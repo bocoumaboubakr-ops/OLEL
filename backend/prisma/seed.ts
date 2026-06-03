@@ -4,7 +4,7 @@ import * as bcrypt from 'bcrypt';
 const prisma = new PrismaClient();
 
 async function main() {
-  // Zones de base (Matam + Gorgol)
+  // Zone : Région de Matam (Sénégal)
   const matam = await prisma.zone.upsert({
     where: { code: 'SN-MT' },
     update: {},
@@ -15,19 +15,6 @@ async function main() {
       latitude: 15.6556,
       longitude: -13.2553,
       radiusKm: 50,
-    },
-  });
-
-  const gorgol = await prisma.zone.upsert({
-    where: { code: 'MR-GO' },
-    update: {},
-    create: {
-      code: 'MR-GO',
-      name: 'Gorgol',
-      region: 'Mauritanie',
-      latitude: 16.25,
-      longitude: -13.2,
-      radiusKm: 60,
     },
   });
 
@@ -101,7 +88,7 @@ async function main() {
     });
   }
 
-  console.log('Seed terminé : zones, utilisateurs et feature flags créés.');
+  console.log('Seed terminé : zone Matam, utilisateurs et feature flags créés.');
 }
 
 main()

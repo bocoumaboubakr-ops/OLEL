@@ -3,6 +3,7 @@ version: '3.9'
 # ── OLEL – Stack complète ────────────────────────────────────────────────────
 # Démarrage : docker compose up -d
 # Reset DB   : docker compose down -v && docker compose up -d
+# Zone cible : Région de Matam (Sénégal)
 
 services:
 
