@@ -1,0 +1,198 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CITOYEN
+  SENTINELLE
+  MAIRIE
+  PREFECTURE
+  ADMIN
+}
+
+enum AlertType {
+  INONDATION
+  INCENDIE
+  SECHERESSE
+  EPIDEMIE
+  AUTRE
+}
+
+enum AlertStatus {
+  PENDING
+  ACTIVE
+  RESOLVED
+  CANCELLED
+}
+
+enum SignalementStatus {
+  PENDING
+  VALIDATED
+  REJECTED
+}
+
+model User {
+  id            String   @id @default(uuid())
+  phone         String   @unique
+  email         String?  @unique
+  name          String
+  role          Role     @default(CITOYEN)
+  passwordHash  String?
+  otpSecret     String?
+  totpSecret    String?
+  totpEnabled   Boolean  @default(false)
+  isActive      Boolean  @default(true)
+  zoneId        String?
+  zone          Zone?    @relation(fields: [zoneId], references: [id])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  signalements  Signalement[]
+  validations   Validation[]
+  auditLogs     AuditLog[]
+  consents      Consent[]
+
+  @@index([phone])
+  @@index([zoneId])
+  @@map("users")
+}
+
+model Zone {
+  id          String   @id @default(uuid())
+  name        String
+  code        String   @unique
+  region      String
+  parentId    String?
+  parent      Zone?    @relation("ZoneHierarchy", fields: [parentId], references: [id])
+  children    Zone[]   @relation("ZoneHierarchy")
+  latitude    Float?
+  longitude   Float?
+  radiusKm    Float?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  users       User[]
+  alerts      Alert[]
+
+  @@index([code])
+  @@map("zones")
+}
+
+model Alert {
+  id          String      @id @default(uuid())
+  title       String
+  description String
+  type        AlertType
+  status      AlertStatus @default(PENDING)
+  severity    Int         @default(1)
+  zoneId      String
+  zone        Zone        @relation(fields: [zoneId], references: [id])
+  createdById String
+  latitude    Float?
+  longitude   Float?
+  mediaUrls   String[]
+  resolvedAt  DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  signalements Signalement[]
+  validations  Validation[]
+  notifications NotificationLog[]
+
+  @@index([zoneId, createdAt])
+  @@index([status])
+  @@map("alerts")
+}
+
+model Signalement {
+  id          String            @id @default(uuid())
+  userId      String
+  user        User              @relation(fields: [userId], references: [id])
+  alertId     String?
+  alert       Alert?            @relation(fields: [alertId], references: [id])
+  type        AlertType
+  text        String
+  mediaUrls   String[]
+  latitude    Float?
+  longitude   Float?
+  status      SignalementStatus @default(PENDING)
+  channel     String            @default("web")
+  createdAt   DateTime          @default(now())
+
+  @@index([userId])
+  @@index([status, createdAt])
+  @@map("signalements")
+}
+
+model Validation {
+  id          String   @id @default(uuid())
+  alertId     String
+  alert       Alert    @relation(fields: [alertId], references: [id])
+  validatorId String
+  validator   User     @relation(fields: [validatorId], references: [id])
+  approved    Boolean
+  comment     String?
+  createdAt   DateTime @default(now())
+
+  @@unique([alertId, validatorId])
+  @@map("validations")
+}
+
+model NotificationLog {
+  id        String   @id @default(uuid())
+  alertId   String
+  alert     Alert    @relation(fields: [alertId], references: [id])
+  channel   String
+  recipient String
+  status    String
+  error     String?
+  sentAt    DateTime @default(now())
+
+  @@index([alertId])
+  @@map("notification_logs")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  action     String
+  resource   String
+  resourceId String?
+  details    Json?
+  ip         String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([resource, resourceId])
+  @@map("audit_logs")
+}
+
+model Consent {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  privacyAccepted Boolean  @default(false)
+  termsAccepted   Boolean  @default(false)
+  acceptedAt      DateTime @default(now())
+  ip              String?
+
+  @@unique([userId])
+  @@map("consents")
+}
+
+model FeatureFlag {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  enabled   Boolean  @default(false)
+  scope     String?
+  updatedAt DateTime @updatedAt
+
+  @@map("feature_flags")
+}

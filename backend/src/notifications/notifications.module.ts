@@ -1,0 +1,14 @@
+import { Module } from '@nestjs/common';
+import { BullModule } from '@nestjs/bull';
+import { NotificationsProcessor } from './notifications.processor';
+import { WhatsappService } from './channels/whatsapp.service';
+import { SmsService } from './channels/sms.service';
+import { IvrService } from './channels/ivr.service';
+import { UssdService } from './channels/ussd.service';
+
+@Module({
+  imports: [BullModule.registerQueue({ name: 'notifications' })],
+  providers: [NotificationsProcessor, WhatsappService, SmsService, IvrService, UssdService],
+  exports: [WhatsappService, SmsService],
+})
+export class NotificationsModule {}

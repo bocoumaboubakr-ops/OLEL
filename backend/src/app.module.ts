@@ -1,0 +1,41 @@
+import { Module } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { BullModule } from '@nestjs/bull';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { AuthModule } from './auth/auth.module';
+import { UsersModule } from './users/users.module';
+import { AlertsModule } from './alerts/alerts.module';
+import { NotificationsModule } from './notifications/notifications.module';
+import { ZonesModule } from './zones/zones.module';
+import { HealthModule } from './health/health.module';
+import { AuditModule } from './audit/audit.module';
+import { PrismaModule } from './common/prisma/prisma.module';
+
+@Module({
+  imports: [
+    ConfigModule.forRoot({ isGlobal: true, envFilePath: '.env' }),
+
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
+
+    BullModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (cfg: ConfigService) => ({
+        redis: {
+          host: cfg.get('REDIS_HOST', 'localhost'),
+          port: cfg.get<number>('REDIS_PORT', 6379),
+          password: cfg.get('REDIS_PASSWORD') || undefined,
+        },
+      }),
+    }),
+
+    PrismaModule,
+    AuthModule,
+    UsersModule,
+    AlertsModule,
+    NotificationsModule,
+    ZonesModule,
+    HealthModule,
+    AuditModule,
+  ],
+})
+export class AppModule {}
