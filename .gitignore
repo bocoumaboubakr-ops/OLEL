@@ -1,0 +1,51 @@
+# ── Dependencies ─────────────────────────────────────────────
+node_modules/
+.pnp/
+.pnp.js
+.yarn/
+
+# ── Env & secrets (M-04) ─────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+secrets/
+
+# ── Builds ───────────────────────────────────────────────────
+dist/
+build/
+.next/
+out/
+*.tsbuildinfo
+.turbo/
+
+# ── Prisma ───────────────────────────────────────────────────
+# Le client généré ne doit pas être committé
+**/generated/
+prisma/*.db
+
+# ── Logs ─────────────────────────────────────────────────────
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ── Coverage & tests ─────────────────────────────────────────
+coverage/
+.nyc_output/
+
+# ── OS / éditeurs ────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# ── Divers ───────────────────────────────────────────────────
+*.local
+.cache/
+tmp/

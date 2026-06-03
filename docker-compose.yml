@@ -1,0 +1,143 @@
+version: '3.9'
+
+# ── OLEL – Stack complète ────────────────────────────────────────────────────
+# Démarrage : docker compose up -d
+# Reset DB   : docker compose down -v && docker compose up -d
+
+services:
+
+  # ── PostgreSQL + PostGIS ────────────────────────────────────────────────────
+  postgres:
+    image: postgis/postgis:16-3.4-alpine
+    container_name: olel-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       olel
+      POSTGRES_USER:     olel
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-olel_dev_pwd}
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U olel"]
+      interval: 10s
+      timeout:   5s
+      retries:   5
+
+  # ── Redis (Bull queues + cache) ─────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: olel-redis
+    restart: unless-stopped
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      retries:  3
+
+  # ── Backend NestJS ──────────────────────────────────────────────────────────
+  backend:
+    build:
+      context:    ./backend
+      dockerfile: Dockerfile
+    container_name: olel-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL:         postgresql://olel:${POSTGRES_PASSWORD:-olel_dev_pwd}@postgres:5432/olel
+      REDIS_URL:            redis://redis:6379
+      JWT_SECRET:           ${JWT_SECRET:-change_me_in_production_32chars}
+      JWT_REFRESH_SECRET:   ${JWT_REFRESH_SECRET:-change_refresh_secret_32chars}
+      WHATSAPP_TOKEN:       ${WHATSAPP_TOKEN:-}
+      WHATSAPP_PHONE_ID:    ${WHATSAPP_PHONE_ID:-}
+      AFRICAS_TALKING_KEY:  ${AFRICAS_TALKING_KEY:-sandbox}
+      AFRICAS_TALKING_USER: ${AFRICAS_TALKING_USER:-sandbox}
+      BOT_API_KEY:          ${BOT_API_KEY:-bot_internal_api_key}
+      DASHBOARD_URL:        http://localhost:3000
+      MOBILE_URL:           http://localhost:3001
+      NODE_ENV:             ${NODE_ENV:-development}
+      PORT:                 3000
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    command: >
+      sh -c "npx prisma migrate deploy && npx prisma db seed && node dist/main.js"
+
+  # ── Dashboard Next.js ───────────────────────────────────────────────────────
+  dashboard:
+    build:
+      context:    ./apps/dashboard
+      dockerfile: Dockerfile
+    container_name: olel-dashboard
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      NEXT_PUBLIC_API_URL:       http://localhost:3000/api/v1
+      NEXT_PUBLIC_WS_URL:        ws://localhost:3000
+      NEXT_PUBLIC_MAPBOX_TOKEN:  ${MAPBOX_TOKEN:-}
+      NODE_ENV:                  ${NODE_ENV:-development}
+    ports:
+      - "3000:3000"
+
+  # ── App Mobile (Next.js PWA) ────────────────────────────────────────────────
+  mobile:
+    build:
+      context:    ./apps/mobile
+      dockerfile: Dockerfile
+    container_name: olel-mobile
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:3000/api/v1
+      NEXT_PUBLIC_WS_URL:  ws://localhost:3000
+      NODE_ENV:            ${NODE_ENV:-development}
+    ports:
+      - "3001:3001"
+
+  # ── Bot WhatsApp ────────────────────────────────────────────────────────────
+  bot:
+    build:
+      context:    ./apps/bot
+      dockerfile: Dockerfile
+    container_name: olel-bot
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      WHATSAPP_TOKEN:           ${WHATSAPP_TOKEN:-}
+      WHATSAPP_PHONE_NUMBER_ID: ${WHATSAPP_PHONE_ID:-}
+      WHATSAPP_VERIFY_TOKEN:    ${WHATSAPP_VERIFY_TOKEN:-olel_webhook_secret}
+      BACKEND_URL:              http://backend:3000
+      BOT_API_KEY:              ${BOT_API_KEY:-bot_internal_api_key}
+      BOT_PORT:                 3002
+      NODE_ENV:                 ${NODE_ENV:-development}
+    ports:
+      - "3002:3002"
+
+  # ── Adminer (UI DB dev) ─────────────────────────────────────────────────────
+  adminer:
+    image: adminer:latest
+    container_name: olel-adminer
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    ports:
+      - "8080:8080"
+    profiles:
+      - dev
+
+volumes:
+  postgres_data:
+  redis_data:

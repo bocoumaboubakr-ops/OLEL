@@ -1,0 +1,100 @@
+# OLEL — Stack DEV 100% docker, env baked in, AUCUNE dependance .env.
+# Demarrage : docker compose -f docker-compose.dev.yml up
+# Acces depuis le tel : meme reseau WiFi, IP du PC sur 3000/3001/4000.
+
+services:
+  postgres:
+    image: postgis/postgis:16-3.4-alpine
+    container_name: olel-postgres-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       olel
+      POSTGRES_USER:     olel
+      POSTGRES_PASSWORD: olel_dev_pwd
+    ports:
+      - "5432:5432"
+    volumes:
+      - olel_pg_dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U olel"]
+      interval: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: olel-redis-dev
+    restart: unless-stopped
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile.dev
+    container_name: olel-backend-dev
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis:    { condition: service_healthy }
+    environment:
+      DATABASE_URL:           postgresql://olel:olel_dev_pwd@postgres:5432/olel?schema=public
+      REDIS_HOST:             redis
+      REDIS_PORT:             "6379"
+      PORT:                   "4000"
+      NODE_ENV:               development
+      JWT_SECRET:             dev_jwt_secret_change_in_prod_32_chars_min
+      JWT_REFRESH_SECRET:     dev_jwt_refresh_secret_change_in_prod_32c
+      TOTP_ENCRYPTION_KEY:    dev_totp_encryption_key_must_be_32_chars
+      WHATSAPP_APP_SECRET:    dev_app_secret_change_me
+      DEFAULT_ZONE_ID:        00000000-0000-0000-0000-000000000000
+      WS_PUBLIC_ORIGIN:       "*"
+      BOT_API_KEY:            bot_internal_api_key_dev
+    ports:
+      - "4000:4000"
+    volumes:
+      - .:/repo
+      - olel_node_modules:/repo/node_modules
+      - olel_backend_nm:/repo/backend/node_modules
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: apps/dashboard/Dockerfile.dev
+    container_name: olel-dashboard-dev
+    depends_on:
+      - backend
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:4000
+      # Pour acces tel : surcharge via "docker compose -f ... up" en mode interactif
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/repo
+      - olel_node_modules:/repo/node_modules
+      - olel_dashboard_nm:/repo/apps/dashboard/node_modules
+
+  mobile:
+    build:
+      context: .
+      dockerfile: apps/mobile/Dockerfile.dev
+    container_name: olel-mobile-dev
+    depends_on:
+      - backend
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:4000
+    ports:
+      - "3001:3001"
+    volumes:
+      - .:/repo
+      - olel_node_modules:/repo/node_modules
+      - olel_mobile_nm:/repo/apps/mobile/node_modules
+
+volumes:
+  olel_pg_dev:
+  olel_node_modules:
+  olel_backend_nm:
+  olel_dashboard_nm:
+  olel_mobile_nm:

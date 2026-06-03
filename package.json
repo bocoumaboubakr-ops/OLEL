@@ -1,0 +1,33 @@
+{
+  "name": "olel-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "OLEL – Plateforme d'alerte précoce multi-risques, projet STOP INONDATION (Matam–Gorgol)",
+  "workspaces": [
+    "packages/*",
+    "apps/*",
+    "backend"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "type-check": "turbo run type-check",
+    "test": "turbo run test",
+    "dev:dashboard": "turbo run dev --filter=@olel/dashboard",
+    "dev:mobile": "turbo run dev --filter=@olel/mobile",
+    "dev:backend": "turbo run dev --filter=@olel/backend",
+    "dev:bot": "turbo run dev --filter=@olel/bot"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.0",
+    "typescript": "^5.4.0",
+    "prettier": "^3.2.0",
+    "@types/node": "^20.12.0"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.1.0"
+}
