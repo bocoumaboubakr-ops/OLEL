@@ -15,7 +15,7 @@ describe('AlertsService', () => {
     id: 'alert-uuid',
     title: 'Inondation critique',
     description: 'Montée des eaux rapide',
-    type: 'INONDATION',
+    type: 'TEMPETE',
     status: 'PENDING',
     severity: 3,
     zoneId: 'zone-uuid',
@@ -85,7 +85,7 @@ describe('AlertsService', () => {
 
   describe('create', () => {
     it('should create alert and queue notification', async () => {
-      await service.create({ title: 'Test', description: 'Desc', type: 'INONDATION', zoneId: 'zone-uuid', severity: 2 }, 'user-uuid');
+      await service.create({ title: 'Test', description: 'Desc', type: 'SECHERESSE', zoneId: 'zone-uuid', severity: 2 }, 'user-uuid');
       expect(queue.add).toHaveBeenCalledWith('fanout', expect.any(Object), expect.any(Object));
       expect(gateway.broadcastAlert).toHaveBeenCalled();
     });

@@ -26,13 +26,16 @@ export class IvrService {
   }
 
   // Réponse XML pour le flux IVR (appelé par le webhook AT)
-  buildAlertXml(alertTitle: string, zone: string): string {
+  buildAlertXml(alertTitle: string, alertType: string, zone: string, severity: number): string {
+    const sevText = severity >= 3 ? 'Niveau urgence extrême.' : severity === 2 ? 'Niveau alerte.' : 'Niveau vigilance.';
     return `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Say voice="fr-FR" playBeep="true">
-    Alerte OLEL. ${alertTitle}. Zone : ${zone}.
-    Pour confirmer la réception, appuyez sur 1.
-    Pour signaler une urgence supplémentaire, appuyez sur 2.
+    Alerte précoce OLEL. Région de Matam. ${sevText}
+    Situation signalée : ${alertTitle}. Zone concernée : ${zone}.
+    Suivez les consignes des autorités locales.
+    Pour confirmer la réception de ce message, appuyez sur 1.
+    Pour signaler une situation supplémentaire, appuyez sur 2.
   </Say>
   <GetDigits timeout="30" finishOnKey="#">
     <Say>Entrez votre choix suivi du dièse.</Say>

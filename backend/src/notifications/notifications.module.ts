@@ -9,6 +9,6 @@ import { UssdService } from './channels/ussd.service';
 @Module({
   imports: [BullModule.registerQueue({ name: 'notifications' })],
   providers: [NotificationsProcessor, WhatsappService, SmsService, IvrService, UssdService],
-  exports: [WhatsappService, SmsService],
+  exports: [WhatsappService, SmsService, IvrService, UssdService],
 })
 export class NotificationsModule {}

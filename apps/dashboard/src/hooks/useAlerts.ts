@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { io } from 'socket.io-client';
 import axios from 'axios';
 
@@ -11,28 +11,39 @@ export function useAlerts() {
   const [alerts, setAlerts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const fetchAlerts = useCallback(async () => {
     const token = localStorage.getItem('olel_token');
     if (!token) return;
+    try {
+      const { data } = await axios.get(`${API}/alerts?limit=100`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setAlerts(data.alerts || []);
+    } catch {
+      // token expiré — redirect login
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-    axios
-      .get(`${API}/alerts?status=ACTIVE&limit=50`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(({ data }) => setAlerts(data.alerts || []))
-      .catch(console.error)
-      .finally(() => setLoading(false));
+  useEffect(() => {
+    fetchAlerts();
+
+    const token = localStorage.getItem('olel_token');
+    if (!token) return;
 
     const socket = io(`${WS}/alerts`, { auth: { token } });
 
     socket.on('alert:new', (alert: any) => {
-      setAlerts((prev) => [alert, ...prev].slice(0, 100));
+      setAlerts((prev) => [alert, ...prev].slice(0, 200));
     });
 
-    socket.on('alert:global', (alert: any) => {
-      setAlerts((prev) => prev.map((a) => (a.id === alert.id ? alert : a)));
+    socket.on('alert:global', (updated: any) => {
+      setAlerts((prev) => prev.map((a) => (a.id === updated.id ? { ...a, ...updated } : a)));
     });
 
     return () => { socket.disconnect(); };
-  }, []);
+  }, [fetchAlerts]);
 
-  return { alerts, loading };
+  return { alerts, loading, refetch: fetchAlerts };
 }

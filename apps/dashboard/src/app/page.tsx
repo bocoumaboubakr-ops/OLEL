@@ -3,46 +3,120 @@
 import { useEffect, useState } from 'react';
 import { AlertsFeed } from '@/components/alerts/AlertsFeed';
 import { AlertMap } from '@/components/map/AlertMap';
+import { AlertDetail } from '@/components/alerts/AlertDetail';
 import { useAlerts } from '@/hooks/useAlerts';
 import { useAuth } from '@/hooks/useAuth';
+import { StatsBar } from '@/components/layout/StatsBar';
+import { CreateAlertModal } from '@/components/alerts/CreateAlertModal';
 
 export default function DashboardPage() {
   const { user, logout } = useAuth();
-  const { alerts, loading } = useAlerts();
+  const { alerts, loading, refetch } = useAlerts();
+  const [selected, setSelected] = useState<any>(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [activeTab, setActiveTab] = useState<'active' | 'all'>('active');
 
-  if (!user) {
-    return <LoginRedirect />;
-  }
+  if (!user) return <LoginRedirect />;
+
+  const canCreate = ['SENTINELLE', 'MAIRIE', 'PREFECTURE', 'ADMIN'].includes(user.role);
+  const filteredAlerts = activeTab === 'active'
+    ? alerts.filter((a) => a.status === 'ACTIVE' || a.status === 'PENDING')
+    : alerts;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
-      <header style={{ background: '#1a3c5e', color: 'white', padding: '12px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h1 style={{ margin: 0, fontSize: '1.4rem' }}>🚨 OLEL – Tableau de Bord</h1>
-        <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-          <span style={{ fontSize: '0.9rem' }}>{user.name} ({user.role})</span>
-          <button onClick={logout} style={{ background: '#e74c3c', color: 'white', border: 'none', padding: '6px 12px', borderRadius: 4, cursor: 'pointer' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', fontFamily: 'system-ui, sans-serif' }}>
+      {/* Header */}
+      <header style={{ background: '#1a3c5e', color: 'white', padding: '0 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: 56, flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontSize: '1.3rem', fontWeight: 800, letterSpacing: '-0.5px' }}>OLEL</span>
+          <span style={{ fontSize: '0.75rem', opacity: 0.7, borderLeft: '1px solid rgba(255,255,255,0.3)', paddingLeft: 12 }}>
+            Alerte Précoce Multi-Risques · Matam
+          </span>
+        </div>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          {canCreate && (
+            <button
+              onClick={() => setShowCreate(true)}
+              style={{ background: '#e74c3c', color: 'white', border: 'none', padding: '6px 14px', borderRadius: 6, cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600 }}
+            >
+              + Nouvelle alerte
+            </button>
+          )}
+          {user.role === 'ADMIN' && (
+            <a href="/admin" style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.85rem', textDecoration: 'none' }}>⚙️ Admin</a>
+          )}
+          <span style={{ fontSize: '0.85rem', opacity: 0.85 }}>{user.name}</span>
+          <span style={{ fontSize: '0.7rem', background: 'rgba(255,255,255,0.15)', padding: '2px 8px', borderRadius: 10 }}>{user.role}</span>
+          <button onClick={logout} style={{ background: 'rgba(255,255,255,0.15)', color: 'white', border: 'none', padding: '5px 12px', borderRadius: 6, cursor: 'pointer', fontSize: '0.8rem' }}>
             Déconnexion
           </button>
         </div>
       </header>
 
+      {/* Stats bar */}
+      <StatsBar alerts={alerts} />
+
+      {/* Main content */}
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        <aside style={{ width: 360, overflowY: 'auto', borderRight: '1px solid #ddd', background: 'white' }}>
-          <div style={{ padding: '16px', borderBottom: '1px solid #eee' }}>
-            <h2 style={{ margin: 0, fontSize: '1rem' }}>Alertes actives</h2>
-            <span style={{ color: '#888', fontSize: '0.85rem' }}>{alerts.length} alerte(s)</span>
+        {/* Sidebar */}
+        <aside style={{ width: 380, display: 'flex', flexDirection: 'column', borderRight: '1px solid #e2e8f0', background: 'white', flexShrink: 0 }}>
+          <div style={{ padding: '12px 16px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: 4 }}>
+              {(['active', 'all'] as const).map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setActiveTab(t)}
+                  style={{
+                    padding: '5px 12px',
+                    borderRadius: 6,
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: '0.8rem',
+                    fontWeight: activeTab === t ? 700 : 400,
+                    background: activeTab === t ? '#1a3c5e' : '#f1f5f9',
+                    color: activeTab === t ? 'white' : '#64748b',
+                  }}
+                >
+                  {t === 'active' ? 'En cours' : 'Toutes'}
+                </button>
+              ))}
+            </div>
+            <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
+              {loading ? '…' : `${filteredAlerts.length} alerte(s)`}
+            </span>
           </div>
-          {loading ? (
-            <div style={{ padding: 24, textAlign: 'center', color: '#888' }}>Chargement...</div>
-          ) : (
-            <AlertsFeed alerts={alerts} />
-          )}
+          <div style={{ overflowY: 'auto', flex: 1 }}>
+            {loading ? (
+              <div style={{ padding: 32, textAlign: 'center', color: '#94a3b8' }}>Chargement…</div>
+            ) : (
+              <AlertsFeed alerts={filteredAlerts} onSelect={setSelected} />
+            )}
+          </div>
         </aside>
 
+        {/* Map */}
         <main style={{ flex: 1, position: 'relative' }}>
-          <AlertMap alerts={alerts} />
+          <AlertMap alerts={alerts} selected={selected} onSelect={setSelected} />
         </main>
       </div>
+
+      {/* Alert detail panel */}
+      {selected && (
+        <AlertDetail
+          alert={selected}
+          currentUser={user}
+          onClose={() => setSelected(null)}
+          onRefetch={refetch}
+        />
+      )}
+
+      {/* Create alert modal */}
+      {showCreate && (
+        <CreateAlertModal
+          onClose={() => setShowCreate(false)}
+          onCreated={() => { setShowCreate(false); refetch(); }}
+        />
+      )}
     </div>
   );
 }

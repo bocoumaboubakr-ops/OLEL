@@ -10,6 +10,10 @@ import { ZonesModule } from './zones/zones.module';
 import { HealthModule } from './health/health.module';
 import { AuditModule } from './audit/audit.module';
 import { PrismaModule } from './common/prisma/prisma.module';
+import { SignalementsModule } from './signalements/signalements.module';
+import { UssdModule } from './ussd/ussd.module';
+import { IvrModule } from './ivr/ivr.module';
+import { StatsModule } from './stats/stats.module';
 
 @Module({
   imports: [
@@ -36,6 +40,10 @@ import { PrismaModule } from './common/prisma/prisma.module';
     ZonesModule,
     HealthModule,
     AuditModule,
+    SignalementsModule,
+    UssdModule,
+    IvrModule,
+    StatsModule,
   ],
 })
 export class AppModule {}

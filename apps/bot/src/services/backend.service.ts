@@ -27,7 +27,7 @@ export class BackendService {
     }
   }
 
-  async createSignalement(payload: { phone: string; type: string; description: string }) {
+  async createSignalement(payload: { phone: string; type: string; description: string; severity?: number }) {
     const { data } = await axios.post(
       `${this.backendUrl}/api/v1/signalements/bot`,
       payload,

@@ -30,7 +30,8 @@ export class NotificationsProcessor {
       select: { id: true, phone: true, name: true },
     });
 
-    const message = `🚨 ALERTE OLEL – ${alert.title}\n${alert.description}\nZone: ${alert.zone.name}`;
+    const severityLabel = { 1: '🟢 Vigilance', 2: '🟡 Alerte', 3: '🔴 URGENCE' }[alert.severity] || '⚠️ Alerte';
+    const message = `🚨 *OLEL – Alerte Précoce*\n${severityLabel}\n\n*${alert.title}*\n${alert.description}\n\n📍 Zone : ${alert.zone.name}\n\nSuivez les consignes des autorités locales.`;
 
     for (const user of users) {
       try {

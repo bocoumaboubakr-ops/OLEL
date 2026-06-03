@@ -1,4 +1,4 @@
-import { NestFactory } from '@nestjs/core';
+import { NestFactory, Reflector } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
@@ -6,6 +6,8 @@ import helmet from 'helmet';
 import * as compression from 'compression';
 import { WinstonModule } from 'nest-winston';
 import * as winston from 'winston';
+import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 
 async function bootstrap() {
   const logger = WinstonModule.createLogger({
@@ -19,40 +21,70 @@ async function bootstrap() {
           ),
         ),
       }),
+      ...(process.env.NODE_ENV === 'production'
+        ? [new winston.transports.File({ filename: 'logs/error.log', level: 'error' }),
+           new winston.transports.File({ filename: 'logs/combined.log' })]
+        : []),
     ],
   });
 
   const app = await NestFactory.create(AppModule, { logger });
 
-  app.use(helmet());
+  // Sécurité
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          connectSrc: ["'self'", process.env.WS_PUBLIC_ORIGIN || 'ws://localhost:4000'],
+          imgSrc: ["'self'", 'data:', 'https://*.openstreetmap.org', 'https://*.tile.openstreetmap.org'],
+        },
+      },
+    }),
+  );
   app.use(compression());
 
   app.enableCors({
-    origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000', 'http://localhost:3001'],
+    origin: (origin, callback) => {
+      const allowed = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000,http://localhost:3001').split(',');
+      if (!origin || allowed.includes(origin)) return callback(null, true);
+      callback(new Error(`CORS: origin ${origin} non autorisée`));
+    },
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   });
 
   app.setGlobalPrefix('api/v1');
 
+  // Validation
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
       forbidNonWhitelisted: true,
       transform: true,
+      transformOptions: { enableImplicitConversion: true },
     }),
   );
 
-  const config = new DocumentBuilder()
-    .setTitle('OLEL API')
-    .setDescription('Plateforme d\'alerte précoce multi-risques — Matam/Gorgol')
-    .setVersion('1.0')
-    .addBearerAuth()
-    .build();
-  SwaggerModule.setup('api-docs', app, SwaggerModule.createDocument(app, config));
+  // Filtres & intercepteurs globaux
+  app.useGlobalFilters(new HttpExceptionFilter());
+  app.useGlobalInterceptors(new LoggingInterceptor());
+
+  // Swagger (désactivé en prod si besoin)
+  if (process.env.NODE_ENV !== 'production' || process.env.SWAGGER_ENABLED === 'true') {
+    const config = new DocumentBuilder()
+      .setTitle('OLEL API')
+      .setDescription('Plateforme d\'alerte précoce multi-risques — Région de Matam\n\nTous les types de risques : Inondation, Sécheresse, Incendie, Tempête, Épidémie, Criquets, Accident industriel, Mouvement de terrain.')
+      .setVersion('1.0')
+      .addBearerAuth()
+      .addApiKey({ type: 'apiKey', name: 'x-bot-api-key', in: 'header' }, 'bot-api-key')
+      .build();
+    SwaggerModule.setup('api-docs', app, SwaggerModule.createDocument(app, config));
+  }
 
   const port = process.env.PORT || 4000;
-  await app.listen(port);
-  logger.log(`OLEL Backend démarré sur http://localhost:${port}`, 'Bootstrap');
+  await app.listen(port, '0.0.0.0');
+  logger.log(`OLEL Backend démarré → http://localhost:${port}/api/v1 | Docs: http://localhost:${port}/api-docs`, 'Bootstrap');
 }
 
 bootstrap();

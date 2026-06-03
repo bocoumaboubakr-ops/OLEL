@@ -18,6 +18,31 @@ async function main() {
     },
   });
 
+  // Sous-zones de Matam (communes / arrondissements)
+  const sousZonesMatam = [
+    { code: 'SN-MT-OUR', name: 'Ourossogui' },
+    { code: 'SN-MT-KAN', name: 'Kanel' },
+    { code: 'SN-MT-RAN', name: 'Ranérou' },
+    { code: 'SN-MT-THI', name: 'Thilogne' },
+    { code: 'SN-MT-ORE', name: 'Oréfondé' },
+    { code: 'SN-MT-NAB', name: 'Nabadji Civol' },
+  ];
+  for (const sz of sousZonesMatam) {
+    await prisma.zone.upsert({
+      where: { code: sz.code },
+      update: {},
+      create: {
+        code: sz.code,
+        name: sz.name,
+        region: 'Sénégal',
+        latitude: matam.latitude,
+        longitude: matam.longitude,
+        radiusKm: 15,
+        parentId: matam.id,
+      },
+    });
+  }
+
   const hash = (pwd: string) => bcrypt.hash(pwd, 10);
 
   // Compte admin
