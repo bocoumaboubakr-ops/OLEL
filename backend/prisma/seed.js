@@ -56,6 +56,21 @@ async function main() {
     create: { phone: '+221700000003', name: 'Sentinelle Terrain', role: 'SENTINELLE', passwordHash: await hash(process.env.SEED_SENTINELLE_PASSWORD || 'Sent2024!'), zoneId: matam.id, isActive: true },
   });
 
+  // ── Comptes de test couvrant chaque niveau du cursus (CURSUS_ALERTE.md) ──
+  const testUsers = [
+    { phone: '+221700000004', email: 'maire@olel.sn',      name: 'Maire Ourossogui',  role: 'MAIRIE',            pwd: 'Maire2024!' },
+    { phone: '+221700000005', email: 'gouverneur@olel.sn', name: 'Gouverneur Matam',  role: 'GOUVERNORAT',       pwd: 'Gouv2024!' },
+    { phone: '+221700000006', email: 'protection@olel.sn', name: 'Protection Civile', role: 'PROTECTION_CIVILE', pwd: 'Protec2024!' },
+    { phone: '+221700000007', email: 'citoyen@olel.sn',    name: 'Citoyen Test',      role: 'CITOYEN',           pwd: 'Citoyen2024!' },
+  ];
+  for (const u of testUsers) {
+    await prisma.user.upsert({
+      where: { phone: u.phone },
+      update: { role: u.role },
+      create: { phone: u.phone, email: u.email, name: u.name, role: u.role, passwordHash: await hash(process.env[`SEED_${u.role}_PASSWORD`] || u.pwd), zoneId: matam.id, isActive: true },
+    });
+  }
+
   const botPhone = process.env.BOT_ACCOUNT_PHONE || '+221700000099';
   await prisma.user.upsert({
     where: { phone: botPhone },
