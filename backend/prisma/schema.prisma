@@ -58,6 +58,28 @@ enum ValidationAction {
   ESCALATED
 }
 
+enum TrainingCategory {
+  SECOURISME
+  RISQUE_LOCAL
+  PROCEDURE
+  SENSIBILISATION
+}
+
+enum MissionType {
+  VERIFICATION
+  PATROUILLE
+  SENSIBILISATION
+  EVACUATION
+}
+
+enum MissionStatus {
+  OPEN
+  ASSIGNED
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
 enum SignalementStatus {
   PENDING
   VALIDATED
@@ -75,6 +97,7 @@ model User {
   totpSecret    String?
   totpEnabled   Boolean  @default(false)
   isActive      Boolean  @default(true)
+  lastActiveAt  DateTime?
   zoneId        String?
   zone          Zone?    @relation(fields: [zoneId], references: [id])
   createdAt     DateTime @default(now())
@@ -84,6 +107,8 @@ model User {
   validations   Validation[]
   auditLogs     AuditLog[]
   consents      Consent[]
+  trainingProgress    TrainingProgress[]
+  missionAssignments  MissionAssignment[]
 
   @@index([phone])
   @@index([zoneId])
@@ -106,6 +131,7 @@ model Zone {
 
   users       User[]
   alerts      Alert[]
+  missions    Mission[]
 
   @@index([code])
   @@map("zones")
@@ -236,4 +262,90 @@ model FeatureFlag {
   updatedAt DateTime @updatedAt
 
   @@map("feature_flags")
+}
+
+// ── Formations sentinelles (CURSUS_ALERTE.md, AUDIT_OLEL_EXHAUSTIF §1.5) ───────
+model TrainingModule {
+  id          String           @id @default(uuid())
+  title       String
+  description String
+  category    TrainingCategory @default(PROCEDURE)
+  order       Int              @default(0)
+  isRequired  Boolean          @default(false)
+  durationMin Int              @default(15)
+  isActive    Boolean          @default(true)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  lessons   TrainingLesson[]
+  progress  TrainingProgress[]
+
+  @@map("training_modules")
+}
+
+model TrainingLesson {
+  id       String         @id @default(uuid())
+  moduleId String
+  module   TrainingModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  title    String
+  content  String
+  mediaUrl String?
+  order    Int            @default(0)
+
+  @@index([moduleId])
+  @@map("training_lessons")
+}
+
+model TrainingProgress {
+  id          String         @id @default(uuid())
+  userId      String
+  user        User           @relation(fields: [userId], references: [id])
+  moduleId    String
+  module      TrainingModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  completed   Boolean        @default(false)
+  score       Int?
+  completedAt DateTime?
+  createdAt   DateTime       @default(now())
+
+  @@unique([userId, moduleId])
+  @@index([userId])
+  @@map("training_progress")
+}
+
+// ── Missions sentinelles ──────────────────────────────────────────────────────
+model Mission {
+  id          String        @id @default(uuid())
+  title       String
+  description String
+  type        MissionType   @default(VERIFICATION)
+  status      MissionStatus @default(OPEN)
+  zoneId      String?
+  zone        Zone?         @relation(fields: [zoneId], references: [id])
+  alertId     String?
+  createdById String
+  dueAt       DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  assignments MissionAssignment[]
+
+  @@index([status, createdAt])
+  @@index([zoneId])
+  @@map("missions")
+}
+
+model MissionAssignment {
+  id          String        @id @default(uuid())
+  missionId   String
+  mission     Mission       @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  sentinelId  String
+  sentinel    User          @relation(fields: [sentinelId], references: [id])
+  status      MissionStatus @default(ASSIGNED)
+  report      String?
+  assignedAt  DateTime      @default(now())
+  completedAt DateTime?
+
+  @@unique([missionId, sentinelId])
+  @@index([sentinelId])
+  @@map("mission_assignments")
 }

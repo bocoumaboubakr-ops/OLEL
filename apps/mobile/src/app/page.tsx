@@ -6,7 +6,8 @@ import { useMobileAuth } from '@/hooks/useMobileAuth';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
 
-type Tab = 'home' | 'alerts' | 'report' | 'map' | 'profile';
+type Tab = 'home' | 'alerts' | 'report' | 'map' | 'formations' | 'missions' | 'profile';
+const SENTINEL_ROLES = ['SENTINELLE', 'MAIRIE', 'PREFECTURE', 'GOUVERNORAT', 'PROTECTION_CIVILE', 'ADMIN', 'SUPER_ADMIN'];
 
 const RISK_ICONS: Record<string, { icon: string; label: string; color: string }> = {
   INONDATION:           { icon: '🌊', label: 'Inondation',   color: '#3b82f6' },
@@ -67,6 +68,7 @@ export default function MobilePage() {
   const active = alerts.filter((a) => !TERMINAL.includes(a.status));
   const maxSev = active.reduce((m, a) => Math.max(m, a.severity), 0);
   const zoneStatus = SEV_ZONE[Math.min(maxSev, 3)] ?? SEV_ZONE[0];
+  const isSentinel = user && SENTINEL_ROLES.includes(user.role);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', background: '#f8f9fa' }}>
@@ -110,17 +112,24 @@ export default function MobilePage() {
           />
         )}
         {tab === 'map' && <MapScreen alerts={active} />}
+        {tab === 'formations' && <FormationsScreen />}
+        {tab === 'missions' && <MissionsScreen />}
         {tab === 'profile' && <ProfileScreen user={user} onLogout={logout} />}
       </div>
 
       {/* ── Bottom Nav ───────────────────────────────────────────────────── */}
-      <nav style={{ background: 'white', borderTop: '1px solid #e2e8f0', display: 'flex', flexShrink: 0 }}>
+      <nav style={{ background: 'white', borderTop: '1px solid #e2e8f0', display: 'flex', flexShrink: 0, overflowX: 'auto' }}>
         {([
-          { key: 'home',    icon: '🏠', label: 'Accueil' },
-          { key: 'alerts',  icon: '🔔', label: active.length > 0 ? `Alertes (${active.length})` : 'Alertes' },
-          { key: 'report',  icon: '📢', label: 'Signaler' },
-          { key: 'map',     icon: '🗺️', label: 'Carte' },
-          { key: 'profile', icon: '👤', label: 'Profil' },
+          { key: 'home',       icon: '🏠', label: 'Accueil' },
+          { key: 'alerts',     icon: '🔔', label: active.length > 0 ? `(${active.length})` : 'Alertes' },
+          { key: 'report',     icon: '📢', label: 'Signaler' },
+          ...(isSentinel ? [
+            { key: 'formations', icon: '📚', label: 'Formation' },
+            { key: 'missions',   icon: '📋', label: 'Missions' },
+          ] : [
+            { key: 'map',        icon: '🗺️', label: 'Carte' },
+          ]),
+          { key: 'profile',    icon: '👤', label: 'Profil' },
         ] as { key: Tab; icon: string; label: string }[]).map(({ key, icon, label }) => (
           <button key={key} onClick={() => setTab(key)}
             style={{ flex: 1, padding: '8px 2px 6px', border: 'none', background: 'none', color: tab === key ? '#1a3c5e' : '#94a3b8', cursor: 'pointer', fontSize: '0.62rem', fontWeight: tab === key ? 700 : 400 }}>
@@ -485,7 +494,246 @@ function ProfileScreen({ user, onLogout }: { user: { id: string; name: string; p
   );
 }
 
-// ── SosModal ──────────────────────────────────────────────────────────────────
+// ── FormationsScreen ──────────────────────────────────────────────────────────
+interface TrainingModule {
+  id: string; title: string; description: string; category: string; isRequired: boolean;
+  durationMin: number; progress: { completed: boolean; score: number | null; completedAt: string | null };
+  lessons: { id: string; title: string; order: number }[];
+}
+
+const CATEGORY_LABEL: Record<string, { icon: string; label: string; color: string }> = {
+  SECOURISME:     { icon: '🩺', label: 'Secourisme',    color: '#16a34a' },
+  RISQUE_LOCAL:   { icon: '🌊', label: 'Risques locaux', color: '#2563eb' },
+  PROCEDURE:      { icon: '📋', label: 'Procédures',    color: '#7c3aed' },
+  SENSIBILISATION:{ icon: '📣', label: 'Sensibilisation',color: '#ea580c' },
+};
+
+function FormationsScreen() {
+  const [modules, setModules] = useState<TrainingModule[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [status, setStatus] = useState<{ certified: boolean; requiredDone: number; requiredTotal: number; completedCount: number; totalModules: number } | null>(null);
+  const [completing, setCompleting] = useState<string | null>(null);
+
+  useEffect(() => {
+    const token = localStorage.getItem('olel_token');
+    if (!token) return;
+    const headers = { Authorization: `Bearer ${token}` };
+    Promise.all([
+      axios.get(`${API}/trainings`, { headers }),
+      axios.get(`${API}/trainings/me/status`, { headers }),
+    ]).then(([mRes, sRes]) => {
+      setModules(mRes.data || []);
+      setStatus(sRes.data);
+    }).catch(() => {}).finally(() => setLoading(false));
+  }, []);
+
+  const handleComplete = async (moduleId: string) => {
+    const token = localStorage.getItem('olel_token');
+    if (!token) return;
+    setCompleting(moduleId);
+    try {
+      await axios.post(`${API}/trainings/${moduleId}/complete`, {}, { headers: { Authorization: `Bearer ${token}` } });
+      const [mRes, sRes] = await Promise.all([
+        axios.get(`${API}/trainings`, { headers: { Authorization: `Bearer ${token}` } }),
+        axios.get(`${API}/trainings/me/status`, { headers: { Authorization: `Bearer ${token}` } }),
+      ]);
+      setModules(mRes.data || []);
+      setStatus(sRes.data);
+    } catch { /* ignore */ } finally { setCompleting(null); }
+  };
+
+  if (loading) return <div style={{ textAlign: 'center', padding: 56, color: '#94a3b8', fontSize: '2.5rem' }}>⏳</div>;
+
+  return (
+    <div style={{ padding: '16px' }}>
+      <h2 style={{ margin: '0 0 12px', fontSize: '1.05rem', color: '#1a3c5e' }}>📚 Formations</h2>
+
+      {status && (
+        <div style={{ background: status.certified ? '#dcfce7' : '#fef9c3', border: `1.5px solid ${status.certified ? '#16a34a' : '#ca8a04'}`, borderRadius: 12, padding: '12px 16px', marginBottom: 16 }}>
+          <div style={{ fontWeight: 800, color: status.certified ? '#16a34a' : '#ca8a04', fontSize: '0.92rem', marginBottom: 4 }}>
+            {status.certified ? '✅ Certification obtenue' : '⚠️ Certification en cours'}
+          </div>
+          <div style={{ fontSize: '0.78rem', color: '#374151' }}>
+            Modules requis : {status.requiredDone}/{status.requiredTotal} · Total complétés : {status.completedCount}/{status.totalModules}
+          </div>
+        </div>
+      )}
+
+      {modules.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '40px 20px', color: '#94a3b8' }}>
+          <div style={{ fontSize: '2.5rem', marginBottom: 10 }}>📚</div>
+          <p style={{ margin: 0 }}>Aucun module de formation disponible.</p>
+        </div>
+      ) : modules.map((m) => {
+        const cat = CATEGORY_LABEL[m.category] || { icon: '📖', label: m.category, color: '#64748b' };
+        return (
+          <div key={m.id} style={{ background: 'white', borderRadius: 12, marginBottom: 12, boxShadow: '0 1px 6px rgba(0,0,0,0.07)', overflow: 'hidden', borderLeft: `4px solid ${m.progress.completed ? '#16a34a' : (m.isRequired ? '#dc2626' : cat.color)}` }}>
+            <div style={{ padding: '14px 14px 10px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 6 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 3 }}>
+                    <span style={{ fontSize: '1rem' }}>{cat.icon}</span>
+                    <span style={{ fontSize: '0.68rem', fontWeight: 700, color: cat.color, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{cat.label}</span>
+                    {m.isRequired && <span style={{ fontSize: '0.62rem', background: '#fee2e2', color: '#dc2626', padding: '1px 6px', borderRadius: 8, fontWeight: 700 }}>REQUIS</span>}
+                  </div>
+                  <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#1a3c5e' }}>{m.title}</div>
+                </div>
+                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                  {m.progress.completed ? (
+                    <div style={{ fontSize: '1.4rem' }}>✅</div>
+                  ) : (
+                    <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>⏱ {m.durationMin} min</div>
+                  )}
+                </div>
+              </div>
+              <p style={{ margin: '0 0 10px', color: '#64748b', fontSize: '0.8rem', lineHeight: 1.4 }}>{m.description}</p>
+              <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginBottom: 10 }}>
+                {m.lessons.length} leçon{m.lessons.length > 1 ? 's' : ''}
+                {m.progress.completed && m.progress.completedAt && (
+                  <> · Complété le {new Date(m.progress.completedAt).toLocaleDateString('fr-FR')}</>
+                )}
+                {m.progress.completed && m.progress.score != null && (
+                  <> · Score : {m.progress.score}%</>
+                )}
+              </div>
+              {!m.progress.completed && (
+                <button
+                  disabled={completing === m.id}
+                  onClick={() => handleComplete(m.id)}
+                  style={{ width: '100%', background: '#1a3c5e', color: 'white', border: 'none', padding: '10px', borderRadius: 8, fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', opacity: completing === m.id ? 0.6 : 1 }}
+                >
+                  {completing === m.id ? '⏳ Enregistrement…' : '✔️ Marquer comme complété'}
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── MissionsScreen ────────────────────────────────────────────────────────────
+interface Mission {
+  id: string; assignmentId: string; title: string; description: string;
+  type: string; status: string; zone?: { name: string };
+  dueAt: string | null; assignedAt: string; completedAt: string | null;
+}
+
+const MISSION_TYPE_ICON: Record<string, string> = {
+  VERIFICATION: '🔍', PATROUILLE: '🚶', SENSIBILISATION: '📣', EVACUATION: '🚨',
+};
+const MISSION_STATUS_LABEL: Record<string, { label: string; color: string }> = {
+  OPEN:        { label: 'Ouverte',      color: '#64748b' },
+  ASSIGNED:    { label: 'Assignée',     color: '#2563eb' },
+  IN_PROGRESS: { label: 'En cours',     color: '#ea580c' },
+  DONE:        { label: 'Terminée',     color: '#16a34a' },
+  CANCELLED:   { label: 'Annulée',      color: '#94a3b8' },
+};
+
+function MissionsScreen() {
+  const [missions, setMissions] = useState<Mission[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [report, setReport] = useState<Record<string, string>>({});
+  const [acting, setActing] = useState<string | null>(null);
+
+  const fetchMissions = async () => {
+    const token = localStorage.getItem('olel_token');
+    if (!token) return;
+    try {
+      const { data } = await axios.get(`${API}/missions/me`, { headers: { Authorization: `Bearer ${token}` } });
+      setMissions(data || []);
+    } catch { /* offline */ } finally { setLoading(false); }
+  };
+
+  useEffect(() => { fetchMissions(); }, []);
+
+  const doAction = async (missionId: string, action: 'accept' | 'complete') => {
+    const token = localStorage.getItem('olel_token');
+    if (!token) return;
+    setActing(missionId + action);
+    try {
+      const body = action === 'complete' ? { report: report[missionId] || '' } : {};
+      await axios.post(`${API}/missions/${missionId}/${action}`, body, { headers: { Authorization: `Bearer ${token}` } });
+      await fetchMissions();
+    } catch { /* ignore */ } finally { setActing(null); }
+  };
+
+  if (loading) return <div style={{ textAlign: 'center', padding: 56, color: '#94a3b8', fontSize: '2.5rem' }}>⏳</div>;
+
+  const active = missions.filter((m) => m.status !== 'DONE' && m.status !== 'CANCELLED');
+  const done = missions.filter((m) => m.status === 'DONE');
+
+  return (
+    <div style={{ padding: '16px' }}>
+      <h2 style={{ margin: '0 0 14px', fontSize: '1.05rem', color: '#1a3c5e' }}>📋 Mes missions ({active.length} active{active.length > 1 ? 's' : ''})</h2>
+
+      {missions.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '40px 20px', color: '#94a3b8' }}>
+          <div style={{ fontSize: '2.5rem', marginBottom: 10 }}>📋</div>
+          <p style={{ margin: 0 }}>Aucune mission assignée pour le moment.</p>
+        </div>
+      ) : <>
+        {active.map((m) => {
+          const st = MISSION_STATUS_LABEL[m.status] || { label: m.status, color: '#64748b' };
+          const icon = MISSION_TYPE_ICON[m.type] || '📋';
+          const isAccepting = acting === m.assignmentId + 'accept';
+          const isCompleting = acting === m.assignmentId + 'complete';
+          return (
+            <div key={m.assignmentId} style={{ background: 'white', borderRadius: 12, marginBottom: 12, boxShadow: '0 1px 6px rgba(0,0,0,0.07)', borderLeft: `4px solid ${st.color}` }}>
+              <div style={{ padding: '14px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
+                  <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#1a3c5e' }}>{icon} {m.title}</div>
+                  <span style={{ fontSize: '0.68rem', background: st.color + '22', color: st.color, padding: '2px 8px', borderRadius: 8, fontWeight: 700, whiteSpace: 'nowrap' }}>{st.label}</span>
+                </div>
+                <p style={{ margin: '0 0 8px', color: '#64748b', fontSize: '0.8rem', lineHeight: 1.4 }}>{m.description}</p>
+                <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginBottom: 10 }}>
+                  📍 {m.zone?.name || 'Matam'}
+                  {m.dueAt && <> · ⏰ Avant le {new Date(m.dueAt).toLocaleDateString('fr-FR')}</>}
+                </div>
+
+                {m.status === 'ASSIGNED' && (
+                  <button disabled={isAccepting} onClick={() => doAction(m.assignmentId, 'accept')}
+                    style={{ width: '100%', background: '#2563eb', color: 'white', border: 'none', padding: '10px', borderRadius: 8, fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', marginBottom: 0, opacity: isAccepting ? 0.6 : 1 }}>
+                    {isAccepting ? '⏳…' : '▶️ Accepter et démarrer'}
+                  </button>
+                )}
+
+                {m.status === 'IN_PROGRESS' && (
+                  <div>
+                    <textarea
+                      value={report[m.assignmentId] || ''}
+                      onChange={(e) => setReport((r) => ({ ...r, [m.assignmentId]: e.target.value }))}
+                      placeholder="Compte-rendu de mission (facultatif)…"
+                      rows={2}
+                      style={{ width: '100%', padding: '8px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: '0.82rem', resize: 'none', boxSizing: 'border-box', fontFamily: 'inherit', marginBottom: 8 }}
+                    />
+                    <button disabled={isCompleting} onClick={() => doAction(m.assignmentId, 'complete')}
+                      style={{ width: '100%', background: '#16a34a', color: 'white', border: 'none', padding: '10px', borderRadius: 8, fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', opacity: isCompleting ? 0.6 : 1 }}>
+                      {isCompleting ? '⏳…' : '✅ Clôturer la mission'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+
+        {done.length > 0 && (
+          <>
+            <div style={{ fontSize: '0.68rem', color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', margin: '16px 0 8px' }}>Missions terminées</div>
+            {done.map((m) => (
+              <div key={m.assignmentId} style={{ background: '#f8fafc', borderRadius: 10, padding: '10px 14px', marginBottom: 8, opacity: 0.8, borderLeft: '4px solid #16a34a' }}>
+                <div style={{ fontWeight: 600, fontSize: '0.85rem', color: '#374151' }}>{MISSION_TYPE_ICON[m.type] || '📋'} {m.title}</div>
+                {m.completedAt && <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: 3 }}>Clôturée le {new Date(m.completedAt).toLocaleDateString('fr-FR')}</div>}
+              </div>
+            ))}
+          </>
+        )}
+      </>}
+    </div>
+  );
+}
 function SosModal({ onClose }: { onClose: () => void }) {
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 9998, display: 'flex', alignItems: 'flex-end' }} onClick={onClose}>

@@ -16,6 +16,8 @@ import { IvrModule } from './ivr/ivr.module';
 import { StatsModule } from './stats/stats.module';
 import { MetricsModule } from './metrics/metrics.module';
 import { SentryModule } from './common/sentry/sentry.module';
+import { TrainingsModule } from './trainings/trainings.module';
+import { MissionsModule } from './missions/missions.module';
 import { validateEnv } from './common/config/env.validation';
 import { configuration } from './common/config/configuration';
 
@@ -55,6 +57,8 @@ import { configuration } from './common/config/configuration';
     StatsModule,
     MetricsModule,
     SentryModule,
+    TrainingsModule,
+    MissionsModule,
   ],
 })
 export class AppModule {}

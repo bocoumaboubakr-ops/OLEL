@@ -87,7 +87,43 @@ async function main() {
     });
   }
 
-  console.log('✅ Seed terminé : zone Matam, sous-zones, utilisateurs et feature flags créés.');
+  // Modules de formation initiaux (ROADMAP §177-180)
+  const trainingModules = [
+    {
+      title: 'Secourisme de base',
+      description: 'Gestes de premiers secours : RCP, arrêt hémorragie, position latérale de sécurité.',
+      category: 'SECOURISME', order: 1, isRequired: true, durationMin: 45,
+    },
+    {
+      title: 'Risques inondation — Région Matam',
+      description: 'Caractéristiques des crues du fleuve Sénégal, zones inondables, conduite à tenir.',
+      category: 'RISQUE_LOCAL', order: 2, isRequired: true, durationMin: 60,
+    },
+    {
+      title: 'Procédures d\'alerte OLEL',
+      description: 'Comment signaler, valider et diffuser une alerte dans le système OLEL.',
+      category: 'PROCEDURE', order: 3, isRequired: true, durationMin: 30,
+    },
+    {
+      title: 'Sensibilisation communautaire',
+      description: 'Techniques de communication pour sensibiliser la population aux risques naturels.',
+      category: 'SENSIBILISATION', order: 4, isRequired: false, durationMin: 40,
+    },
+    {
+      title: 'Évacuation et points de rassemblement',
+      description: 'Plans d\'évacuation des communes, points de rassemblement, coordination logistique.',
+      category: 'PROCEDURE', order: 5, isRequired: false, durationMin: 35,
+    },
+  ];
+
+  for (const m of trainingModules) {
+    const existing = await prisma.trainingModule.findFirst({ where: { title: m.title } });
+    if (!existing) {
+      await prisma.trainingModule.create({ data: m });
+    }
+  }
+
+  console.log('✅ Seed terminé : zone Matam, sous-zones, utilisateurs, feature flags et modules de formation créés.');
 }
 
 main()
