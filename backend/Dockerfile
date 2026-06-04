@@ -21,9 +21,12 @@ COPY package.json ./
 COPY pnpm-lock.yaml* ./
 RUN pnpm install --prefer-frozen-lockfile --prod
 
+# Copier le build compilé et le schéma Prisma
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY prisma ./prisma
+
+# Générer le client Prisma dans l'image de prod
+RUN pnpm prisma:generate
 
 ENV NODE_ENV=production
 ENV PORT=4000
