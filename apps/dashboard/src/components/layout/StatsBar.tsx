@@ -17,13 +17,13 @@ export function StatsBar({ alerts }: { alerts: any[] }) {
       .catch(() => {});
   }, [alerts.length]);
 
-  const active = alerts.filter((a) => a.status === 'ACTIVE').length;
-  const pending = alerts.filter((a) => a.status === 'PENDING').length;
-  const urgent = alerts.filter((a) => a.severity === 3).length;
+  const diffusees = alerts.filter((a) => a.status === 'BROADCAST' || a.status === 'BROADCASTING' || a.status === 'ACTIVE').length;
+  const enCours = alerts.filter((a) => ['PENDING', 'UNDER_REVIEW', 'VALIDATED'].includes(a.status)).length;
+  const urgent = alerts.filter((a) => a.severity === 3 && !['CLOSED', 'RESOLVED', 'REJECTED', 'CANCELLED'].includes(a.status)).length;
 
   const items = [
-    { label: 'Alertes actives', value: stats?.alertsActive ?? active, color: '#16a34a', bg: '#dcfce7' },
-    { label: 'En validation', value: stats?.signalementsPending ?? pending, color: '#92400e', bg: '#fef3c7' },
+    { label: 'Alertes diffusées', value: stats?.alertsActive ?? diffusees, color: '#16a34a', bg: '#dcfce7' },
+    { label: 'En traitement', value: stats?.signalementsPending ?? enCours, color: '#92400e', bg: '#fef3c7' },
     { label: 'Niveau urgence', value: urgent, color: '#dc2626', bg: '#fee2e2' },
     { label: 'Total (30j)', value: stats?.alertsLast30Days ?? '—', color: '#1d4ed8', bg: '#dbeafe' },
     { label: 'Notif. envoyées', value: stats?.notificationsSent ?? '—', color: '#7c3aed', bg: '#ede9fe' },

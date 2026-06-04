@@ -17,6 +17,7 @@ describe('AlertsService', () => {
     description: 'Montée des eaux rapide',
     type: 'TEMPETE',
     status: 'PENDING',
+    currentStep: 'SIGNALEMENT',
     severity: 3,
     zoneId: 'zone-uuid',
     zone: { name: 'Matam', code: 'SN-MT' },
@@ -41,6 +42,7 @@ describe('AlertsService', () => {
               update: jest.fn().mockResolvedValue(mockAlert),
             },
             validation: {
+              create: jest.fn().mockResolvedValue({}),
               upsert: jest.fn().mockResolvedValue({}),
             },
           },
@@ -91,10 +93,19 @@ describe('AlertsService', () => {
     });
   });
 
-  describe('validate', () => {
-    it('should throw ForbiddenException if alert already processed', async () => {
-      prisma.alert.findUnique.mockResolvedValue({ ...mockAlert, status: 'ACTIVE', signalements: [], validations: [] });
-      await expect(service.validate('alert-uuid', 'validator-uuid', true)).rejects.toThrow(ForbiddenException);
+  describe('advance', () => {
+    it('should throw ForbiddenException on a terminal (CLOSED) alert', async () => {
+      prisma.alert.findUnique.mockResolvedValue({ ...mockAlert, status: 'CLOSED', currentStep: 'CLOSED', signalements: [], validations: [] });
+      await expect(
+        service.advance('alert-uuid', { id: 'validator-uuid', role: 'ADMIN' as any }, { action: 'VALIDATED' as any }),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('should reject sentinelle validation without GPS/photo/gravity', async () => {
+      prisma.alert.findUnique.mockResolvedValue({ ...mockAlert, status: 'PENDING', currentStep: 'SIGNALEMENT', signalements: [], validations: [] });
+      await expect(
+        service.advance('alert-uuid', { id: 'v', role: 'SENTINELLE' as any }, { action: 'VALIDATED' as any }),
+      ).rejects.toThrow();
     });
   });
 });

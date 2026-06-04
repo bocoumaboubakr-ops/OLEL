@@ -12,7 +12,10 @@ enum Role {
   SENTINELLE
   MAIRIE
   PREFECTURE
+  GOUVERNORAT
+  PROTECTION_CIVILE
   ADMIN
+  SUPER_ADMIN
 }
 
 enum AlertType {
@@ -32,6 +35,27 @@ enum AlertStatus {
   ACTIVE
   RESOLVED
   CANCELLED
+  UNDER_REVIEW
+  VALIDATED
+  BROADCASTING
+  BROADCAST
+  REJECTED
+  CLOSED
+}
+
+enum AlertStep {
+  SIGNALEMENT
+  SENTINELLE
+  MAIRIE
+  PREFECTURE
+  BROADCAST
+  CLOSED
+}
+
+enum ValidationAction {
+  VALIDATED
+  REJECTED
+  ESCALATED
 }
 
 enum SignalementStatus {
@@ -93,6 +117,7 @@ model Alert {
   description String
   type        AlertType
   status      AlertStatus @default(PENDING)
+  currentStep AlertStep   @default(SIGNALEMENT)
   severity    Int         @default(1)
   zoneId      String
   zone        Zone        @relation(fields: [zoneId], references: [id])
@@ -101,6 +126,12 @@ model Alert {
   longitude   Float?
   mediaUrls   String[]
   resolvedAt  DateTime?
+  broadcastAt DateTime?
+  closedAt    DateTime?
+  closureReason String?
+  requiresMedicalReview Boolean @default(false)
+  requiresConsent       Boolean @default(false)
+  consentObtained       Boolean @default(false)
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
@@ -134,16 +165,22 @@ model Signalement {
 }
 
 model Validation {
-  id          String   @id @default(uuid())
+  id          String            @id @default(uuid())
   alertId     String
-  alert       Alert    @relation(fields: [alertId], references: [id])
+  alert       Alert             @relation(fields: [alertId], references: [id])
   validatorId String
-  validator   User     @relation(fields: [validatorId], references: [id])
+  validator   User              @relation(fields: [validatorId], references: [id])
   approved    Boolean
+  action      ValidationAction?
+  step        AlertStep?
   comment     String?
-  createdAt   DateTime @default(now())
+  photoUrl    String?
+  latitude    Float?
+  longitude   Float?
+  gravity     Int?
+  createdAt   DateTime          @default(now())
 
-  @@unique([alertId, validatorId])
+  @@index([alertId, createdAt])
   @@map("validations")
 }
 

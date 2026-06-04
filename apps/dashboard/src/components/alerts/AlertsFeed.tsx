@@ -28,11 +28,33 @@ export const TYPE_META: Record<string, { icon: string; label: string }> = {
 };
 
 export const STATUS_STYLE: Record<string, { bg: string; color: string; label: string }> = {
-  PENDING:   { bg: '#fef3c7', color: '#92400e', label: 'En attente' },
-  ACTIVE:    { bg: '#dcfce7', color: '#16a34a', label: 'Active' },
-  RESOLVED:  { bg: '#dbeafe', color: '#1d4ed8', label: 'Résolue' },
-  CANCELLED: { bg: '#f1f5f9', color: '#64748b', label: 'Annulée' },
+  PENDING:      { bg: '#fef3c7', color: '#92400e', label: 'Signalement' },
+  UNDER_REVIEW: { bg: '#fef9c3', color: '#a16207', label: 'En vérification' },
+  VALIDATED:    { bg: '#e0e7ff', color: '#4338ca', label: 'Validée' },
+  BROADCASTING: { bg: '#fae8ff', color: '#a21caf', label: 'Diffusion…' },
+  BROADCAST:    { bg: '#fee2e2', color: '#dc2626', label: 'Diffusée' },
+  ACTIVE:       { bg: '#dcfce7', color: '#16a34a', label: 'Active' },
+  RESOLVED:     { bg: '#dbeafe', color: '#1d4ed8', label: 'Résolue' },
+  CLOSED:       { bg: '#dbeafe', color: '#1d4ed8', label: 'Clôturée' },
+  REJECTED:     { bg: '#f1f5f9', color: '#64748b', label: 'Rejetée' },
+  CANCELLED:    { bg: '#f1f5f9', color: '#64748b', label: 'Annulée' },
 };
+
+/** Étapes du cursus (CURSUS_ALERTE.md) dans l'ordre. */
+export const WORKFLOW_STEPS = ['SIGNALEMENT', 'SENTINELLE', 'MAIRIE', 'PREFECTURE', 'BROADCAST', 'CLOSED'] as const;
+
+export const STEP_LABEL: Record<string, string> = {
+  SIGNALEMENT: 'Signalement',
+  SENTINELLE:  'Sentinelle',
+  MAIRIE:      'Mairie',
+  PREFECTURE:  'Préfecture',
+  BROADCAST:   'Diffusion',
+  CLOSED:      'Clôture',
+};
+
+/** Statuts considérés « en cours » (non terminaux) pour le filtre dashboard. */
+export const ACTIVE_STATUSES = ['PENDING', 'UNDER_REVIEW', 'VALIDATED', 'BROADCASTING', 'BROADCAST', 'ACTIVE'];
+export const TERMINAL_STATUSES = ['CLOSED', 'RESOLVED', 'REJECTED', 'CANCELLED'];
 
 export function AlertsFeed({ alerts, onSelect }: { alerts: any[]; onSelect?: (a: any) => void }) {
   if (!alerts.length) {

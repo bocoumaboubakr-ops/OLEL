@@ -8,6 +8,7 @@ import { useAlerts } from '@/hooks/useAlerts';
 import { useAuth } from '@/hooks/useAuth';
 import { StatsBar } from '@/components/layout/StatsBar';
 import { CreateAlertModal } from '@/components/alerts/CreateAlertModal';
+import { ACTIVE_STATUSES } from '@/components/alerts/AlertsFeed';
 
 export default function DashboardPage() {
   const { user, initialized, logout } = useAuth();
@@ -19,9 +20,9 @@ export default function DashboardPage() {
   if (!initialized) return null;
   if (!user) return <LoginRedirect />;
 
-  const canCreate = ['SENTINELLE', 'MAIRIE', 'PREFECTURE', 'ADMIN'].includes(user.role);
+  const canCreate = ['CITOYEN', 'SENTINELLE', 'MAIRIE', 'PREFECTURE', 'GOUVERNORAT', 'PROTECTION_CIVILE', 'ADMIN', 'SUPER_ADMIN'].includes(user.role);
   const filteredAlerts = activeTab === 'active'
-    ? alerts.filter((a) => a.status === 'ACTIVE' || a.status === 'PENDING')
+    ? alerts.filter((a) => ACTIVE_STATUSES.includes(a.status))
     : alerts;
 
   return (

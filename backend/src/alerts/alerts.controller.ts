@@ -1,13 +1,13 @@
-import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { AlertsService } from './alerts.service';
 import { CreateAlertDto } from './dto/create-alert.dto';
-import { ValidateAlertDto } from './dto/validate-alert.dto';
+import { ValidateAlertDto, CloseAlertDto } from './dto/validate-alert.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { Role, AlertStatus, AlertType } from '@prisma/client';
+import { Role, AlertStatus, AlertStep, AlertType } from '@prisma/client';
 
 @ApiTags('Alerts')
 @ApiBearerAuth()
@@ -22,10 +22,11 @@ export class AlertsController {
     @Query('zoneId') zoneId?: string,
     @Query('status') status?: AlertStatus,
     @Query('type') type?: AlertType,
+    @Query('step') step?: AlertStep,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
   ) {
-    return this.alerts.findAll({ zoneId, status, type, page, limit });
+    return this.alerts.findAll({ zoneId, status, type, step, page, limit });
   }
 
   @Get(':id')
@@ -34,27 +35,30 @@ export class AlertsController {
   }
 
   @Post()
-  @Roles(Role.SENTINELLE, Role.MAIRIE, Role.PREFECTURE, Role.ADMIN)
-  @ApiOperation({ summary: 'Créer une alerte' })
-  create(@Body() dto: CreateAlertDto, @CurrentUser('id') userId: string) {
-    return this.alerts.create(dto, userId);
+  @Roles(Role.CITOYEN, Role.SENTINELLE, Role.MAIRIE, Role.PREFECTURE, Role.GOUVERNORAT, Role.PROTECTION_CIVILE, Role.ADMIN, Role.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Créer une alerte (signalement)' })
+  create(@Body() dto: CreateAlertDto, @CurrentUser() user: { id: string; role: Role }) {
+    return this.alerts.create(dto, user.id, user.role);
   }
 
-  @Post(':id/validate')
-  @Roles(Role.MAIRIE, Role.PREFECTURE, Role.ADMIN)
-  @ApiOperation({ summary: 'Valider/rejeter une alerte' })
-  validate(
-    @Param('id') id: string,
-    @Body() dto: ValidateAlertDto,
-    @CurrentUser('id') userId: string,
-  ) {
-    return this.alerts.validate(id, userId, dto.approved, dto.comment);
+  @Post(':id/advance')
+  @Roles(Role.SENTINELLE, Role.MAIRIE, Role.PREFECTURE, Role.GOUVERNORAT, Role.PROTECTION_CIVILE, Role.ADMIN, Role.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Faire avancer une alerte dans le cursus (valider/rejeter/escalader)' })
+  advance(@Param('id') id: string, @Body() dto: ValidateAlertDto, @CurrentUser() user: { id: string; role: Role }) {
+    return this.alerts.advance(id, user, dto);
   }
 
-  @Patch(':id/resolve')
-  @Roles(Role.PREFECTURE, Role.ADMIN)
-  @ApiOperation({ summary: 'Clôturer une alerte' })
-  resolve(@Param('id') id: string, @CurrentUser('id') userId: string) {
-    return this.alerts.resolve(id, userId);
+  @Post(':id/broadcast')
+  @Roles(Role.PREFECTURE, Role.GOUVERNORAT, Role.PROTECTION_CIVILE, Role.ADMIN, Role.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Diffuser une alerte validée (multi-canal)' })
+  broadcast(@Param('id') id: string, @CurrentUser() user: { id: string; role: Role }) {
+    return this.alerts.broadcast(id, user);
+  }
+
+  @Post(':id/close')
+  @Roles(Role.MAIRIE, Role.PREFECTURE, Role.GOUVERNORAT, Role.PROTECTION_CIVILE, Role.ADMIN, Role.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Clôturer une alerte (raison obligatoire)' })
+  close(@Param('id') id: string, @Body() dto: CloseAlertDto, @CurrentUser() user: { id: string; role: Role }) {
+    return this.alerts.close(id, user, dto.reason);
   }
 }
