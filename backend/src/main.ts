@@ -8,6 +8,7 @@ import { WinstonModule } from 'nest-winston';
 import * as winston from 'winston';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
+import { MetricsService } from './metrics/metrics.service';
 
 async function bootstrap() {
   const logger = WinstonModule.createLogger({
@@ -66,9 +67,10 @@ async function bootstrap() {
     }),
   );
 
-  // Filtres & intercepteurs globaux
+  // Filtres & intercepteurs globaux (avec injection MetricsService)
+  const metricsService = app.get(MetricsService);
   app.useGlobalFilters(new HttpExceptionFilter());
-  app.useGlobalInterceptors(new LoggingInterceptor());
+  app.useGlobalInterceptors(new LoggingInterceptor(metricsService));
 
   // Swagger (désactivé en prod si besoin)
   if (process.env.NODE_ENV !== 'production' || process.env.SWAGGER_ENABLED === 'true') {

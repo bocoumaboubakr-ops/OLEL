@@ -14,10 +14,18 @@ import { SignalementsModule } from './signalements/signalements.module';
 import { UssdModule } from './ussd/ussd.module';
 import { IvrModule } from './ivr/ivr.module';
 import { StatsModule } from './stats/stats.module';
+import { MetricsModule } from './metrics/metrics.module';
+import { validateEnv } from './common/config/env.validation';
+import { configuration } from './common/config/configuration';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true, envFilePath: '.env' }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: '.env',
+      validate: validateEnv,
+      load: [configuration],
+    }),
 
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
 
@@ -44,6 +52,7 @@ import { StatsModule } from './stats/stats.module';
     UssdModule,
     IvrModule,
     StatsModule,
+    MetricsModule,
   ],
 })
 export class AppModule {}

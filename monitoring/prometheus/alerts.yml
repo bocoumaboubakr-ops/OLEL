@@ -1,0 +1,47 @@
+groups:
+  - name: olel_alerts
+    rules:
+      - alert: BackendDown
+        expr: up{job="olel-backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "OLEL Backend est hors ligne"
+          description: "Le backend OLEL ne répond plus depuis 1 minute."
+
+      - alert: PostgresDown
+        expr: up{job="postgres"} == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL OLEL hors ligne"
+          description: "La base de données est inaccessible."
+
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Taux d'erreur élevé sur l'API OLEL"
+          description: "Plus de 10% des requêtes retournent des erreurs 5xx."
+
+      - alert: HighMemoryUsage
+        expr: process_resident_memory_bytes{job="olel-backend"} > 512 * 1024 * 1024
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Consommation mémoire élevée"
+          description: "Le backend utilise plus de 512MB de RAM."
+
+      - alert: DiskSpaceLow
+        expr: (node_filesystem_avail_bytes / node_filesystem_size_bytes) < 0.15
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Espace disque faible"
+          description: "Moins de 15% d'espace disque disponible."

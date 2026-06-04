@@ -43,16 +43,21 @@ export class SignalementsService {
     });
   }
 
-  async createFromBot(dto: any, botUserId: string) {
+  async createFromBot(dto: any) {
+    // Résoudre l'utilisateur bot depuis son numéro de téléphone
+    const botPhone = process.env.BOT_ACCOUNT_PHONE || '+221700000099';
+    const botUser = await this.prisma.user.findUnique({ where: { phone: botPhone } });
+    if (!botUser) throw new Error(`Compte bot introuvable (${botPhone}). Vérifiez le seed.`);
+
     return this.prisma.signalement.create({
       data: {
-        userId: botUserId,
+        userId: botUser.id,
         type: dto.type,
-        text: dto.text,
+        text: dto.description || dto.text || '',
         mediaUrls: dto.mediaUrls || [],
         latitude: dto.latitude,
         longitude: dto.longitude,
-        channel: dto.channel || 'bot',
+        channel: 'whatsapp',
       },
     });
   }

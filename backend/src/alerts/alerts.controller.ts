@@ -1,9 +1,10 @@
-import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { AlertsService } from './alerts.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Role, AlertStatus, AlertType } from '@prisma/client';
 
 @ApiTags('Alerts')
@@ -33,21 +34,25 @@ export class AlertsController {
   @Post()
   @Roles(Role.SENTINELLE, Role.MAIRIE, Role.PREFECTURE, Role.ADMIN)
   @ApiOperation({ summary: 'Créer une alerte' })
-  create(@Body() dto: any, @Request() req) {
-    return this.alerts.create(dto, req.user.id);
+  create(@Body() dto: any, @CurrentUser('id') userId: string) {
+    return this.alerts.create(dto, userId);
   }
 
   @Post(':id/validate')
   @Roles(Role.MAIRIE, Role.PREFECTURE, Role.ADMIN)
   @ApiOperation({ summary: 'Valider/rejeter une alerte' })
-  validate(@Param('id') id: string, @Body() dto: { approved: boolean; comment?: string }, @Request() req) {
-    return this.alerts.validate(id, req.user.id, dto.approved, dto.comment);
+  validate(
+    @Param('id') id: string,
+    @Body() dto: { approved: boolean; comment?: string },
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.alerts.validate(id, userId, dto.approved, dto.comment);
   }
 
   @Patch(':id/resolve')
   @Roles(Role.PREFECTURE, Role.ADMIN)
   @ApiOperation({ summary: 'Clôturer une alerte' })
-  resolve(@Param('id') id: string, @Request() req) {
-    return this.alerts.resolve(id, req.user.id);
+  resolve(@Param('id') id: string, @CurrentUser('id') userId: string) {
+    return this.alerts.resolve(id, userId);
   }
 }
