@@ -160,11 +160,16 @@ export class AlertsService {
     const def = WORKFLOW[alert.currentStep];
 
     // États terminaux : aucune action possible
-    if ([AlertStatus.REJECTED, AlertStatus.CLOSED, AlertStatus.CANCELLED, AlertStatus.BROADCAST].includes(alert.status as any)) {
-      throw new ForbiddenException('Alerte déjà clôturée ou diffusée');
+    const TERMINAL: string[] = [AlertStatus.REJECTED, AlertStatus.CLOSED, AlertStatus.CANCELLED, AlertStatus.BROADCAST, AlertStatus.BROADCASTING];
+    if (TERMINAL.includes(alert.status as string)) {
+      throw new ForbiddenException('Alerte déjà clôturée ou diffusée — aucune action possible');
     }
     if (alert.currentStep === AlertStep.BROADCAST || alert.currentStep === AlertStep.CLOSED) {
-      throw new ForbiddenException('Cette étape ne se valide pas (diffusion/clôture dédiées)');
+      throw new ForbiddenException('Cette étape ne se valide pas (diffusion/clôture via endpoints dédiés)');
+    }
+    // Étape PREFECTURE → uniquement via broadcast(), pas advance()
+    if (alert.currentStep === AlertStep.PREFECTURE) {
+      throw new ForbiddenException('Alerte validée par la préfecture — utilisez l\'action Diffuser');
     }
     if (!canAdvance(validator.role, alert.currentStep)) {
       throw new ForbiddenException(`Rôle ${validator.role} insuffisant pour l'étape ${alert.currentStep}`);
@@ -228,11 +233,14 @@ export class AlertsService {
     if (!canBroadcast(user.role)) {
       throw new ForbiddenException('Seule la préfecture (ou plus) peut diffuser');
     }
-    if (alert.status !== AlertStatus.VALIDATED && alert.currentStep !== AlertStep.PREFECTURE) {
-      throw new ForbiddenException('Alerte non validée — diffusion impossible');
+    // Doit être à l'étape PREFECTURE avec statut VALIDATED (les deux conditions)
+    if (alert.currentStep !== AlertStep.PREFECTURE || alert.status !== AlertStatus.VALIDATED) {
+      throw new ForbiddenException(
+        `Diffusion impossible : l'alerte doit être à l'étape Préfecture avec statut Validée (actuel : étape ${alert.currentStep}, statut ${alert.status})`,
+      );
     }
-    if (alert.requiresMedicalReview && alert.status !== AlertStatus.VALIDATED) {
-      throw new ForbiddenException('Validation médicale requise avant diffusion');
+    if (alert.requiresMedicalReview) {
+      throw new ForbiddenException('Validation médicale requise avant diffusion — contactez le service de santé');
     }
     if (alert.requiresConsent && !alert.consentObtained) {
       throw new ForbiddenException('Consentement requis avant diffusion');
@@ -261,8 +269,13 @@ export class AlertsService {
     if (!canClose(user.role)) {
       throw new ForbiddenException('Rôle insuffisant pour clôturer');
     }
+    if (alert.status !== AlertStatus.BROADCAST) {
+      throw new ForbiddenException(
+        `Seule une alerte diffusée (BROADCAST) peut être clôturée (statut actuel : ${alert.status})`,
+      );
+    }
     if (!reason || reason.trim().length < 3) {
-      throw new BadRequestException('Raison de clôture obligatoire');
+      throw new BadRequestException('Raison de clôture obligatoire (3 caractères minimum)');
     }
 
     const updated = await this.prisma.alert.update({

@@ -6,14 +6,28 @@ import { TYPE_META, SEVERITY_COLOR, SEVERITY_LABEL, STATUS_STYLE, WORKFLOW_STEPS
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
 
-// Hiérarchie des rôles (miroir du backend alert-workflow.ts)
+// Miroir de alert-workflow.ts (backend) — hiérarchie des rôles
 const ROLE_LEVEL: Record<string, number> = {
   CITOYEN: 0, SENTINELLE: 1, MAIRIE: 2, PREFECTURE: 3,
   GOUVERNORAT: 4, PROTECTION_CIVILE: 4, ADMIN: 99, SUPER_ADMIN: 99,
 };
-// Rôle minimum requis pour agir à chaque étape
+
+// Rôle minimum requis pour agir à chaque étape (advance)
+// PREFECTURE est géré par broadcast(), pas advance() → absent de cette map
 const STEP_MIN_ROLE: Record<string, number> = {
-  SIGNALEMENT: 1, SENTINELLE: 2, MAIRIE: 3, PREFECTURE: 3,
+  SIGNALEMENT: 1,  // SENTINELLE valide sur le terrain
+  SENTINELLE:  2,  // MAIRIE confirme
+  MAIRIE:      3,  // PREFECTURE valide
+};
+
+// Message d'aide affiché sous l'étape active
+const STEP_NEXT_ACTION: Record<string, string> = {
+  SIGNALEMENT: 'Une sentinelle doit vérifier sur le terrain (photo + GPS + gravité)',
+  SENTINELLE:  'La mairie doit confirmer le signalement',
+  MAIRIE:      'La préfecture doit valider avant diffusion',
+  PREFECTURE:  'La préfecture peut maintenant diffuser l\'alerte',
+  BROADCAST:   'Alerte diffusée — la mairie peut clôturer avec bilan',
+  CLOSED:      'Alerte clôturée',
 };
 
 export function AlertDetail({ alert, currentUser, onClose, onRefetch }: {
@@ -36,10 +50,17 @@ export function AlertDetail({ alert, currentUser, onClose, onRefetch }: {
   const level = ROLE_LEVEL[currentUser.role] ?? 0;
   const step = alert.currentStep || 'SIGNALEMENT';
 
-  const isTerminal = ['CLOSED', 'RESOLVED', 'REJECTED', 'CANCELLED'].includes(alert.status);
-  const canAdvance = !isTerminal && ['SIGNALEMENT', 'SENTINELLE', 'MAIRIE', 'PREFECTURE'].includes(step)
-    && level >= (STEP_MIN_ROLE[step] ?? 99) && alert.status !== 'VALIDATED';
-  const canBroadcast = !isTerminal && (alert.status === 'VALIDATED' || step === 'PREFECTURE') && level >= ROLE_LEVEL.PREFECTURE;
+  const isTerminal = ['CLOSED', 'RESOLVED', 'REJECTED', 'CANCELLED', 'BROADCAST'].includes(alert.status);
+  // PREFECTURE step → géré uniquement par broadcast(), pas advance()
+  const canAdvance = !isTerminal
+    && alert.status !== 'BROADCASTING'
+    && ['SIGNALEMENT', 'SENTINELLE', 'MAIRIE'].includes(step)
+    && level >= (STEP_MIN_ROLE[step] ?? 99);
+  // Diffusion : les DEUX conditions doivent être vraies (AND, pas OR)
+  const canBroadcast = !isTerminal
+    && alert.status === 'VALIDATED'
+    && step === 'PREFECTURE'
+    && level >= ROLE_LEVEL.PREFECTURE;
   const canClose = alert.status === 'BROADCAST' && level >= ROLE_LEVEL.MAIRIE;
   const needsProof = step === 'SIGNALEMENT';
 
@@ -55,17 +76,28 @@ export function AlertDetail({ alert, currentUser, onClose, onRefetch }: {
   const advance = (action: 'VALIDATED' | 'REJECTED' | 'ESCALATED') => run(async () => {
     const body: any = { action, comment };
     if (needsProof && action !== 'REJECTED') {
+      if (!photoUrl) throw new Error('Photo de preuve obligatoire — uploadez une photo avant de valider');
       body.photoUrl = photoUrl;
       body.gravity = Number(gravity);
-      if (navigator.geolocation && (alert.latitude == null)) {
+
+      // GPS : tenter la capture, utiliser coords de l'alerte en fallback
+      const gpsAvailable = typeof navigator !== 'undefined' && !!navigator.geolocation;
+      if (gpsAvailable) {
         await new Promise<void>((res) => {
           navigator.geolocation.getCurrentPosition(
             (p) => { body.latitude = p.coords.latitude; body.longitude = p.coords.longitude; res(); },
-            () => res(), { timeout: 4000 },
+            () => {
+              // GPS refusé/indisponible : utiliser les coords du signalement d'origine
+              body.latitude = alert.latitude ?? 15.6556;
+              body.longitude = alert.longitude ?? -13.2553;
+              res();
+            },
+            { timeout: 5000, maximumAge: 30000 },
           );
         });
       } else {
-        body.latitude = alert.latitude; body.longitude = alert.longitude;
+        body.latitude = alert.latitude ?? 15.6556;
+        body.longitude = alert.longitude ?? -13.2553;
       }
     }
     await axios.post(`${API}/alerts/${alert.id}/advance`, body, { headers: auth() });
@@ -106,22 +138,40 @@ export function AlertDetail({ alert, currentUser, onClose, onRefetch }: {
         <Section title="Cursus de l'alerte">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
             {WORKFLOW_STEPS.map((s, i) => {
-              const done = i < currentStepIdx || isTerminal && alert.status !== 'REJECTED';
-              const active = i === currentStepIdx && !isTerminal;
+              const allDone = alert.status === 'CLOSED' || alert.status === 'BROADCAST';
+              const done = i < currentStepIdx || (allDone && i <= currentStepIdx && alert.status !== 'REJECTED');
+              const active = i === currentStepIdx && !['CLOSED', 'RESOLVED', 'REJECTED', 'CANCELLED'].includes(alert.status);
               const rejected = alert.status === 'REJECTED' && i === currentStepIdx;
+              const waiting = i > currentStepIdx;
+              const nextAction = active ? STEP_NEXT_ACTION[s] : null;
               return (
-                <div key={s} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0' }}>
-                  <div style={{
-                    width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', fontWeight: 700,
-                    background: rejected ? '#dc2626' : done ? '#16a34a' : active ? '#1a3c5e' : '#e2e8f0',
-                    color: (done || active || rejected) ? 'white' : '#94a3b8',
-                  }}>
-                    {rejected ? '✕' : done ? '✓' : i + 1}
+                <div key={s}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '5px 0' }}>
+                    <div style={{
+                      width: 24, height: 24, borderRadius: '50%', flexShrink: 0,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.72rem', fontWeight: 700,
+                      background: rejected ? '#dc2626' : done ? '#16a34a' : active ? '#1a3c5e' : '#e2e8f0',
+                      color: (done || active || rejected) ? 'white' : '#94a3b8',
+                      boxShadow: active ? '0 0 0 3px rgba(26,60,94,0.15)' : 'none',
+                    }}>
+                      {rejected ? '✕' : done ? '✓' : i + 1}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <span style={{ fontSize: '0.82rem', fontWeight: active ? 700 : 400, color: rejected ? '#dc2626' : active ? '#1a3c5e' : waiting ? '#cbd5e1' : '#64748b' }}>
+                        {STEP_LABEL[s]}
+                      </span>
+                    </div>
+                    {active && !rejected && (
+                      <span style={{ fontSize: '0.65rem', background: '#1a3c5e', color: 'white', padding: '1px 7px', borderRadius: 8, fontWeight: 700 }}>
+                        EN COURS
+                      </span>
+                    )}
                   </div>
-                  <span style={{ fontSize: '0.82rem', fontWeight: active ? 700 : 400, color: active ? '#1a3c5e' : '#64748b' }}>
-                    {STEP_LABEL[s]}
-                  </span>
+                  {active && nextAction && (
+                    <div style={{ marginLeft: 34, marginBottom: 4, fontSize: '0.72rem', color: '#64748b', fontStyle: 'italic' }}>
+                      → {nextAction}
+                    </div>
+                  )}
                 </div>
               );
             })}
