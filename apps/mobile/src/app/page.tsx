@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import { useMobileAuth } from '@/hooks/useMobileAuth';
 
@@ -108,7 +108,7 @@ export default function MobilePage() {
 
       {/* ── Contenu scrollable ───────────────────────────────────────────── */}
       <div style={{ flex: 1, overflowY: 'auto' }}>
-        {tab === 'home' && <HomeScreen zoneStatus={zoneStatus} activeCount={active.length} onReport={() => setTab('report')} />}
+        {tab === 'home' && <HomeScreen zoneStatus={zoneStatus} activeCount={active.length} onReport={() => setTab('report')} onAlerts={() => setTab('alerts')} onMap={() => setTab('map')} isSentinel={isSentinel} />}
         {tab === 'alerts' && <AlertsScreen alerts={active} loading={alertsLoading} onRefresh={fetchAlerts} />}
         {tab === 'report' && (
           <ReportScreen
@@ -292,7 +292,10 @@ function MobileLoginScreen({
 }
 
 // ── HomeScreen ────────────────────────────────────────────────────────────────
-function HomeScreen({ zoneStatus, activeCount, onReport }: { zoneStatus: typeof SEV_ZONE[0]; activeCount: number; onReport: () => void }) {
+function HomeScreen({ zoneStatus, activeCount, onReport, onAlerts, onMap, isSentinel }: {
+  zoneStatus: typeof SEV_ZONE[0]; activeCount: number;
+  onReport: () => void; onAlerts: () => void; onMap: () => void; isSentinel: boolean;
+}) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', padding: '0 0 16px' }}>
       <div style={{ background: zoneStatus.bg, borderBottom: `4px solid ${zoneStatus.border}`, padding: '16px 20px', textAlign: 'center' }}>
@@ -316,21 +319,24 @@ function HomeScreen({ zoneStatus, activeCount, onReport }: { zoneStatus: typeof 
         </p>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, width: '100%', maxWidth: 340 }}>
-          <InfoCard icon="📊" label="Alertes actives" sub={`${activeCount} en cours`} color="#1a3c5e" />
-          <InfoCard icon="🗺️" label="Carte Matam" sub="Région Matam" color="#0891b2" />
+          <InfoCard icon="📊" label="Alertes actives" sub={`${activeCount} en cours`} color="#1a3c5e" onClick={onAlerts} />
+          {!isSentinel && <InfoCard icon="🗺️" label="Carte Matam" sub="Région Matam" color="#0891b2" onClick={onMap} />}
         </div>
       </div>
     </div>
   );
 }
 
-function InfoCard({ icon, label, sub, color }: { icon: string; label: string; sub: string; color: string }) {
+function InfoCard({ icon, label, sub, color, onClick }: { icon: string; label: string; sub: string; color: string; onClick?: () => void }) {
   return (
-    <div style={{ background: 'white', borderRadius: 12, padding: '14px 12px', boxShadow: '0 1px 6px rgba(0,0,0,0.07)', borderLeft: `3px solid ${color}` }}>
+    <button
+      onClick={onClick}
+      style={{ background: 'white', borderRadius: 12, padding: '14px 12px', boxShadow: '0 1px 6px rgba(0,0,0,0.07)', borderLeft: `3px solid ${color}`, border: `1px solid #f1f5f9`, borderLeftWidth: 3, borderLeftColor: color, cursor: onClick ? 'pointer' : 'default', textAlign: 'left', width: '100%' }}
+    >
       <div style={{ fontSize: '1.4rem', marginBottom: 4 }}>{icon}</div>
       <div style={{ fontSize: '0.8rem', fontWeight: 700, color }}>{label}</div>
       <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: 2 }}>{sub}</div>
-    </div>
+    </button>
   );
 }
 
@@ -484,31 +490,78 @@ function AlertsScreen({ alerts, loading, onRefresh }: { alerts: MobileAlert[]; l
 }
 
 // ── MapScreen ─────────────────────────────────────────────────────────────────
+// Matam city center coordinates
+const MATAM_CENTER: [number, number] = [15.6556, -13.2553];
+
 function MapScreen({ alerts }: { alerts: MobileAlert[] }) {
+  const mapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !mapRef.current) return;
+
+    // Inject Leaflet CSS
+    if (!document.getElementById('leaflet-css')) {
+      const link = document.createElement('link');
+      link.id = 'leaflet-css';
+      link.rel = 'stylesheet';
+      link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+      document.head.appendChild(link);
+    }
+
+    let map: any;
+    import('leaflet').then((L) => {
+      if (!mapRef.current) return;
+      // Avoid double-init if component remounts
+      if ((mapRef.current as any)._leaflet_id) return;
+
+      map = L.map(mapRef.current, { zoomControl: true }).setView(MATAM_CENTER, 11);
+
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 18,
+      }).addTo(map);
+
+      // Fix default marker icon paths broken by webpack
+      delete (L.Icon.Default.prototype as any)._getIconUrl;
+      L.Icon.Default.mergeOptions({
+        iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+        iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+        shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+      });
+
+      // Matam center marker
+      L.marker(MATAM_CENTER).addTo(map).bindPopup('Matam — centre de coordination OLEL');
+
+      // Alert markers
+      alerts.forEach((a) => {
+        const lat = (a as any).latitude ?? MATAM_CENTER[0];
+        const lng = (a as any).longitude ?? MATAM_CENTER[1];
+        const color = SEV_COLOR[a.severity] || '#888';
+        const meta = RISK_ICONS[a.type] || RISK_ICONS.AUTRE;
+
+        const icon = L.divIcon({
+          html: `<div style="background:${color};color:white;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-size:1rem;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3)">${meta.icon}</div>`,
+          className: '',
+          iconSize: [32, 32],
+          iconAnchor: [16, 16],
+        });
+
+        L.marker([lat, lng], { icon })
+          .addTo(map)
+          .bindPopup(`<b>${meta.icon} ${a.title}</b><br>${a.description || ''}<br><small>${STATUS_LABEL[a.status] || a.status}</small>`);
+      });
+    });
+
+    return () => { if (map) map.remove(); };
+  }, [alerts]);
+
   return (
-    <div style={{ padding: '16px' }}>
-      <h2 style={{ margin: '0 0 14px', fontSize: '1.05rem', color: '#1a3c5e' }}>🗺️ Carte des risques</h2>
-      <div style={{ background: '#e8f4f8', borderRadius: 12, height: 240, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', marginBottom: 16, border: '1px solid #bfdbfe' }}>
-        <div style={{ fontSize: '2.5rem', marginBottom: 8 }}>🗺️</div>
-        <div style={{ fontSize: '0.82rem', color: '#64748b', textAlign: 'center' }}>Carte interactive (V2)<br /><span style={{ fontSize: '0.72rem' }}>Région de Matam · Sénégal</span></div>
+    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100dvh - 52px - 56px)' }}>
+      <div style={{ padding: '10px 16px 6px', flexShrink: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h2 style={{ margin: 0, fontSize: '1rem', color: '#1a3c5e' }}>🗺️ Carte des risques — Matam</h2>
+        <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>{alerts.length} alerte{alerts.length !== 1 ? 's' : ''}</span>
       </div>
-      {alerts.length > 0 && <>
-        <div style={{ fontSize: '0.68rem', color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Zones concernées</div>
-        {alerts.map((a) => {
-          const color = SEV_COLOR[a.severity] || '#888';
-          const meta = RISK_ICONS[a.type] || RISK_ICONS.AUTRE;
-          return (
-            <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'white', borderRadius: 10, marginBottom: 8, boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
-              <span style={{ fontSize: '1.3rem' }}>{meta.icon}</span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#1a3c5e', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.title}</div>
-                <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>📍 {a.zone?.name || 'Matam'}</div>
-              </div>
-              <span style={{ fontSize: '0.68rem', background: color + '22', color, padding: '2px 7px', borderRadius: 8, fontWeight: 700, whiteSpace: 'nowrap' }}>{SEV_LABEL[a.severity]}</span>
-            </div>
-          );
-        })}
-      </>}
+      <div ref={mapRef} style={{ flex: 1, minHeight: 0 }} />
     </div>
   );
 }
@@ -757,8 +810,8 @@ function MissionsScreen() {
         {active.map((m) => {
           const st = MISSION_STATUS_LABEL[m.status] || { label: m.status, color: '#64748b' };
           const icon = MISSION_TYPE_ICON[m.type] || '📋';
-          const isAccepting = acting === m.assignmentId + 'accept';
-          const isCompleting = acting === m.assignmentId + 'complete';
+          const isAccepting = acting === m.id + 'accept';
+          const isCompleting = acting === m.id + 'complete';
           return (
             <div key={m.assignmentId} style={{ background: 'white', borderRadius: 12, marginBottom: 12, boxShadow: '0 1px 6px rgba(0,0,0,0.07)', borderLeft: `4px solid ${st.color}` }}>
               <div style={{ padding: '14px' }}>
@@ -773,7 +826,7 @@ function MissionsScreen() {
                 </div>
 
                 {m.status === 'ASSIGNED' && (
-                  <button disabled={isAccepting} onClick={() => doAction(m.assignmentId, 'accept')}
+                  <button disabled={isAccepting} onClick={() => doAction(m.id, 'accept')}
                     style={{ width: '100%', background: '#2563eb', color: 'white', border: 'none', padding: '10px', borderRadius: 8, fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', marginBottom: 0, opacity: isAccepting ? 0.6 : 1 }}>
                     {isAccepting ? '⏳…' : '▶️ Accepter et démarrer'}
                   </button>
@@ -782,13 +835,13 @@ function MissionsScreen() {
                 {m.status === 'IN_PROGRESS' && (
                   <div>
                     <textarea
-                      value={report[m.assignmentId] || ''}
-                      onChange={(e) => setReport((r) => ({ ...r, [m.assignmentId]: e.target.value }))}
+                      value={report[m.id] || ''}
+                      onChange={(e) => setReport((r) => ({ ...r, [m.id]: e.target.value }))}
                       placeholder="Compte-rendu de mission (facultatif)…"
                       rows={2}
                       style={{ width: '100%', padding: '8px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: '0.82rem', resize: 'none', boxSizing: 'border-box', fontFamily: 'inherit', marginBottom: 8 }}
                     />
-                    <button disabled={isCompleting} onClick={() => doAction(m.assignmentId, 'complete')}
+                    <button disabled={isCompleting} onClick={() => doAction(m.id, 'complete')}
                       style={{ width: '100%', background: '#16a34a', color: 'white', border: 'none', padding: '10px', borderRadius: 8, fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', opacity: isCompleting ? 0.6 : 1 }}>
                       {isCompleting ? '⏳…' : '✅ Clôturer la mission'}
                     </button>
@@ -824,10 +877,10 @@ function SosModal({ onClose }: { onClose: () => void }) {
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {[
-            { label: 'Pompiers',          number: '18',   color: '#dc2626' },
-            { label: 'Police',            number: '17',   color: '#1d4ed8' },
-            { label: 'SAMU',              number: '15',   color: '#16a34a' },
-            { label: 'Protection Civile', number: '1515', color: '#ea580c' },
+            { label: 'Sapeurs-Pompiers',         number: '18',           color: '#dc2626' },
+            { label: 'Police / Gendarmerie',     number: '17',           color: '#1d4ed8' },
+            { label: 'SAMU Sénégal',             number: '15',           color: '#16a34a' },
+            { label: 'Protection Civile',        number: '33 869 19 20', color: '#ea580c' },
           ].map(({ label, number, color }) => (
             <a key={number} href={`tel:${number}`}
               style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', background: color + '11', borderRadius: 12, border: `2px solid ${color}33`, textDecoration: 'none' }}>
