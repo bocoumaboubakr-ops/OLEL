@@ -60,6 +60,6 @@ export class IvrController {
     }
 
     // Default / initial prompt
-    return this.ivrService.buildAlertXml('Alerte en cours', 'votre zone');
+    return this.ivrService.buildAlertXml('Alerte en cours', 'AUTRE', 'Matam', 2);
   }
 }
