@@ -15,6 +15,7 @@ import { UssdModule } from './ussd/ussd.module';
 import { IvrModule } from './ivr/ivr.module';
 import { StatsModule } from './stats/stats.module';
 import { MetricsModule } from './metrics/metrics.module';
+import { SentryModule } from './common/sentry/sentry.module';
 import { validateEnv } from './common/config/env.validation';
 import { configuration } from './common/config/configuration';
 
@@ -53,6 +54,7 @@ import { configuration } from './common/config/configuration';
     IvrModule,
     StatsModule,
     MetricsModule,
+    SentryModule,
   ],
 })
 export class AppModule {}

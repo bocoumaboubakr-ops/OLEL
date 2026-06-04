@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
   title: 'OLEL Dashboard – Alerte Précoce',
-  description: 'Tableau de bord de la plateforme OLEL – Matam/Gorgol',
+  description: 'Tableau de bord de la plateforme OLEL – Région de Matam',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

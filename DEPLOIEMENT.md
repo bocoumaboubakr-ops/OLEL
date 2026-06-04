@@ -39,6 +39,8 @@ nano .env   # Remplir avec les secrets générés + tokens WhatsApp + Africa's T
 | `WHATSAPP_APP_SECRET` | Secret Meta App (HMAC webhook) |
 | `AFRICAS_TALKING_KEY` | Clé Africa's Talking (prod) |
 | `AFRICAS_TALKING_USER` | Username Africa's Talking |
+| `SENTRY_DSN` | DSN Sentry (backend) — optionnel mais recommandé |
+| `NEXT_PUBLIC_SENTRY_DSN` | DSN Sentry (dashboard + mobile) — optionnel |
 
 ## 3. Démarrage des services
 

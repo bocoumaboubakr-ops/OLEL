@@ -13,6 +13,7 @@ export class SignalementsService {
 
     const where: any = {};
     if (params.status) where.status = params.status;
+    if (params.zoneId) where.user = { zoneId: params.zoneId };
 
     const [items, total] = await Promise.all([
       this.prisma.signalement.findMany({
@@ -20,7 +21,7 @@ export class SignalementsService {
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
-        include: { user: { select: { id: true, name: true, phone: true } } },
+        include: { user: { select: { id: true, name: true, phone: true, zoneId: true } } },
       }),
       this.prisma.signalement.count({ where }),
     ]);
@@ -44,7 +45,6 @@ export class SignalementsService {
   }
 
   async createFromBot(dto: any) {
-    // Résoudre l'utilisateur bot depuis son numéro de téléphone
     const botPhone = process.env.BOT_ACCOUNT_PHONE || '+221700000099';
     const botUser = await this.prisma.user.findUnique({ where: { phone: botPhone } });
     if (!botUser) throw new Error(`Compte bot introuvable (${botPhone}). Vérifiez le seed.`);
@@ -66,9 +66,19 @@ export class SignalementsService {
     const existing = await this.prisma.signalement.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException(`Signalement ${id} introuvable`);
 
-    return this.prisma.signalement.update({
-      where: { id },
-      data: { status },
-    });
+    const [updated] = await this.prisma.$transaction([
+      this.prisma.signalement.update({ where: { id }, data: { status } }),
+      this.prisma.auditLog.create({
+        data: {
+          userId: reviewerId,
+          action: `signalement.${status.toLowerCase()}`,
+          resource: 'signalement',
+          resourceId: id,
+          details: { previousStatus: existing.status, newStatus: status },
+        },
+      }),
+    ]);
+
+    return updated;
   }
 }
