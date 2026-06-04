@@ -10,12 +10,13 @@ import { StatsBar } from '@/components/layout/StatsBar';
 import { CreateAlertModal } from '@/components/alerts/CreateAlertModal';
 
 export default function DashboardPage() {
-  const { user, logout } = useAuth();
+  const { user, initialized, logout } = useAuth();
   const { alerts, loading, refetch } = useAlerts();
   const [selected, setSelected] = useState<any>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [activeTab, setActiveTab] = useState<'active' | 'all'>('active');
 
+  if (!initialized) return null;
   if (!user) return <LoginRedirect />;
 
   const canCreate = ['SENTINELLE', 'MAIRIE', 'PREFECTURE', 'ADMIN'].includes(user.role);

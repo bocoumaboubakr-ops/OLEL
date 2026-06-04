@@ -14,12 +14,14 @@ interface AuthUser {
 
 export function useAuth() {
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [initialized, setInitialized] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const stored = localStorage.getItem('olel_user');
     if (stored) setUser(JSON.parse(stored));
+    setInitialized(true);
   }, []);
 
   const login = async (phone: string, password: string) => {
@@ -47,5 +49,5 @@ export function useAuth() {
     window.location.href = '/login';
   };
 
-  return { user, login, logout, loading, error };
+  return { user, initialized, login, logout, loading, error };
 }
