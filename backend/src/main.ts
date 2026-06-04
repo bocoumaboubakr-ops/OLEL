@@ -53,8 +53,11 @@ async function bootstrap() {
 
   app.enableCors({
     origin: (origin, callback) => {
-      const allowed = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000,http://localhost:3001').split(',');
-      if (!origin || allowed.includes(origin)) return callback(null, true);
+      const allowed = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000,http://localhost:3001')
+        .split(',')
+        .map((o) => o.trim().replace(/\/$/, ''));
+      const normalized = origin?.replace(/\/$/, '');
+      if (!origin || allowed.includes(normalized)) return callback(null, true);
       callback(new Error(`CORS: origin ${origin} non autorisée`));
     },
     credentials: true,
