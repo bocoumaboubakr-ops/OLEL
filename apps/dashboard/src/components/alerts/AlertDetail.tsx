@@ -25,8 +25,8 @@ export function AlertDetail({ alert, currentUser, onClose, onRefetch }: {
   const [loading, setLoading] = useState(false);
   const [comment, setComment] = useState('');
   const [error, setError] = useState('');
-  // Champs obligatoires pour la validation sentinelle (étape SIGNALEMENT)
   const [photoUrl, setPhotoUrl] = useState('');
+  const [photoUploading, setPhotoUploading] = useState(false);
   const [gravity, setGravity] = useState('2');
   const [reason, setReason] = useState('');
 
@@ -174,11 +174,35 @@ export function AlertDetail({ alert, currentUser, onClose, onRefetch }: {
                     <div style={{ fontSize: '0.75rem', color: '#92400e', marginBottom: 6 }}>
                       Validation sentinelle : preuve obligatoire (photo + GPS + gravité)
                     </div>
-                    <input
-                      value={photoUrl} onChange={(e) => setPhotoUrl(e.target.value)}
-                      placeholder="URL photo de preuve"
-                      style={inputS}
-                    />
+                    <div style={{ marginBottom: 6 }}>
+                      {photoUrl ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <img src={photoUrl} alt="preuve" style={{ height: 60, borderRadius: 6, objectFit: 'cover', border: '1px solid #e2e8f0' }} />
+                          <button onClick={() => setPhotoUrl('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626', fontSize: '0.8rem' }}>✕ Supprimer</button>
+                        </div>
+                      ) : (
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', background: 'white', border: '1.5px dashed #d97706', borderRadius: 8, padding: '10px 14px' }}>
+                          <span style={{ fontSize: '1.1rem' }}>📷</span>
+                          <span style={{ fontSize: '0.82rem', fontWeight: 600, color: '#92400e' }}>
+                            {photoUploading ? 'Upload en cours…' : 'Choisir une photo de preuve'}
+                          </span>
+                          <input type="file" accept="image/*" style={{ display: 'none' }}
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              setPhotoUploading(true);
+                              try {
+                                const fd = new FormData();
+                                fd.append('file', file);
+                                const { data } = await axios.post(`${API}/upload/photo`, fd, { headers: { Authorization: `Bearer ${localStorage.getItem('olel_token')}`, 'Content-Type': 'multipart/form-data' } });
+                                setPhotoUrl(data.url);
+                              } catch { setError('Échec de l\'upload photo'); }
+                              finally { setPhotoUploading(false); }
+                            }}
+                          />
+                        </label>
+                      )}
+                    </div>
                     <select value={gravity} onChange={(e) => setGravity(e.target.value)} style={{ ...inputS, marginTop: 6 }}>
                       <option value="0">Gravité 0 — Info</option>
                       <option value="1">Gravité 1 — Vigilance</option>

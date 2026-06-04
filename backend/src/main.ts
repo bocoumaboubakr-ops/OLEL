@@ -1,5 +1,8 @@
 import { NestFactory, Reflector } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { ValidationPipe } from '@nestjs/common';
+import { join } from 'path';
+import { mkdirSync } from 'fs';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import helmet from 'helmet';
@@ -35,7 +38,11 @@ async function bootstrap() {
     ],
   });
 
-  const app = await NestFactory.create(AppModule, { logger });
+  const uploadDir = process.env.UPLOAD_DIR || join(process.cwd(), 'uploads');
+  mkdirSync(uploadDir, { recursive: true });
+
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { logger });
+  app.useStaticAssets(uploadDir, { prefix: '/uploads' });
 
   // Sécurité
   app.use(
