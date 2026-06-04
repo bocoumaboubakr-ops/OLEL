@@ -1,6 +1,7 @@
 FROM node:20-alpine AS builder
 
 WORKDIR /app
+RUN apk add --no-cache openssl
 RUN npm install -g pnpm@9
 
 COPY package.json ./
@@ -15,6 +16,7 @@ RUN pnpm build
 FROM node:20-alpine AS runner
 
 WORKDIR /app
+RUN apk add --no-cache openssl
 RUN npm install -g pnpm@9
 
 COPY package.json ./
