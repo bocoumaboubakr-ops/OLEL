@@ -44,7 +44,10 @@ export default function DashboardPage() {
               + Nouvelle alerte
             </button>
           )}
-          {user.role === 'ADMIN' && (
+          {['MAIRIE', 'PREFECTURE', 'GOUVERNORAT', 'PROTECTION_CIVILE', 'ADMIN', 'SUPER_ADMIN'].includes(user.role) && (
+            <a href="/sentinelles" style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.85rem', textDecoration: 'none' }}>🔭 Sentinelles</a>
+          )}
+          {['ADMIN', 'SUPER_ADMIN'].includes(user.role) && (
             <a href="/admin" style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.85rem', textDecoration: 'none' }}>⚙️ Admin</a>
           )}
           <span style={{ fontSize: '0.85rem', opacity: 0.85 }}>{user.name}</span>
