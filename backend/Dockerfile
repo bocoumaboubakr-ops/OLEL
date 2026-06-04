@@ -16,7 +16,7 @@ RUN pnpm build
 FROM node:20-alpine AS runner
 
 WORKDIR /app
-RUN apk add --no-cache openssl
+RUN apk add --no-cache openssl curl
 RUN npm install -g pnpm@9
 
 COPY package.json ./
@@ -35,7 +35,7 @@ ENV PORT=4000
 
 EXPOSE 4000
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=5 \
-  CMD wget -qO- http://127.0.0.1:4000/api/v1/health/live || exit 1
+HEALTHCHECK --interval=20s --timeout=10s --start-period=60s --retries=5 \
+  CMD curl -fs http://127.0.0.1:4000/api/v1/health/live || exit 1
 
 CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main.js"]
