@@ -36,9 +36,16 @@ export class CreateAlertDto {
   @Max(3)
   severity?: number;
 
-  @ApiProperty()
+  @ApiPropertyOptional({ description: 'Zone concernée. Si absente, résolue depuis l\'utilisateur ou la zone par défaut.' })
+  @IsOptional()
   @IsUUID()
-  zoneId: string;
+  zoneId?: string;
+
+  @ApiPropertyOptional({ description: 'Canal d\'origine (app, web, whatsapp, ussd, ivr)' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  channel?: string;
 
   @ApiPropertyOptional()
   @IsOptional()

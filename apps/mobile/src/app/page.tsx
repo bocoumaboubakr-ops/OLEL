@@ -296,22 +296,17 @@ function ReportConfirm({ type, onSent, onBack }: { type: AlertType; onSent: () =
       } catch { /* GPS non dispo */ }
 
       const headers = { Authorization: `Bearer ${token}` };
-      const zoneId = process.env.NEXT_PUBLIC_DEFAULT_ZONE_ID;
-
-      if (zoneId) {
-        await axios.post(`${API}/alerts`, {
-          title: `Signalement : ${label}`,
-          description: note.trim() || `Signalement de type ${label} depuis l'application mobile.`,
-          type, severity: 2, zoneId, latitude: lat, longitude: lng,
-        }, { headers });
-      } else {
-        await axios.post(`${API}/signalements`, {
-          type,
-          text: note.trim() || `Signalement de type ${label} depuis l'application mobile.`,
-          latitude: lat, longitude: lng,
-          channel: 'mobile',
-        }, { headers });
-      }
+      // Canal canonique du signalement citoyen (cf. ARCHITECTURE_OLEL.md Workflow 1) :
+      // POST /alerts crée l'alerte à l'étape SIGNALEMENT. La zone est résolue
+      // côté backend (zone fournie → zone de l'utilisateur → zone par défaut Matam).
+      const zoneId = process.env.NEXT_PUBLIC_DEFAULT_ZONE_ID || undefined;
+      await axios.post(`${API}/alerts`, {
+        title: `Signalement : ${label}`,
+        description: note.trim() || `Signalement de type ${label} depuis l'application mobile.`,
+        type, severity: 2, channel: 'app',
+        ...(zoneId ? { zoneId } : {}),
+        latitude: lat, longitude: lng,
+      }, { headers });
       onSent();
     } catch (e: any) {
       const msg = e.response?.data?.message;

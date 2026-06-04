@@ -45,6 +45,15 @@ describe('AlertsService', () => {
               create: jest.fn().mockResolvedValue({}),
               upsert: jest.fn().mockResolvedValue({}),
             },
+            signalement: {
+              create: jest.fn().mockResolvedValue({}),
+            },
+            user: {
+              findUnique: jest.fn().mockResolvedValue({ zoneId: 'zone-uuid' }),
+            },
+            zone: {
+              findFirst: jest.fn().mockResolvedValue({ id: 'zone-uuid' }),
+            },
           },
         },
         {

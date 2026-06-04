@@ -37,6 +37,12 @@ export class CreateSignalementDto {
   @IsUUID()
   alertId?: string;
 
+  @ApiPropertyOptional({ description: 'Canal d\'origine (app, web, whatsapp, ussd, ivr)' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  channel?: string;
+
   @ApiPropertyOptional({ type: [String] })
   @IsOptional()
   @IsArray()

@@ -71,8 +71,26 @@ export class AlertsService {
     return alert;
   }
 
+  /**
+   * Résout la zone d'un signalement : zone fournie → zone de l'utilisateur →
+   * zone racine par défaut (Matam). Garantit qu'un citoyen peut signaler sans
+   * connaître l'UUID de sa zone (cf. ARCHITECTURE_OLEL.md Workflow 1).
+   */
+  private async resolveZoneId(zoneId: string | undefined, userId: string): Promise<string> {
+    if (zoneId) return zoneId;
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { zoneId: true } });
+    if (user?.zoneId) return user.zoneId;
+    const root = await this.prisma.zone.findFirst({
+      where: { parentId: null },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true },
+    });
+    if (!root) throw new BadRequestException('Aucune zone configurée — contactez l\'administrateur');
+    return root.id;
+  }
+
   async create(
-    dto: { title: string; description: string; type: any; severity?: number; zoneId: string; latitude?: number; longitude?: number; mediaUrls?: string[] },
+    dto: { title: string; description: string; type: any; severity?: number; zoneId?: string; latitude?: number; longitude?: number; mediaUrls?: string[]; channel?: string },
     userId: string,
     creatorRole?: Role,
   ) {
@@ -85,6 +103,8 @@ export class AlertsService {
       status = AlertStatus.UNDER_REVIEW;
     }
 
+    const zoneId = await this.resolveZoneId(dto.zoneId, userId);
+
     const alert = await this.prisma.alert.create({
       data: {
         title: dto.title,
@@ -93,7 +113,7 @@ export class AlertsService {
         severity: dto.severity || 2,
         status,
         currentStep,
-        zoneId: dto.zoneId,
+        zoneId,
         createdById: userId,
         latitude: dto.latitude,
         longitude: dto.longitude,
@@ -102,6 +122,24 @@ export class AlertsService {
       },
       include: { zone: { select: { name: true } } },
     });
+
+    // Trace de provenance : enregistre le signalement lié (canal d'origine)
+    try {
+      await this.prisma.signalement.create({
+        data: {
+          userId,
+          alertId: alert.id,
+          type: dto.type,
+          text: dto.description,
+          mediaUrls: dto.mediaUrls || [],
+          latitude: dto.latitude,
+          longitude: dto.longitude,
+          channel: dto.channel || 'app',
+        },
+      });
+    } catch (e) {
+      this.logger.error(`Échec enregistrement signalement de provenance: ${(e as Error).message}`);
+    }
 
     await this.enqueueFanout({ alertId: alert.id });
     this.safeBroadcast(alert);
