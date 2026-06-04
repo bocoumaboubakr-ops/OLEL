@@ -89,7 +89,7 @@ services:
     restart: unless-stopped
     depends_on:
       backend:
-        condition: service_healthy
+        condition: service_started
     environment:
       NEXT_PUBLIC_API_URL:       http://localhost:4000/api/v1
       NEXT_PUBLIC_WS_URL:        ws://localhost:4000
@@ -108,7 +108,7 @@ services:
     restart: unless-stopped
     depends_on:
       backend:
-        condition: service_healthy
+        condition: service_started
     environment:
       NEXT_PUBLIC_API_URL:        http://localhost:4000/api/v1
       NEXT_PUBLIC_WS_URL:         ws://localhost:4000
@@ -127,7 +127,7 @@ services:
     restart: unless-stopped
     depends_on:
       backend:
-        condition: service_healthy
+        condition: service_started
     environment:
       WHATSAPP_TOKEN:           ${WHATSAPP_TOKEN:-}
       WHATSAPP_PHONE_ID:        ${WHATSAPP_PHONE_ID:-}
