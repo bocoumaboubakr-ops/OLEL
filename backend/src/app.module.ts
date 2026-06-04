@@ -19,6 +19,7 @@ import { SentryModule } from './common/sentry/sentry.module';
 import { TrainingsModule } from './trainings/trainings.module';
 import { MissionsModule } from './missions/missions.module';
 import { UploadModule } from './common/upload/upload.module';
+import { SchedulerModule } from './common/scheduler/scheduler.module';
 import { validateEnv } from './common/config/env.validation';
 import { configuration } from './common/config/configuration';
 
@@ -61,6 +62,7 @@ import { configuration } from './common/config/configuration';
     TrainingsModule,
     MissionsModule,
     UploadModule,
+    SchedulerModule,
   ],
 })
 export class AppModule {}
