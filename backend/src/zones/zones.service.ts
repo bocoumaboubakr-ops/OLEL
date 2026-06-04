@@ -29,7 +29,7 @@ export class ZonesService {
     return this.prisma.zone.create({ data: dto });
   }
 
-  async update(id: string, dto: any) {
+  async update(id: string, dto: Partial<{ name: string; latitude: number; longitude: number; radiusKm: number; isActive: boolean }>) {
     await this.findOne(id);
     return this.prisma.zone.update({ where: { id }, data: dto });
   }

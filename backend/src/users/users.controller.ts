@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { UsersService } from './users.service';
+import { CreateUserDto, UpdateUserDto } from './dto/create-user.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -28,13 +29,13 @@ export class UsersController {
 
   @Post()
   @Roles(Role.ADMIN)
-  create(@Body() dto: any) {
+  create(@Body() dto: CreateUserDto) {
     return this.users.create(dto);
   }
 
   @Patch(':id')
   @Roles(Role.ADMIN)
-  update(@Param('id') id: string, @Body() dto: any) {
+  update(@Param('id') id: string, @Body() dto: UpdateUserDto) {
     return this.users.update(id, dto);
   }
 

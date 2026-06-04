@@ -33,12 +33,9 @@ export class UsersService {
   async create(dto: { name: string; phone: string; email?: string; role: Role; password: string; zoneId?: string }) {
     const exists = await this.prisma.user.findUnique({ where: { phone: dto.phone } });
     if (exists) throw new ConflictException('Ce numéro est déjà utilisé');
+    const { password, ...rest } = dto;
     return this.prisma.user.create({
-      data: {
-        ...dto,
-        passwordHash: await bcrypt.hash(dto.password, 10),
-        password: undefined,
-      } as any,
+      data: { ...rest, passwordHash: await bcrypt.hash(password, 10) },
       select: { id: true, name: true, phone: true, role: true, createdAt: true },
     });
   }

@@ -1,6 +1,8 @@
 import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { AlertsService } from './alerts.service';
+import { CreateAlertDto } from './dto/create-alert.dto';
+import { ValidateAlertDto } from './dto/validate-alert.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -34,7 +36,7 @@ export class AlertsController {
   @Post()
   @Roles(Role.SENTINELLE, Role.MAIRIE, Role.PREFECTURE, Role.ADMIN)
   @ApiOperation({ summary: 'Créer une alerte' })
-  create(@Body() dto: any, @CurrentUser('id') userId: string) {
+  create(@Body() dto: CreateAlertDto, @CurrentUser('id') userId: string) {
     return this.alerts.create(dto, userId);
   }
 
@@ -43,7 +45,7 @@ export class AlertsController {
   @ApiOperation({ summary: 'Valider/rejeter une alerte' })
   validate(
     @Param('id') id: string,
-    @Body() dto: { approved: boolean; comment?: string },
+    @Body() dto: ValidateAlertDto,
     @CurrentUser('id') userId: string,
   ) {
     return this.alerts.validate(id, userId, dto.approved, dto.comment);

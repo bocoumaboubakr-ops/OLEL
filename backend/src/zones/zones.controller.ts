@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Patch, Body, Param, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { ZonesService } from './zones.service';
+import { CreateZoneDto, UpdateZoneDto } from './dto/zone.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -21,9 +22,9 @@ export class ZonesController {
 
   @Post()
   @Roles(Role.ADMIN)
-  create(@Body() dto: any) { return this.zones.create(dto); }
+  create(@Body() dto: CreateZoneDto) { return this.zones.create(dto); }
 
   @Patch(':id')
   @Roles(Role.ADMIN)
-  update(@Param('id') id: string, @Body() dto: any) { return this.zones.update(id, dto); }
+  update(@Param('id') id: string, @Body() dto: UpdateZoneDto) { return this.zones.update(id, dto); }
 }

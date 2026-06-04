@@ -46,7 +46,7 @@ export class AlertsService {
     return alert;
   }
 
-  async create(dto: any, userId: string) {
+  async create(dto: { title: string; description: string; type: any; severity?: number; zoneId: string; latitude?: number; longitude?: number; mediaUrls?: string[] }, userId: string) {
     const alert = await this.prisma.alert.create({
       data: {
         title: dto.title,

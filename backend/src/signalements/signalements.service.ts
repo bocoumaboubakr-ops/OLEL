@@ -29,7 +29,7 @@ export class SignalementsService {
     return { items, total, page, limit, pages: Math.ceil(total / limit) };
   }
 
-  async create(dto: any, userId: string) {
+  async create(dto: { type: any; text: string; latitude?: number; longitude?: number; alertId?: string; mediaUrls?: string[]; channel?: string }, userId: string) {
     return this.prisma.signalement.create({
       data: {
         userId,
@@ -44,7 +44,7 @@ export class SignalementsService {
     });
   }
 
-  async createFromBot(dto: any) {
+  async createFromBot(dto: { type: any; description?: string; text?: string; latitude?: number; longitude?: number; mediaUrls?: string[] }) {
     const botPhone = process.env.BOT_ACCOUNT_PHONE || '+221700000099';
     const botUser = await this.prisma.user.findUnique({ where: { phone: botPhone } });
     if (!botUser) throw new Error(`Compte bot introuvable (${botPhone}). Vérifiez le seed.`);
