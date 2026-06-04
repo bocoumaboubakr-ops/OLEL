@@ -4,6 +4,8 @@ import axios from 'axios';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
 
+export type AuthMode = 'password' | 'otp_request' | 'otp_verify';
+
 export function useMobileAuth() {
   const [user, setUser] = useState<{ id: string; name: string; phone: string; role: string } | null>(null);
   const [initialized, setInitialized] = useState(false);
@@ -12,20 +14,50 @@ export function useMobileAuth() {
 
   useEffect(() => {
     const stored = localStorage.getItem('olel_user');
-    if (stored) setUser(JSON.parse(stored));
+    if (stored) {
+      try { setUser(JSON.parse(stored)); } catch { /* ignore */ }
+    }
     setInitialized(true);
   }, []);
 
+  const _store = (data: { accessToken: string; refreshToken: string; user: any }) => {
+    localStorage.setItem('olel_token', data.accessToken);
+    localStorage.setItem('olel_refresh', data.refreshToken);
+    localStorage.setItem('olel_user', JSON.stringify(data.user));
+    setUser(data.user);
+  };
+
+  /** Connexion par mot de passe (sentinelles, opérateurs, admin). */
   const login = async (phone: string, password: string) => {
     setLoading(true); setError('');
     try {
       const { data } = await axios.post(`${API}/auth/login`, { phone, password });
-      localStorage.setItem('olel_token', data.accessToken);
-      localStorage.setItem('olel_refresh', data.refreshToken);
-      localStorage.setItem('olel_user', JSON.stringify(data.user));
-      setUser(data.user);
+      _store(data);
     } catch (e: any) {
-      setError(e.response?.data?.message || 'Erreur de connexion');
+      setError(e.response?.data?.message || 'Identifiants incorrects');
+    } finally { setLoading(false); }
+  };
+
+  /** Demander un OTP (citoyens). Retourne dev_code si env dev. */
+  const requestOtp = async (phone: string): Promise<{ dev_code?: string } | null> => {
+    setLoading(true); setError('');
+    try {
+      const { data } = await axios.post(`${API}/auth/otp/request`, { phone });
+      return data; // { message, dev_code? }
+    } catch (e: any) {
+      setError(e.response?.data?.message || 'Impossible d\'envoyer le code');
+      return null;
+    } finally { setLoading(false); }
+  };
+
+  /** Vérifier le code OTP et se connecter (crée le compte si nouveau). */
+  const verifyOtp = async (phone: string, code: string) => {
+    setLoading(true); setError('');
+    try {
+      const { data } = await axios.post(`${API}/auth/otp/verify`, { phone, code });
+      _store(data);
+    } catch (e: any) {
+      setError(e.response?.data?.message || 'Code incorrect ou expiré');
     } finally { setLoading(false); }
   };
 
@@ -36,5 +68,5 @@ export function useMobileAuth() {
     setUser(null);
   };
 
-  return { user, initialized, loading, error, login, logout };
+  return { user, initialized, loading, error, login, requestOtp, verifyOtp, logout };
 }

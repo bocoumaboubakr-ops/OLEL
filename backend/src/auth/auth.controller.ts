@@ -5,6 +5,7 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { LoginDto } from './dto/login.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { TotpVerifyDto } from './dto/totp-verify.dto';
+import { OtpRequestDto, OtpVerifyDto } from './dto/otp.dto';
 import { ThrottleStrict } from '../common/decorators/throttle.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 
@@ -29,6 +30,26 @@ export class AuthController {
   refresh(@Body() dto: RefreshDto) {
     return this.auth.refreshTokens(dto.refreshToken);
   }
+
+  // ── OTP ───────────────────────────────────────────────────────────────────
+
+  @Post('otp/request')
+  @ThrottleStrict()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Demander un code OTP par SMS (inscription/connexion citoyen)' })
+  requestOtp(@Body() dto: OtpRequestDto) {
+    return this.auth.requestOtp(dto.phone);
+  }
+
+  @Post('otp/verify')
+  @ThrottleStrict()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Vérifier le code OTP et obtenir un token JWT (crée le compte si nouveau)' })
+  verifyOtp(@Body() dto: OtpVerifyDto) {
+    return this.auth.verifyOtp(dto.phone, dto.code);
+  }
+
+  // ── TOTP (2FA) ────────────────────────────────────────────────────────────
 
   @Post('totp/setup')
   @UseGuards(JwtAuthGuard)

@@ -52,7 +52,7 @@ describe('UsersService', () => {
       (prisma.user.findMany as jest.Mock).mockResolvedValue([mockUser]);
       (prisma.user.count as jest.Mock).mockResolvedValue(1);
 
-      const result = await service.findAll(1, 20);
+      const result = await service.findAll({ page: 1, limit: 20 });
 
       expect(result.users).toEqual([mockUser]);
       expect(result.total).toBe(1);

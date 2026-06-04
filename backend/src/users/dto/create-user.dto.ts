@@ -42,6 +42,24 @@ export class CreateUserDto {
   zoneId?: string;
 }
 
+/** Création d'une sentinelle par un MAIRIE ou ADMIN. */
+export class CreateSentinelleDto {
+  @ApiProperty({ example: 'Aminata Diallo' })
+  @IsString()
+  @MaxLength(100)
+  name: string;
+
+  @ApiProperty({ example: '+221776543210' })
+  @IsString()
+  @Matches(/^\+\d{7,15}$/, { message: 'Format téléphone invalide (ex: +221776543210)' })
+  phone: string;
+
+  @ApiPropertyOptional({ description: 'Zone de la sentinelle (défaut : zone du mairie)' })
+  @IsOptional()
+  @IsUUID()
+  zoneId?: string;
+}
+
 export class UpdateUserDto {
   @ApiPropertyOptional()
   @IsOptional()

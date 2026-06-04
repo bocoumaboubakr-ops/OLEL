@@ -41,7 +41,7 @@ interface MobileAlert { id: string; title: string; description: string; type: st
 
 // ── App root ──────────────────────────────────────────────────────────────────
 export default function MobilePage() {
-  const { user, initialized, login, logout, loading: authLoading, error: authError } = useMobileAuth();
+  const { user, initialized, login, logout, requestOtp, verifyOtp, loading: authLoading, error: authError } = useMobileAuth();
   const [tab, setTab] = useState<Tab>('home');
   const [alerts, setAlerts] = useState<MobileAlert[]>([]);
   const [alertsLoading, setAlertsLoading] = useState(true);
@@ -63,7 +63,15 @@ export default function MobilePage() {
   useEffect(() => { if (tab === 'report') { setReportStep('type'); setReportType(null); } }, [tab]);
 
   if (!initialized) return <Splash />;
-  if (!user) return <MobileLoginScreen onLogin={login} loading={authLoading} error={authError} />;
+  if (!user) return (
+    <MobileLoginScreen
+      onLogin={login}
+      onRequestOtp={requestOtp}
+      onVerifyOtp={verifyOtp}
+      loading={authLoading}
+      error={authError}
+    />
+  );
 
   const active = alerts.filter((a) => !TERMINAL.includes(a.status));
   const maxSev = active.reduce((m, a) => Math.max(m, a.severity), 0);
@@ -156,55 +164,127 @@ function Splash() {
 }
 
 // ── MobileLoginScreen ─────────────────────────────────────────────────────────
-function MobileLoginScreen({ onLogin, loading, error }: { onLogin: (p: string, pw: string) => void; loading: boolean; error: string }) {
+function MobileLoginScreen({
+  onLogin, onRequestOtp, onVerifyOtp, loading, error,
+}: {
+  onLogin: (p: string, pw: string) => void;
+  onRequestOtp: (p: string) => Promise<{ dev_code?: string } | null>;
+  onVerifyOtp: (p: string, code: string) => void;
+  loading: boolean;
+  error: string;
+}) {
+  const [mode, setMode] = useState<'choose' | 'otp_phone' | 'otp_code' | 'password'>('choose');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
+  const [otpCode, setOtpCode] = useState('');
+  const [devCode, setDevCode] = useState('');
+
+  const handleRequestOtp = async () => {
+    const result = await onRequestOtp(phone);
+    if (result) {
+      if (result.dev_code) setDevCode(result.dev_code);
+      setMode('otp_code');
+    }
+  };
+
+  const inpStyle = { width: '100%', padding: '14px', border: '1.5px solid #e2e8f0', borderRadius: 10, fontSize: '1rem', boxSizing: 'border-box' as const, outline: 'none' };
+  const btnPrimary = (disabled?: boolean): React.CSSProperties => ({ width: '100%', background: '#1a3c5e', color: 'white', border: 'none', padding: '16px', borderRadius: 12, fontSize: '1rem', fontWeight: 800, cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.6 : 1 });
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100dvh', background: '#1a3c5e' }}>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 24px 24px', color: 'white' }}>
         <div style={{ fontSize: '4rem', marginBottom: 8 }}>🚨</div>
         <h1 style={{ margin: '0 0 4px', fontSize: '2rem', fontWeight: 900, letterSpacing: '-1px' }}>OLEL</h1>
-        <p style={{ margin: '0 0 40px', fontSize: '0.85rem', opacity: 0.8, textAlign: 'center' }}>
-          Alerte précoce multi-risques<br />Région de Matam
+        <p style={{ margin: '0 0 32px', fontSize: '0.85rem', opacity: 0.8, textAlign: 'center' }}>
+          Alerte précoce multi-risques · Matam
         </p>
 
         <div style={{ background: 'white', borderRadius: 20, padding: '28px 24px', width: '100%', maxWidth: 360 }}>
-          <h2 style={{ margin: '0 0 20px', fontSize: '1rem', color: '#1a3c5e', fontWeight: 700 }}>Connexion</h2>
 
-          <div style={{ marginBottom: 14 }}>
-            <label style={{ display: 'block', marginBottom: 6, fontSize: '0.82rem', fontWeight: 600, color: '#374151' }}>
-              📱 Numéro de téléphone
-            </label>
-            <input
-              type="tel" value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="+221700000001"
-              style={{ width: '100%', padding: '14px', border: '1.5px solid #e2e8f0', borderRadius: 10, fontSize: '1rem', boxSizing: 'border-box', outline: 'none' }}
-            />
-          </div>
+          {/* ── Choix du mode ── */}
+          {mode === 'choose' && (
+            <>
+              <h2 style={{ margin: '0 0 18px', fontSize: '1rem', color: '#1a3c5e', fontWeight: 700 }}>Comment souhaitez-vous accéder ?</h2>
+              <button onClick={() => setMode('otp_phone')} style={{ ...btnPrimary(), marginBottom: 12, background: '#dc2626' }}>
+                📱 Citoyen — Connexion par SMS
+              </button>
+              <button onClick={() => setMode('password')} style={{ ...btnPrimary(), background: '#1a3c5e' }}>
+                🔒 Opérateur — Mot de passe
+              </button>
+              <p style={{ textAlign: 'center', fontSize: '0.72rem', color: '#94a3b8', marginTop: 14, marginBottom: 0 }}>
+                Les citoyens se connectent par code SMS.<br />Les sentinelles et agents utilisent un mot de passe.
+              </p>
+            </>
+          )}
 
-          <div style={{ marginBottom: 20 }}>
-            <label style={{ display: 'block', marginBottom: 6, fontSize: '0.82rem', fontWeight: 600, color: '#374151' }}>
-              🔒 Mot de passe
-            </label>
-            <input
-              type="password" value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && onLogin(phone, password)}
-              style={{ width: '100%', padding: '14px', border: '1.5px solid #e2e8f0', borderRadius: 10, fontSize: '1rem', boxSizing: 'border-box', outline: 'none' }}
-            />
-          </div>
+          {/* ── OTP : saisie du téléphone ── */}
+          {mode === 'otp_phone' && (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                <button onClick={() => setMode('choose')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: '1.1rem' }}>←</button>
+                <h2 style={{ margin: 0, fontSize: '1rem', color: '#1a3c5e', fontWeight: 700 }}>Connexion citoyen</h2>
+              </div>
+              <label style={{ display: 'block', marginBottom: 6, fontSize: '0.82rem', fontWeight: 600, color: '#374151' }}>📱 Numéro de téléphone</label>
+              <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)}
+                placeholder="+221700000001" style={{ ...inpStyle, marginBottom: 16 }} />
+              {error && <div style={{ background: '#fee2e2', color: '#dc2626', padding: '8px 12px', borderRadius: 8, marginBottom: 12, fontSize: '0.82rem' }}>{error}</div>}
+              <button disabled={loading || !phone} onClick={handleRequestOtp} style={btnPrimary(loading || !phone)}>
+                {loading ? '⏳ Envoi…' : 'Recevoir un code SMS →'}
+              </button>
+            </>
+          )}
 
-          {error && <div style={{ background: '#fee2e2', color: '#dc2626', padding: '10px 12px', borderRadius: 8, marginBottom: 14, fontSize: '0.82rem' }}>{error}</div>}
+          {/* ── OTP : saisie du code ── */}
+          {mode === 'otp_code' && (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                <button onClick={() => setMode('otp_phone')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: '1.1rem' }}>←</button>
+                <h2 style={{ margin: 0, fontSize: '1rem', color: '#1a3c5e', fontWeight: 700 }}>Entrez votre code</h2>
+              </div>
+              <div style={{ background: '#f0f9ff', borderRadius: 8, padding: '8px 12px', marginBottom: 16, fontSize: '0.78rem', color: '#0369a1' }}>
+                Code envoyé au {phone}. Valable 10 minutes.
+              </div>
+              {devCode && (
+                <div style={{ background: '#fef3c7', borderRadius: 8, padding: '8px 12px', marginBottom: 12, fontSize: '0.82rem', color: '#92400e', fontWeight: 700 }}>
+                  🛠 Dev : code = <span style={{ fontFamily: 'monospace', fontSize: '1.1rem' }}>{devCode}</span>
+                </div>
+              )}
+              <label style={{ display: 'block', marginBottom: 6, fontSize: '0.82rem', fontWeight: 600, color: '#374151' }}>🔢 Code à 6 chiffres</label>
+              <input type="text" inputMode="numeric" pattern="[0-9]*" maxLength={6}
+                value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                placeholder="123456"
+                style={{ ...inpStyle, letterSpacing: '0.3em', textAlign: 'center', fontSize: '1.6rem', marginBottom: 16 }} />
+              {error && <div style={{ background: '#fee2e2', color: '#dc2626', padding: '8px 12px', borderRadius: 8, marginBottom: 12, fontSize: '0.82rem' }}>{error}</div>}
+              <button disabled={loading || otpCode.length < 6} onClick={() => onVerifyOtp(phone, otpCode)} style={btnPrimary(loading || otpCode.length < 6)}>
+                {loading ? '⏳ Vérification…' : 'Valider →'}
+              </button>
+              <button onClick={handleRequestOtp} style={{ width: '100%', background: 'none', border: 'none', color: '#64748b', marginTop: 10, cursor: 'pointer', fontSize: '0.82rem', padding: '6px 0' }}>
+                Renvoyer le code
+              </button>
+            </>
+          )}
 
-          <button
-            disabled={loading || !phone || !password}
-            onClick={() => onLogin(phone, password)}
-            style={{ width: '100%', background: '#1a3c5e', color: 'white', border: 'none', padding: '16px', borderRadius: 12, fontSize: '1rem', fontWeight: 800, cursor: 'pointer', opacity: loading ? 0.6 : 1 }}
-          >
-            {loading ? '⏳ Connexion…' : 'Se connecter →'}
-          </button>
+          {/* ── Connexion par mot de passe (sentinelles / agents) ── */}
+          {mode === 'password' && (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                <button onClick={() => setMode('choose')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: '1.1rem' }}>←</button>
+                <h2 style={{ margin: 0, fontSize: '1rem', color: '#1a3c5e', fontWeight: 700 }}>Connexion opérateur</h2>
+              </div>
+              <label style={{ display: 'block', marginBottom: 6, fontSize: '0.82rem', fontWeight: 600, color: '#374151' }}>📱 Téléphone</label>
+              <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)}
+                placeholder="+221700000001" style={{ ...inpStyle, marginBottom: 12 }} />
+              <label style={{ display: 'block', marginBottom: 6, fontSize: '0.82rem', fontWeight: 600, color: '#374151' }}>🔒 Mot de passe</label>
+              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && onLogin(phone, password)}
+                style={{ ...inpStyle, marginBottom: 16 }} />
+              {error && <div style={{ background: '#fee2e2', color: '#dc2626', padding: '8px 12px', borderRadius: 8, marginBottom: 12, fontSize: '0.82rem' }}>{error}</div>}
+              <button disabled={loading || !phone || !password} onClick={() => onLogin(phone, password)} style={btnPrimary(loading || !phone || !password)}>
+                {loading ? '⏳ Connexion…' : 'Se connecter →'}
+              </button>
+            </>
+          )}
+
         </div>
       </div>
     </div>
