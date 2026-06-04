@@ -7,6 +7,10 @@ COPY package.json pnpm-lock.yaml* ./
 RUN pnpm install --prefer-frozen-lockfile
 
 COPY . .
+
+ARG NEXT_PUBLIC_API_URL=http://localhost:4000/api/v1
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+
 RUN pnpm build
 
 # ── Production image ──────────────────────────────────────────────────────────
@@ -27,8 +31,5 @@ RUN chown -R olel:olel /app
 USER olel
 
 EXPOSE 3001
-
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD wget -qO- http://localhost:3001 || exit 1
 
 CMD ["node", "server.js"]

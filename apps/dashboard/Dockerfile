@@ -7,6 +7,13 @@ COPY package.json pnpm-lock.yaml* ./
 RUN pnpm install --prefer-frozen-lockfile
 
 COPY . .
+
+# Variables injectées au build pour Next.js (NEXT_PUBLIC_* baked dans le bundle)
+ARG NEXT_PUBLIC_API_URL=http://localhost:4000/api/v1
+ARG NEXT_PUBLIC_WS_URL=ws://localhost:4000
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_WS_URL=$NEXT_PUBLIC_WS_URL
+
 RUN pnpm build
 
 # ── Production image ──────────────────────────────────────────────────────────
@@ -27,8 +34,5 @@ RUN chown -R olel:olel /app
 USER olel
 
 EXPOSE 3000
-
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD wget -qO- http://localhost:3000 || exit 1
 
 CMD ["node", "server.js"]
