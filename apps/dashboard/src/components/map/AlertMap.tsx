@@ -10,6 +10,15 @@ export function AlertMap({ alerts, selected, onSelect }: { alerts: any[]; select
   useEffect(() => {
     if (typeof window === 'undefined' || mapRef.current) return;
 
+    // Inject Leaflet CSS once
+    if (!document.getElementById('leaflet-css')) {
+      const link = document.createElement('link');
+      link.id = 'leaflet-css';
+      link.rel = 'stylesheet';
+      link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+      document.head.appendChild(link);
+    }
+
     import('leaflet').then((L) => {
       mapRef.current = L.map('alert-map', { center: [15.6556, -13.2553], zoom: 9 });
 
@@ -22,6 +31,10 @@ export function AlertMap({ alerts, selected, onSelect }: { alerts: any[]; select
       L.circle([15.6556, -13.2553], { radius: 50000, color: '#1a3c5e', fillColor: '#1a3c5e', fillOpacity: 0.05, weight: 1.5, dashArray: '6' })
         .addTo(mapRef.current);
     });
+
+    return () => {
+      if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; }
+    };
   }, []);
 
   useEffect(() => {
@@ -85,5 +98,5 @@ export function AlertMap({ alerts, selected, onSelect }: { alerts: any[]; select
     });
   }, [alerts, selected, onSelect]);
 
-  return <div id="alert-map" style={{ width: '100%', height: '100%', background: '#e8f0fe' }} />;
+  return <div id="alert-map" style={{ width: '100%', height: '100%', minHeight: '400px', background: '#e8f0fe' }} />;
 }
