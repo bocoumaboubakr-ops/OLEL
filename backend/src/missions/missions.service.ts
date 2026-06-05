@@ -94,6 +94,23 @@ export class MissionsService {
     return { success: true };
   }
 
+  /** La sentinelle refuse une mission assignée. */
+  async reject(missionId: string, userId: string) {
+    const assignment = await this.getAssignment(missionId, userId);
+    await this.prisma.missionAssignment.update({
+      where: { id: assignment.id },
+      data: { status: MissionStatus.CANCELLED },
+    });
+    // Remettre la mission OPEN si plus personne ne l'a en cours
+    const active = await this.prisma.missionAssignment.count({
+      where: { missionId, status: { in: [MissionStatus.ASSIGNED, MissionStatus.IN_PROGRESS] } },
+    });
+    if (active === 0) {
+      await this.prisma.mission.update({ where: { id: missionId }, data: { status: MissionStatus.OPEN } });
+    }
+    return { success: true };
+  }
+
   private async getAssignment(missionId: string, sentinelId: string) {
     const assignment = await this.prisma.missionAssignment.findUnique({
       where: { missionId_sentinelId: { missionId, sentinelId } },

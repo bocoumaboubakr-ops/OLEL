@@ -103,12 +103,16 @@ model User {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
+  deletedAt     DateTime?
+
   signalements  Signalement[]
   validations   Validation[]
   auditLogs     AuditLog[]
   consents      Consent[]
   trainingProgress    TrainingProgress[]
   missionAssignments  MissionAssignment[]
+  createdAlerts       Alert[]    @relation("AlertCreator")
+  createdMissions     Mission[]  @relation("MissionCreator")
 
   @@index([phone])
   @@index([zoneId])
@@ -148,6 +152,7 @@ model Alert {
   zoneId      String
   zone        Zone        @relation(fields: [zoneId], references: [id])
   createdById String
+  createdBy   User        @relation("AlertCreator", fields: [createdById], references: [id])
   latitude    Float?
   longitude   Float?
   mediaUrls   String[]
@@ -165,7 +170,7 @@ model Alert {
   validations  Validation[]
   notifications NotificationLog[]
 
-  @@index([zoneId, createdAt])
+  @@index([zoneId, createdAt(sort: Desc)])
   @@index([status])
   @@map("alerts")
 }
@@ -323,6 +328,7 @@ model Mission {
   zone        Zone?         @relation(fields: [zoneId], references: [id])
   alertId     String?
   createdById String
+  createdBy   User?         @relation("MissionCreator", fields: [createdById], references: [id])
   dueAt       DateTime?
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt

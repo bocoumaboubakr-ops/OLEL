@@ -27,4 +27,14 @@ export class AlertsScheduler {
     });
     if (count > 0) this.logger.log(`Auto-clôture : ${count} alerte(s) fermée(s) après ${STALE_HOURS}h d'inactivité`);
   }
+
+  /** Supprime les OTP de plus de 24h (nettoyage RGPD). */
+  @Cron(CronExpression.EVERY_DAY_AT_3AM)
+  async cleanupExpiredOtps() {
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const { count } = await this.prisma.otpRequest.deleteMany({
+      where: { createdAt: { lt: cutoff } },
+    });
+    if (count > 0) this.logger.log(`OTP cleanup : ${count} enregistrement(s) supprimé(s)`);
+  }
 }

@@ -55,4 +55,11 @@ export class MissionsController {
   complete(@Param('id') id: string, @Body() dto: CompleteMissionDto, @CurrentUser('id') userId: string) {
     return this.missions.complete(id, userId, dto.report);
   }
+
+  @Post(':id/reject')
+  @Roles(Role.SENTINELLE, Role.MAIRIE, Role.PREFECTURE, Role.GOUVERNORAT, Role.PROTECTION_CIVILE, Role.ADMIN, Role.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Refuser une mission assignée (sentinelle)' })
+  reject(@Param('id') id: string, @CurrentUser('id') userId: string) {
+    return this.missions.reject(id, userId);
+  }
 }

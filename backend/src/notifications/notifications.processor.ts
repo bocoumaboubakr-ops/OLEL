@@ -37,6 +37,9 @@ export class NotificationsProcessor {
     if (!isBroadcast) {
       // Notification interne : seulement les opérateurs pour valider
       where.role = { in: OPERATOR_ROLES };
+    } else {
+      // RGPD : exclure les utilisateurs sans consentement explicite
+      where.consents = { some: { termsAccepted: true } };
     }
 
     const users = await this.prisma.user.findMany({
@@ -44,35 +47,40 @@ export class NotificationsProcessor {
       select: { id: true, phone: true, name: true, role: true },
     });
 
-    const severityLabel = { 1: '🟡 Vigilance', 2: '🟠 Alerte', 3: '🔴 URGENCE' }[alert.severity] ?? '⚠️ Alerte';
+    const severityLabel = { 1: 'Vigilance', 2: 'Alerte', 3: 'URGENCE' }[alert.severity] ?? 'Alerte';
 
     const message = isBroadcast
-      ? `🚨 *OLEL – Alerte Officielle*\n${severityLabel}\n\n*${alert.title}*\n${alert.description}\n\n📍 Zone : ${alert.zone.name}\n\n⚠️ Suivez les consignes des autorités locales.`
-      : `📋 *OLEL – Nouveau signalement à valider*\n\nType : ${alert.type}\n${alert.title}\n\n📍 Zone : ${alert.zone.name}\n\nConnectez-vous sur la plateforme OLEL pour valider ou rejeter ce signalement.`;
+      ? `[OLEL] ALERTE OFFICIELLE - ${severityLabel}\n${alert.title}\n${alert.description}\nZone : ${alert.zone.name}\nSuivez les consignes des autorites locales.`
+      : `[OLEL] Nouveau signalement a valider\nType : ${alert.type}\n${alert.title}\nZone : ${alert.zone.name}\nConnectez-vous sur la plateforme OLEL.`;
 
     let sent = 0, failed = 0;
-    for (const user of users) {
-      try {
-        await this.whatsapp.sendMessage(user.phone, message);
-        await this.prisma.notificationLog.create({
-          data: { alertId, channel: 'whatsapp', recipient: user.phone, status: 'sent' },
-        });
-        sent++;
-      } catch {
-        // Fallback SMS
+    // Traitement par lots de 50 pour éviter la surcharge
+    const BATCH_SIZE = 50;
+    for (let i = 0; i < users.length; i += BATCH_SIZE) {
+      const batch = users.slice(i, i + BATCH_SIZE);
+      await Promise.all(batch.map(async (user) => {
         try {
-          await this.sms.sendSms(user.phone, message);
+          await this.whatsapp.sendMessage(user.phone, message);
           await this.prisma.notificationLog.create({
-            data: { alertId, channel: 'sms', recipient: user.phone, status: 'sent' },
+            data: { alertId, channel: 'whatsapp', recipient: user.phone, status: 'sent' },
           });
           sent++;
-        } catch (smsErr) {
-          await this.prisma.notificationLog.create({
-            data: { alertId, channel: 'sms', recipient: user.phone, status: 'failed', error: (smsErr as Error).message },
-          });
-          failed++;
+        } catch {
+          // Fallback SMS
+          try {
+            await this.sms.sendSms(user.phone, message);
+            await this.prisma.notificationLog.create({
+              data: { alertId, channel: 'sms', recipient: user.phone, status: 'sent' },
+            });
+            sent++;
+          } catch (smsErr) {
+            await this.prisma.notificationLog.create({
+              data: { alertId, channel: 'sms', recipient: user.phone, status: 'failed', error: (smsErr as Error).message },
+            });
+            failed++;
+          }
         }
-      }
+      }));
     }
 
     this.logger.log(

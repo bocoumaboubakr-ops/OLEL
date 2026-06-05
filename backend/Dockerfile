@@ -15,6 +15,8 @@ RUN pnpm build
 # ── Production image ──────────────────────────────────────────────────────────
 FROM node:20-alpine AS runner
 
+RUN addgroup -S olel && adduser -S olel -G olel
+
 WORKDIR /app
 RUN apk add --no-cache openssl curl
 RUN npm install -g pnpm@9
@@ -32,6 +34,9 @@ RUN pnpm prisma:generate
 
 ENV NODE_ENV=production
 ENV PORT=4000
+
+RUN chown -R olel:olel /app
+USER olel
 
 EXPOSE 4000
 

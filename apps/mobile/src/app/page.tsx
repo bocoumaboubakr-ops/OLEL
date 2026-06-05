@@ -6,7 +6,7 @@ import { useMobileAuth } from '@/hooks/useMobileAuth';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
 
-type Tab = 'home' | 'alerts' | 'report' | 'map' | 'formations' | 'missions' | 'profile';
+type Tab = 'home' | 'alerts' | 'report' | 'map' | 'formations' | 'missions' | 'validate' | 'profile';
 const SENTINEL_ROLES = ['SENTINELLE', 'MAIRIE', 'PREFECTURE', 'GOUVERNORAT', 'PROTECTION_CIVILE', 'ADMIN', 'SUPER_ADMIN'];
 
 const RISK_ICONS: Record<string, { icon: string; label: string; color: string }> = {
@@ -48,6 +48,15 @@ export default function MobilePage() {
   const [sosOpen, setSosOpen] = useState(false);
   const [reportType, setReportType] = useState<AlertType | null>(null);
   const [reportStep, setReportStep] = useState<'type' | 'confirm' | 'done'>('type');
+  const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
+
+  useEffect(() => {
+    const on = () => setIsOnline(true);
+    const off = () => setIsOnline(false);
+    window.addEventListener('online', on);
+    window.addEventListener('offline', off);
+    return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off); };
+  }, []);
 
   const fetchAlerts = useCallback(async () => {
     try {
@@ -91,17 +100,24 @@ export default function MobilePage() {
           <span style={{ fontSize: '1.1rem', fontWeight: 800 }}>🚨 OLEL</span>
           <span style={{ fontSize: '0.68rem', opacity: 0.7 }}>Matam</span>
         </div>
-        <button
-          onClick={() => setSosOpen(true)}
-          style={{
-            background: '#dc2626', color: 'white', border: 'none',
-            padding: '6px 14px', borderRadius: 20, fontWeight: 800,
-            fontSize: '0.82rem', cursor: 'pointer',
-            boxShadow: '0 2px 8px rgba(220,38,38,0.4)',
-          }}
-        >
-          🆘 SOS
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {!isOnline && (
+            <span style={{ fontSize: '0.65rem', background: '#fef3c7', color: '#92400e', padding: '2px 8px', borderRadius: 10, fontWeight: 700 }}>
+              HORS LIGNE
+            </span>
+          )}
+          <button
+            onClick={() => setSosOpen(true)}
+            style={{
+              background: '#dc2626', color: 'white', border: 'none',
+              padding: '6px 14px', borderRadius: 20, fontWeight: 800,
+              fontSize: '0.82rem', cursor: 'pointer',
+              boxShadow: '0 2px 8px rgba(220,38,38,0.4)',
+            }}
+          >
+            🆘 SOS
+          </button>
+        </div>
       </header>
 
       {sosOpen && <SosModal onClose={() => setSosOpen(false)} />}
@@ -122,6 +138,7 @@ export default function MobilePage() {
         {tab === 'map' && <MapScreen alerts={active} />}
         {tab === 'formations' && <FormationsScreen />}
         {tab === 'missions' && <MissionsScreen />}
+        {tab === 'validate' && <SentinelValidationScreen alerts={alerts.filter((a) => a.status === 'PENDING' || a.status === 'UNDER_REVIEW')} onDone={fetchAlerts} />}
         {tab === 'profile' && <ProfileScreen user={user} onLogout={logout} />}
       </div>
 
@@ -132,8 +149,9 @@ export default function MobilePage() {
           { key: 'alerts',     icon: '🔔', label: active.length > 0 ? `(${active.length})` : 'Alertes' },
           { key: 'report',     icon: '📢', label: 'Signaler' },
           ...(isSentinel ? [
-            { key: 'formations', icon: '📚', label: 'Formation' },
+            { key: 'validate',   icon: '✔️',  label: 'Valider' },
             { key: 'missions',   icon: '📋', label: 'Missions' },
+            { key: 'formations', icon: '📚', label: 'Formation' },
           ] : [
             { key: 'map',        icon: '🗺️', label: 'Carte' },
           ]),
@@ -867,6 +885,151 @@ function MissionsScreen() {
     </div>
   );
 }
+// ── SentinelValidationScreen ──────────────────────────────────────────────────
+function SentinelValidationScreen({ alerts, onDone }: { alerts: MobileAlert[]; onDone: () => void }) {
+  const [selected, setSelected] = useState<MobileAlert | null>(null);
+
+  if (selected) {
+    return <SentinelValidationForm alert={selected} onBack={() => setSelected(null)} onDone={() => { setSelected(null); onDone(); }} />;
+  }
+
+  return (
+    <div style={{ padding: 16 }}>
+      <h2 style={{ margin: '0 0 14px', fontSize: '1.05rem', color: '#1a3c5e' }}>✔️ Signalements à valider ({alerts.length})</h2>
+      {alerts.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '40px 20px', color: '#94a3b8' }}>
+          <div style={{ fontSize: '2.5rem', marginBottom: 10 }}>✅</div>
+          <p style={{ margin: 0 }}>Aucun signalement en attente de validation.</p>
+        </div>
+      ) : alerts.map((a) => {
+        const meta = RISK_ICONS[a.type] || RISK_ICONS.AUTRE;
+        const color = SEV_COLOR[a.severity] || '#888';
+        return (
+          <div key={a.id} style={{ background: 'white', borderRadius: 12, padding: 14, marginBottom: 10, boxShadow: '0 1px 6px rgba(0,0,0,0.07)', borderLeft: `4px solid ${color}` }}>
+            <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#1a3c5e', marginBottom: 4 }}>{meta.icon} {a.title}</div>
+            <p style={{ margin: '0 0 10px', color: '#555', fontSize: '0.82rem', lineHeight: 1.4 }}>{a.description}</p>
+            <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginBottom: 10 }}>📍 {a.zone?.name || 'Matam'} · {STATUS_LABEL[a.status] || a.status}</div>
+            <button onClick={() => setSelected(a)}
+              style={{ width: '100%', background: '#1a3c5e', color: 'white', border: 'none', padding: '10px', borderRadius: 8, fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer' }}>
+              Valider / Rejeter ce signalement →
+            </button>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function SentinelValidationForm({ alert, onBack, onDone }: { alert: MobileAlert; onBack: () => void; onDone: () => void }) {
+  const [action, setAction] = useState<'VALIDATED' | 'REJECTED' | 'ESCALATED'>('VALIDATED');
+  const [gravity, setGravity] = useState(1);
+  const [comment, setComment] = useState('');
+  const [photoUrl, setPhotoUrl] = useState('');
+  const [gps, setGps] = useState<{ lat: number; lng: number } | null>(null);
+  const [gpsError, setGpsError] = useState('');
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => setGps({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        () => setGpsError('GPS non disponible — position manuelle requise'),
+        { timeout: 8000 }
+      );
+    }
+  }, []);
+
+  const handleSubmit = async () => {
+    if (action !== 'REJECTED') {
+      if (!gps) { setError('Position GPS requise pour valider'); return; }
+      if (!photoUrl.trim()) { setError('URL de la photo de preuve requise'); return; }
+    }
+    setSending(true); setError('');
+    try {
+      const token = localStorage.getItem('olel_token');
+      await axios.post(`${API}/alerts/${alert.id}/advance`, {
+        action,
+        gravity: action === 'REJECTED' ? undefined : gravity,
+        comment: comment.trim() || undefined,
+        photoUrl: action === 'REJECTED' ? undefined : photoUrl.trim(),
+        latitude: gps?.lat,
+        longitude: gps?.lng,
+      }, { headers: { Authorization: `Bearer ${token}` } });
+      onDone();
+    } catch (e: any) {
+      const msg = e.response?.data?.message;
+      setError(Array.isArray(msg) ? msg.join(', ') : (msg || 'Erreur lors de la validation'));
+    } finally { setSending(false); }
+  };
+
+  const meta = RISK_ICONS[alert.type] || RISK_ICONS.AUTRE;
+
+  return (
+    <div style={{ padding: '16px 20px 32px' }}>
+      <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '0.85rem', padding: '0 0 12px', display: 'block' }}>← Retour</button>
+      <h2 style={{ margin: '0 0 14px', fontSize: '1rem', color: '#1a3c5e' }}>Validation terrain</h2>
+
+      <div style={{ background: '#f8fafc', borderRadius: 10, padding: '10px 14px', marginBottom: 14, fontSize: '0.88rem' }}>
+        <b>{meta.icon} {alert.title}</b><br />
+        <span style={{ color: '#64748b', fontSize: '0.8rem' }}>{alert.description}</span>
+      </div>
+
+      <div style={{ marginBottom: 14 }}>
+        <label style={{ display: 'block', fontWeight: 700, fontSize: '0.82rem', color: '#374151', marginBottom: 6 }}>Action</label>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {([['VALIDATED', '✅ Valider', '#16a34a'], ['REJECTED', '❌ Rejeter', '#dc2626'], ['ESCALATED', '⬆️ Escalader', '#ea580c']] as const).map(([val, label, color]) => (
+            <button key={val} onClick={() => setAction(val)}
+              style={{ flex: 1, padding: '8px 4px', border: `2px solid ${action === val ? color : '#e2e8f0'}`, borderRadius: 8, background: action === val ? color + '22' : 'white', color: action === val ? color : '#64748b', fontWeight: 700, fontSize: '0.72rem', cursor: 'pointer' }}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {action !== 'REJECTED' && (
+        <>
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ display: 'block', fontWeight: 700, fontSize: '0.82rem', color: '#374151', marginBottom: 6 }}>Niveau de gravité (0 = faible, 3 = critique)</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {[0, 1, 2, 3].map((g) => (
+                <button key={g} onClick={() => setGravity(g)}
+                  style={{ flex: 1, padding: '10px 4px', border: `2px solid ${gravity === g ? '#1a3c5e' : '#e2e8f0'}`, borderRadius: 8, background: gravity === g ? '#1a3c5e' : 'white', color: gravity === g ? 'white' : '#64748b', fontWeight: 800, cursor: 'pointer' }}>
+                  {g}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ display: 'block', fontWeight: 700, fontSize: '0.82rem', color: '#374151', marginBottom: 6 }}>📷 URL photo de preuve *</label>
+            <input type="url" value={photoUrl} onChange={(e) => setPhotoUrl(e.target.value)}
+              placeholder="https://..." style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #e2e8f0', borderRadius: 8, fontSize: '0.88rem', boxSizing: 'border-box' as const }} />
+          </div>
+
+          <div style={{ marginBottom: 14, padding: '8px 12px', background: gps ? '#dcfce7' : '#fef9c3', borderRadius: 8, fontSize: '0.78rem', color: gps ? '#16a34a' : '#92400e' }}>
+            {gps ? `📍 GPS : ${gps.lat.toFixed(5)}, ${gps.lng.toFixed(5)}` : (gpsError || '📍 Acquisition GPS en cours…')}
+          </div>
+        </>
+      )}
+
+      <div style={{ marginBottom: 14 }}>
+        <label style={{ display: 'block', fontWeight: 700, fontSize: '0.82rem', color: '#374151', marginBottom: 6 }}>Commentaire (facultatif)</label>
+        <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={2}
+          placeholder="Observations de terrain…"
+          style={{ width: '100%', padding: '8px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: '0.85rem', resize: 'none', boxSizing: 'border-box' as const, fontFamily: 'inherit' }} />
+      </div>
+
+      {error && <div style={{ background: '#fee2e2', color: '#dc2626', padding: '8px 12px', borderRadius: 8, marginBottom: 12, fontSize: '0.82rem' }}>{error}</div>}
+
+      <button disabled={sending} onClick={handleSubmit}
+        style={{ width: '100%', background: action === 'REJECTED' ? '#dc2626' : '#1a3c5e', color: 'white', border: 'none', padding: '14px', borderRadius: 12, fontSize: '0.95rem', fontWeight: 800, cursor: 'pointer', opacity: sending ? 0.6 : 1 }}>
+        {sending ? '⏳ Envoi…' : action === 'VALIDATED' ? '✅ Valider le signalement' : action === 'REJECTED' ? '❌ Rejeter le signalement' : '⬆️ Escalader à la préfecture'}
+      </button>
+    </div>
+  );
+}
+
 function SosModal({ onClose }: { onClose: () => void }) {
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 9998, display: 'flex', alignItems: 'flex-end' }} onClick={onClose}>

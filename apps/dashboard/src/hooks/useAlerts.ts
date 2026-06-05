@@ -19,8 +19,13 @@ export function useAlerts() {
         headers: { Authorization: `Bearer ${token}` },
       });
       setAlerts(data.alerts || []);
-    } catch {
-      // token expiré — redirect login
+    } catch (e: any) {
+      if (e?.response?.status === 401) {
+        localStorage.removeItem('olel_token');
+        localStorage.removeItem('olel_refresh');
+        localStorage.removeItem('olel_user');
+        window.location.href = '/login';
+      }
     } finally {
       setLoading(false);
     }

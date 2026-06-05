@@ -35,6 +35,12 @@ export class AlertsController {
     return this.alerts.findOne(id);
   }
 
+  @Get(':id/history')
+  @ApiOperation({ summary: 'Historique des validations d\'une alerte' })
+  history(@Param('id') id: string) {
+    return this.alerts.getHistory(id);
+  }
+
   @Post()
   @ThrottleNormal()
   @Roles(Role.CITOYEN, Role.SENTINELLE, Role.MAIRIE, Role.PREFECTURE, Role.GOUVERNORAT, Role.PROTECTION_CIVILE, Role.ADMIN, Role.SUPER_ADMIN)

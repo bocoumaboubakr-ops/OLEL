@@ -92,8 +92,8 @@ async function bootstrap() {
   app.useGlobalFilters(new HttpExceptionFilter(sentryService));
   app.useGlobalInterceptors(new LoggingInterceptor(metricsService));
 
-  // Swagger (désactivé en prod si besoin)
-  if (process.env.NODE_ENV !== 'production' || process.env.SWAGGER_ENABLED === 'true') {
+  // Swagger : désactivé strictement en production
+  if (process.env.NODE_ENV !== 'production') {
     const config = new DocumentBuilder()
       .setTitle('OLEL API')
       .setDescription('Plateforme d\'alerte précoce multi-risques — Région de Matam\n\nTous les types de risques : Inondation, Sécheresse, Incendie, Tempête, Épidémie, Criquets, Accident industriel, Mouvement de terrain.')

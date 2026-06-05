@@ -15,15 +15,23 @@ export class SentinellesScheduler {
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async deactivateInactiveSentinelles() {
     const cutoff = new Date(Date.now() - INACTIVE_DAYS * 24 * 60 * 60 * 1000);
+    // Exclure les sentinelles ayant une mission IN_PROGRESS
+    const busySentinelIds = await this.prisma.missionAssignment.findMany({
+      where: { status: 'IN_PROGRESS' },
+      select: { sentinelId: true },
+    }).then((rows) => rows.map((r) => r.sentinelId));
+
     const { count } = await this.prisma.user.updateMany({
       where: {
         role: Role.SENTINELLE,
         isActive: true,
         lastActiveAt: { lt: cutoff },
+        ...(busySentinelIds.length > 0 ? { id: { notIn: busySentinelIds } } : {}),
       },
       data: { isActive: false },
     });
     if (count > 0) this.logger.log(`${count} sentinelle(s) désactivée(s) après ${INACTIVE_DAYS}j d'inactivité`);
+    if (busySentinelIds.length > 0) this.logger.log(`${busySentinelIds.length} sentinelle(s) épargnée(s) — mission en cours`);
   }
 
   /** Rappel quotidien : liste des sentinelles inactives (pour monitoring). */

@@ -124,6 +124,15 @@ export class UsersService {
     });
   }
 
+  async changePassword(id: string, newPassword: string) {
+    await this.findOne(id);
+    await this.prisma.user.update({
+      where: { id },
+      data: { passwordHash: await bcrypt.hash(newPassword, 10) },
+    });
+    return { success: true };
+  }
+
   async remove(id: string) {
     await this.findOne(id);
     await this.prisma.user.update({ where: { id }, data: { isActive: false } });

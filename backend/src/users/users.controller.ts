@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { CreateUserDto, UpdateUserDto, CreateSentinelleDto } from './dto/create-user.dto';
@@ -73,6 +73,19 @@ export class UsersController {
     @CurrentUser() caller: { id: string; role: Role },
   ) {
     return this.users.update(id, dto, caller);
+  }
+
+  @Post(':id/change-password')
+  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Changer le mot de passe d\'un utilisateur (admin seulement)' })
+  changePassword(
+    @Param('id') id: string,
+    @Body() body: { newPassword: string },
+  ) {
+    if (!body.newPassword || body.newPassword.length < 8) {
+      throw new BadRequestException('Le mot de passe doit contenir au moins 8 caractères');
+    }
+    return this.users.changePassword(id, body.newPassword);
   }
 
   @Delete(':id')

@@ -7,6 +7,23 @@ const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
 // Timeout pour les zones à faible débit (Matam, réseau mobile instable)
 const axiosWithTimeout = axios.create({ timeout: 15000 });
 
+// Intercepteur 401 : redirige vers la page de connexion si le token expire
+axiosWithTimeout.interceptors.response.use(
+  (r) => r,
+  (error) => {
+    if (error?.response?.status === 401 && typeof window !== 'undefined') {
+      const isAuthEndpoint = error?.config?.url?.includes('/auth/');
+      if (!isAuthEndpoint) {
+        localStorage.removeItem('olel_token');
+        localStorage.removeItem('olel_refresh');
+        localStorage.removeItem('olel_user');
+        window.location.href = '/';
+      }
+    }
+    return Promise.reject(error);
+  },
+);
+
 export type AuthMode = 'password' | 'otp_request' | 'otp_verify';
 
 export function useMobileAuth() {

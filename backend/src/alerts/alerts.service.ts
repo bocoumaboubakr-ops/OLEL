@@ -5,6 +5,7 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { AlertStatus, AlertStep, AlertType, Role, ValidationAction } from '@prisma/client';
 import { AlertsGateway } from './alerts.gateway';
 import { WORKFLOW, canAdvance, canBroadcast, canClose } from './alert-workflow';
+import { AuditService } from '../common/audit/audit.service';
 
 @Injectable()
 export class AlertsService {
@@ -14,6 +15,7 @@ export class AlertsService {
     private prisma: PrismaService,
     @InjectQueue('notifications') private notifQueue: Queue,
     private gateway: AlertsGateway,
+    private audit: AuditService,
   ) {}
 
   /** Enfile un job de fanout sans faire échouer la requête si Redis est indisponible. */
@@ -32,6 +34,14 @@ export class AlertsService {
     } catch (e) {
       this.logger.error(`Échec broadcast WS: ${(e as Error).message}`);
     }
+  }
+
+  async getHistory(alertId: string) {
+    return this.prisma.validation.findMany({
+      where: { alertId },
+      orderBy: { createdAt: 'asc' },
+      include: { validator: { select: { name: true, role: true } } },
+    });
   }
 
   async findAll(filters: { zoneId?: string; status?: AlertStatus; type?: AlertType; step?: AlertStep; page?: number; limit?: number }) {
@@ -255,20 +265,16 @@ export class AlertsService {
       throw new ForbiddenException('Consentement requis avant diffusion');
     }
 
-    await this.prisma.alert.update({
-      where: { id: alertId },
-      data: { status: AlertStatus.BROADCASTING, currentStep: AlertStep.BROADCAST },
-    });
-
     await this.enqueueFanout({ alertId, isBroadcast: true });
 
     const updated = await this.prisma.alert.update({
       where: { id: alertId },
-      data: { status: AlertStatus.BROADCAST, broadcastAt: new Date() },
+      data: { status: AlertStatus.BROADCAST, currentStep: AlertStep.BROADCAST, broadcastAt: new Date() },
       include: { zone: { select: { name: true } } },
     });
 
     this.safeBroadcast(updated);
+    this.audit.log({ userId: user.id, action: 'alert.broadcast', resource: 'alert', resourceId: alertId, details: { step: AlertStep.BROADCAST } });
     return updated;
   }
 
@@ -294,6 +300,7 @@ export class AlertsService {
     });
 
     this.safeBroadcast(updated);
+    this.audit.log({ userId: user.id, action: 'alert.close', resource: 'alert', resourceId: alertId, details: { reason } });
     return updated;
   }
 }
