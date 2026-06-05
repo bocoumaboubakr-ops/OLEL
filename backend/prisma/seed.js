@@ -38,6 +38,13 @@ async function main() {
 
   const hash = (pwd) => bcrypt.hash(pwd, 10);
 
+  // SUPER_ADMIN
+  await prisma.user.upsert({
+    where: { phone: '+221700000000' },
+    update: {},
+    create: { phone: '+221700000000', email: 'superadmin@olel.sn', name: 'Super Administrateur OLEL', role: 'SUPER_ADMIN', passwordHash: await hash(process.env.SEED_SUPERADMIN_PASSWORD || 'SuperOlel2024!'), zoneId: matam.id, isActive: true },
+  });
+
   await prisma.user.upsert({
     where: { phone: '+221700000001' },
     update: {},
