@@ -1,25 +1,49 @@
-// Seed en JavaScript pur — exécuté avec : node prisma/seed.js
+// Seed OLEL — Gouvernance v2 (un compte par rôle, territoire Matam, permissions)
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcrypt');
 
 const prisma = new PrismaClient();
+const hash = (pwd) => bcrypt.hash(pwd, 10);
 
 async function main() {
-  // Zone : Région de Matam (Sénégal)
+  // ── Territoire Matam ───────────────────────────────────────────────────────
+
+  const region = await prisma.region.upsert({
+    where: { code: 'SN-MT' },
+    update: {},
+    create: { code: 'SN-MT', name: 'Matam' },
+  });
+
+  const dept = await prisma.department.upsert({
+    where: { code: 'SN-MT-DEPT' },
+    update: {},
+    create: { code: 'SN-MT-DEPT', name: 'Département Matam', regionId: region.id },
+  });
+
+  const municipalities = [
+    { code: 'SN-MT-OUR', name: 'Ourossogui' },
+    { code: 'SN-MT-KAN', name: 'Kanel' },
+    { code: 'SN-MT-RAN', name: 'Ranérou' },
+    { code: 'SN-MT-THI', name: 'Thilogne' },
+    { code: 'SN-MT-ORE', name: 'Oréfondé' },
+    { code: 'SN-MT-NAB', name: 'Nabadji Civol' },
+  ];
+  for (const m of municipalities) {
+    await prisma.municipality.upsert({
+      where: { code: m.code },
+      update: {},
+      create: { code: m.code, name: m.name, departmentId: dept.id, latitude: 15.6556, longitude: -13.2553, radiusKm: 15 },
+    });
+  }
+
+  // ── Zone Prisma (compatible avec le reste du code) ─────────────────────────
+
   const matam = await prisma.zone.upsert({
     where: { code: 'SN-MT' },
     update: {},
-    create: {
-      code: 'SN-MT',
-      name: 'Matam',
-      region: 'Sénégal',
-      latitude: 15.6556,
-      longitude: -13.2553,
-      radiusKm: 50,
-    },
+    create: { code: 'SN-MT', name: 'Matam', region: 'Sénégal', latitude: 15.6556, longitude: -13.2553, radiusKm: 50 },
   });
 
-  // Sous-zones de Matam
   const sousZones = [
     { code: 'SN-MT-OUR', name: 'Ourossogui' },
     { code: 'SN-MT-KAN', name: 'Kanel' },
@@ -36,54 +60,48 @@ async function main() {
     });
   }
 
-  const hash = (pwd) => bcrypt.hash(pwd, 10);
+  // ── Comptes (un par rôle) ──────────────────────────────────────────────────
 
-  // SUPER_ADMIN
-  await prisma.user.upsert({
-    where: { phone: '+221700000000' },
-    update: {},
-    create: { phone: '+221700000000', email: 'superadmin@olel.sn', name: 'Super Administrateur OLEL', role: 'SUPER_ADMIN', passwordHash: await hash(process.env.SEED_SUPERADMIN_PASSWORD || 'SuperOlel2024!'), zoneId: matam.id, isActive: true },
-  });
-
-  await prisma.user.upsert({
-    where: { phone: '+221700000001' },
-    update: {},
-    create: { phone: '+221700000001', email: 'admin@olel.sn', name: 'Administrateur OLEL', role: 'ADMIN', passwordHash: await hash(process.env.SEED_ADMIN_PASSWORD || 'OlelAdmin2024!'), zoneId: matam.id, isActive: true },
-  });
-
-  await prisma.user.upsert({
-    where: { phone: '+221700000002' },
-    update: {},
-    create: { phone: '+221700000002', email: 'prefet@olel.sn', name: 'Préfet Matam', role: 'PREFECTURE', passwordHash: await hash(process.env.SEED_PREFET_PASSWORD || 'Prefet2024!'), zoneId: matam.id, isActive: true },
-  });
-
-  await prisma.user.upsert({
-    where: { phone: '+221700000003' },
-    update: {},
-    create: { phone: '+221700000003', name: 'Sentinelle Terrain', role: 'SENTINELLE', passwordHash: await hash(process.env.SEED_SENTINELLE_PASSWORD || 'Sent2024!'), zoneId: matam.id, isActive: true },
-  });
-
-  // ── Comptes de test couvrant chaque niveau du cursus (CURSUS_ALERTE.md) ──
-  const testUsers = [
-    { phone: '+221700000004', email: 'maire@olel.sn',      name: 'Maire Ourossogui',  role: 'MAIRIE',            pwd: 'Maire2024!' },
-    { phone: '+221700000005', email: 'gouverneur@olel.sn', name: 'Gouverneur Matam',  role: 'GOUVERNORAT',       pwd: 'Gouv2024!' },
-    { phone: '+221700000006', email: 'protection@olel.sn', name: 'Protection Civile', role: 'PROTECTION_CIVILE', pwd: 'Protec2024!' },
-    { phone: '+221700000007', email: 'citoyen@olel.sn',    name: 'Citoyen Test',      role: 'CITOYEN',           pwd: 'Citoyen2024!' },
+  const users = [
+    { phone: '+221700000000', email: 'superadmin@olel.sn',       name: 'Super Administrateur',    role: 'SUPER_ADMIN',        pwd: process.env.SEED_SUPERADMIN_PASSWORD  || 'SuperOlel2024!' },
+    { phone: '+221700000001', email: 'admin@olel.sn',            name: 'Administrateur OLEL',     role: 'ADMIN',              pwd: process.env.SEED_ADMIN_PASSWORD       || 'OlelAdmin2024!' },
+    { phone: '+221700000002', email: 'superviseur@olel.sn',      name: 'Superviseur Régional',    role: 'SUPERVISEUR_REGIONAL', pwd: process.env.SEED_SUPERVISEUR_PASSWORD || 'Superviseur2024!' },
+    { phone: '+221700000003', email: 'gouverneur@olel.sn',       name: 'Gouverneur Matam',        role: 'GOUVERNORAT',        pwd: process.env.SEED_GOUVERNEUR_PASSWORD  || 'Gouv2024!' },
+    { phone: '+221700000004', email: 'protection@olel.sn',       name: 'Agent Protection Civile', role: 'PROTECTION_CIVILE',  pwd: process.env.SEED_PCIVILE_PASSWORD     || 'PCivile2024!' },
+    { phone: '+221700000005', email: 'prefet@olel.sn',           name: 'Préfet Matam',            role: 'PREFECTURE',         pwd: process.env.SEED_PREFET_PASSWORD      || 'Prefet2024!' },
+    { phone: '+221700000006', email: 'mairie@olel.sn',           name: 'Agent Mairie Ourossogui', role: 'MAIRIE',             pwd: process.env.SEED_MAIRIE_PASSWORD      || 'Mairie2024!' },
+    { phone: '+221700000007', email: 'coordinateur@olel.sn',     name: 'Coordinateur Sentinelles',role: 'COORDINATEUR',       pwd: process.env.SEED_COORD_PASSWORD       || 'Coord2024!' },
+    { phone: '+221700000008', email: 'hydro@olel.sn',            name: 'Agent Hydrologie Matam',  role: 'HYDRO_METEO',        pwd: process.env.SEED_HYDRO_PASSWORD       || 'Hydro2024!' },
+    { phone: '+221700000009', email: 'radio@olel.sn',            name: 'Radio Communautaire FM',  role: 'RADIO_COMMUNAUTAIRE',pwd: process.env.SEED_RADIO_PASSWORD       || 'Radio2024!' },
+    { phone: '+221700000010', email: 'sentinelle@olel.sn',       name: 'Sentinelle Terrain',      role: 'SENTINELLE',         pwd: process.env.SEED_SENTINELLE_PASSWORD  || 'Sent2024!' },
+    { phone: '+221700000011', email: 'citoyen@olel.sn',          name: 'Citoyen Test',            role: 'CITOYEN',            pwd: process.env.SEED_CITOYEN_PASSWORD     || 'Citoyen2024!' },
   ];
-  for (const u of testUsers) {
+
+  for (const u of users) {
     await prisma.user.upsert({
       where: { phone: u.phone },
-      update: { role: u.role },
-      create: { phone: u.phone, email: u.email, name: u.name, role: u.role, passwordHash: await hash(process.env[`SEED_${u.role}_PASSWORD`] || u.pwd), zoneId: matam.id, isActive: true },
+      update: {},
+      create: {
+        phone: u.phone,
+        email: u.email,
+        name: u.name,
+        role: u.role,
+        passwordHash: await hash(u.pwd),
+        zoneId: matam.id,
+        isActive: true,
+      },
     });
   }
 
+  // BOT système
   const botPhone = process.env.BOT_ACCOUNT_PHONE || '+221700000099';
   await prisma.user.upsert({
     where: { phone: botPhone },
     update: {},
     create: { phone: botPhone, name: 'BOT OLEL', role: 'ADMIN', isActive: true, zoneId: matam.id },
   });
+
+  // ── Feature flags ──────────────────────────────────────────────────────────
 
   const flags = ['whatsapp_notifications', 'sms_notifications', 'ussd_enabled', 'ivr_enabled'];
   for (const name of flags) {
@@ -94,43 +112,22 @@ async function main() {
     });
   }
 
-  // Modules de formation initiaux (ROADMAP §177-180)
+  // ── Modules de formation ───────────────────────────────────────────────────
+
   const trainingModules = [
-    {
-      title: 'Secourisme de base',
-      description: 'Gestes de premiers secours : RCP, arrêt hémorragie, position latérale de sécurité.',
-      category: 'SECOURISME', order: 1, isRequired: true, durationMin: 45,
-    },
-    {
-      title: 'Risques inondation — Région Matam',
-      description: 'Caractéristiques des crues du fleuve Sénégal, zones inondables, conduite à tenir.',
-      category: 'RISQUE_LOCAL', order: 2, isRequired: true, durationMin: 60,
-    },
-    {
-      title: 'Procédures d\'alerte OLEL',
-      description: 'Comment signaler, valider et diffuser une alerte dans le système OLEL.',
-      category: 'PROCEDURE', order: 3, isRequired: true, durationMin: 30,
-    },
-    {
-      title: 'Sensibilisation communautaire',
-      description: 'Techniques de communication pour sensibiliser la population aux risques naturels.',
-      category: 'SENSIBILISATION', order: 4, isRequired: false, durationMin: 40,
-    },
-    {
-      title: 'Évacuation et points de rassemblement',
-      description: 'Plans d\'évacuation des communes, points de rassemblement, coordination logistique.',
-      category: 'PROCEDURE', order: 5, isRequired: false, durationMin: 35,
-    },
+    { title: 'Secourisme de base',              description: 'Gestes de premiers secours : RCP, arrêt hémorragie, PLS.', category: 'SECOURISME',     order: 1, isRequired: true,  durationMin: 45 },
+    { title: 'Risques inondation — Région Matam', description: 'Crues du fleuve Sénégal, zones inondables, conduite à tenir.', category: 'RISQUE_LOCAL', order: 2, isRequired: true, durationMin: 60 },
+    { title: 'Procédures d\'alerte OLEL',       description: 'Signaler, valider et diffuser dans le système OLEL.',        category: 'PROCEDURE',     order: 3, isRequired: true,  durationMin: 30 },
+    { title: 'Sensibilisation communautaire',   description: 'Techniques de communication pour sensibiliser la population.', category: 'SENSIBILISATION', order: 4, isRequired: false, durationMin: 40 },
+    { title: 'Évacuation et points de rassemblement', description: 'Plans d\'évacuation, points de rassemblement, logistique.', category: 'PROCEDURE', order: 5, isRequired: false, durationMin: 35 },
   ];
 
   for (const m of trainingModules) {
     const existing = await prisma.trainingModule.findFirst({ where: { title: m.title } });
-    if (!existing) {
-      await prisma.trainingModule.create({ data: m });
-    }
+    if (!existing) await prisma.trainingModule.create({ data: m });
   }
 
-  console.log('✅ Seed terminé : zone Matam, sous-zones, utilisateurs, feature flags et modules de formation créés.');
+  console.log('✅ Seed terminé : territoire Matam, 12 comptes (un par rôle), feature flags et modules de formation créés.');
 }
 
 main()

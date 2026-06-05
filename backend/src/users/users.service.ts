@@ -5,8 +5,10 @@ import * as bcrypt from 'bcrypt';
 import { AuditService } from '../audit/audit.service';
 
 const ROLE_LEVEL: Record<Role, number> = {
-  CITOYEN: 0, SENTINELLE: 1, MAIRIE: 2, PREFECTURE: 3,
-  GOUVERNORAT: 4, PROTECTION_CIVILE: 4, ADMIN: 99, SUPER_ADMIN: 99,
+  CITOYEN: 0, SENTINELLE: 1, RADIO_COMMUNAUTAIRE: 1, COORDINATEUR: 2,
+  MAIRIE: 3, HYDRO_METEO: 3, PREFECTURE: 4,
+  GOUVERNORAT: 5, PROTECTION_CIVILE: 5, SUPERVISEUR_REGIONAL: 6,
+  ADMIN: 99, SUPER_ADMIN: 99,
 };
 
 @Injectable()

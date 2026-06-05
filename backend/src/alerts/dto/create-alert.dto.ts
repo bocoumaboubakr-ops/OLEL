@@ -12,7 +12,7 @@ import {
   ArrayMaxSize,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { AlertType } from '@prisma/client';
+import { AlertLevel, AlertType } from '@prisma/client';
 
 export class CreateAlertDto {
   @ApiProperty({ example: 'Inondation secteur Ourossogui' })
@@ -29,7 +29,12 @@ export class CreateAlertDto {
   @IsEnum(AlertType)
   type: AlertType;
 
-  @ApiPropertyOptional({ minimum: 1, maximum: 3, default: 2 })
+  @ApiPropertyOptional({ enum: AlertLevel, default: 'BLEU', description: 'Niveau d\'alerte (BLEU par défaut)' })
+  @IsOptional()
+  @IsEnum(AlertLevel)
+  alertLevel?: AlertLevel;
+
+  @ApiPropertyOptional({ minimum: 1, maximum: 3, default: 1 })
   @IsOptional()
   @IsNumber()
   @Min(1)
@@ -40,6 +45,11 @@ export class CreateAlertDto {
   @IsOptional()
   @IsUUID()
   zoneId?: string;
+
+  @ApiPropertyOptional({ description: 'Commune concernée (lien Municipality)' })
+  @IsOptional()
+  @IsUUID()
+  municipalityId?: string;
 
   @ApiPropertyOptional({ description: 'Canal d\'origine (app, web, whatsapp, ussd, ivr)' })
   @IsOptional()

@@ -21,6 +21,8 @@ import { MissionsModule } from './missions/missions.module';
 import { UploadModule } from './common/upload/upload.module';
 import { SchedulerModule } from './common/scheduler/scheduler.module';
 import { FlagsModule } from './flags/flags.module';
+import { TerritoriesModule } from './territories/territories.module';
+import { PermissionsModule } from './permissions/permissions.module';
 import { validateEnv } from './common/config/env.validation';
 import { configuration } from './common/config/configuration';
 
@@ -65,6 +67,8 @@ import { configuration } from './common/config/configuration';
     UploadModule,
     SchedulerModule,
     FlagsModule,
+    TerritoriesModule,
+    PermissionsModule,
   ],
 })
 export class AppModule {}

@@ -8,14 +8,39 @@ datasource db {
 }
 
 enum Role {
+  // Niveau 0 — Population
   CITOYEN
+  // Niveau 1 — Réseau communautaire
   SENTINELLE
+  RADIO_COMMUNAUTAIRE
+  // Niveau 2 — Coordination communautaire
+  COORDINATEUR
+  // Niveau 3 — Collectivités / Services techniques
   MAIRIE
+  HYDRO_METEO
+  // Niveau 4 — Administration territoriale
   PREFECTURE
+  // Niveau 5 — Gouvernance régionale / Services spécialisés
   GOUVERNORAT
   PROTECTION_CIVILE
+  // Niveau 6 — Administration plateforme
+  SUPERVISEUR_REGIONAL
   ADMIN
   SUPER_ADMIN
+}
+
+enum AlertLevel {
+  BLEU         // Information
+  JAUNE        // Vigilance
+  ORANGE       // Pré-alerte
+  ROUGE        // Urgence
+  ROUGE_FONCE  // Crise Majeure
+}
+
+enum CriticalValidatorCategory {
+  SENTINELLE_CATEGORY   // SENTINELLE ou COORDINATEUR
+  AUTORITE_LOCALE       // MAIRIE ou PREFECTURE
+  AUTORITE_ADMIN        // GOUVERNORAT, PROTECTION_CIVILE ou SUPERVISEUR_REGIONAL
 }
 
 enum AlertType {
@@ -46,8 +71,10 @@ enum AlertStatus {
 enum AlertStep {
   SIGNALEMENT
   SENTINELLE
+  COORDINATEUR
   MAIRIE
   PREFECTURE
+  GOUVERNANCE
   BROADCAST
   CLOSED
 }
@@ -109,10 +136,12 @@ model User {
   validations   Validation[]
   auditLogs     AuditLog[]
   consents      Consent[]
-  trainingProgress    TrainingProgress[]
-  missionAssignments  MissionAssignment[]
-  createdAlerts       Alert[]    @relation("AlertCreator")
-  createdMissions     Mission[]  @relation("MissionCreator")
+  trainingProgress         TrainingProgress[]
+  missionAssignments       MissionAssignment[]
+  createdAlerts            Alert[]                   @relation("AlertCreator")
+  createdMissions          Mission[]                 @relation("MissionCreator")
+  criticalValidations      AlertCriticalValidation[] @relation("CriticalValidations")
+  authoredBroadcasts       Broadcast[]               @relation("BroadcastAuthor")
 
   @@index([phone])
   @@index([zoneId])
@@ -146,11 +175,14 @@ model Alert {
   title       String
   description String
   type        AlertType
+  alertLevel  AlertLevel  @default(BLEU)
   status      AlertStatus @default(PENDING)
   currentStep AlertStep   @default(SIGNALEMENT)
   severity    Int         @default(1)
   zoneId      String
   zone        Zone        @relation(fields: [zoneId], references: [id])
+  municipalityId String?
+  municipality   Municipality? @relation(fields: [municipalityId], references: [id])
   createdById String
   createdBy   User        @relation("AlertCreator", fields: [createdById], references: [id])
   latitude    Float?
@@ -163,15 +195,19 @@ model Alert {
   requiresMedicalReview Boolean @default(false)
   requiresConsent       Boolean @default(false)
   consentObtained       Boolean @default(false)
+  criticalValidated     Boolean @default(false)
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
-  signalements Signalement[]
-  validations  Validation[]
-  notifications NotificationLog[]
+  signalements         Signalement[]
+  validations          Validation[]
+  notifications        NotificationLog[]
+  criticalValidations  AlertCriticalValidation[]
+  broadcasts           Broadcast[]
 
   @@index([zoneId, createdAt(sort: Desc)])
   @@index([status])
+  @@index([alertLevel, status])
   @@map("alerts")
 }
 
@@ -366,4 +402,115 @@ model OtpRequest {
 
   @@index([phone, createdAt])
   @@map("otp_requests")
+}
+
+// ── Entités territoriales ─────────────────────────────────────────────────────
+
+model Region {
+  id          String       @id @default(uuid())
+  name        String
+  code        String       @unique
+  createdAt   DateTime     @default(now())
+
+  departments Department[]
+
+  @@map("regions")
+}
+
+model Department {
+  id          String         @id @default(uuid())
+  name        String
+  code        String         @unique
+  regionId    String
+  region      Region         @relation(fields: [regionId], references: [id])
+  createdAt   DateTime       @default(now())
+
+  municipalities Municipality[]
+
+  @@index([regionId])
+  @@map("departments")
+}
+
+model Municipality {
+  id           String   @id @default(uuid())
+  name         String
+  code         String   @unique
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id])
+  latitude     Float?
+  longitude    Float?
+  radiusKm     Float?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  alerts       Alert[]
+
+  @@index([departmentId])
+  @@map("municipalities")
+}
+
+// ── RBAC explicite ─────────────────────────────────────────────────────────────
+
+model Permission {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String
+  category    String
+  createdAt   DateTime @default(now())
+
+  rolePermissions RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  id           String     @id @default(uuid())
+  role         Role
+  permissionId String
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  grantedAt    DateTime   @default(now())
+
+  @@unique([role, permissionId])
+  @@index([role])
+  @@map("role_permissions")
+}
+
+// ── Validation critique multi-acteurs (ORANGE / ROUGE / ROUGE_FONCE) ──────────
+
+model AlertCriticalValidation {
+  id                String                     @id @default(uuid())
+  alertId           String
+  alert             Alert                      @relation(fields: [alertId], references: [id])
+  validatorId       String
+  validator         User                       @relation("CriticalValidations", fields: [validatorId], references: [id])
+  validatorCategory CriticalValidatorCategory
+  comment           String?
+  validatedAt       DateTime                   @default(now())
+
+  @@unique([alertId, validatorId])
+  @@index([alertId])
+  @@map("alert_critical_validations")
+}
+
+// ── Diffusion enrichie ─────────────────────────────────────────────────────────
+
+model Broadcast {
+  id               String   @id @default(uuid())
+  alertId          String
+  alert            Alert    @relation(fields: [alertId], references: [id])
+  authorId         String
+  author           User     @relation("BroadcastAuthor", fields: [authorId], references: [id])
+  message          String
+  templateId       String?
+  targetZoneIds    String[]
+  channels         String[]
+  totalRecipients  Int      @default(0)
+  deliveredCount   Int      @default(0)
+  costXof          Float    @default(0)
+  idempotencyKey   String   @unique
+  createdAt        DateTime @default(now())
+
+  @@index([alertId])
+  @@index([authorId])
+  @@map("broadcasts")
 }
