@@ -5,7 +5,7 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { AlertStatus, AlertStep, AlertType, Role, ValidationAction } from '@prisma/client';
 import { AlertsGateway } from './alerts.gateway';
 import { WORKFLOW, canAdvance, canBroadcast, canClose } from './alert-workflow';
-import { AuditService } from '../common/audit/audit.service';
+import { AuditService } from '../audit/audit.service';
 
 @Injectable()
 export class AlertsService {

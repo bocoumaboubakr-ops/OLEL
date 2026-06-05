@@ -186,13 +186,85 @@ function AuditTab() {
 }
 
 function FlagsTab() {
+  const [flags, setFlags] = useState<{ name: string; enabled: boolean; updatedAt: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [toggling, setToggling] = useState<string | null>(null);
+  const auth = () => ({ Authorization: `Bearer ${localStorage.getItem('olel_token')}` });
+
+  const FLAG_META: Record<string, { icon: string; label: string; description: string }> = {
+    whatsapp: { icon: '💬', label: 'WhatsApp',        description: 'Notifications via WhatsApp Business API' },
+    sms:      { icon: '📱', label: 'SMS',             description: 'Notifications par SMS (Orange/Expresso Sénégal)' },
+    ussd:     { icon: '📟', label: 'USSD',            description: 'Signalement via menu USSD (sans internet)' },
+    ivr:      { icon: '📞', label: 'IVR',             description: 'Serveur vocal interactif pour alertes vocales' },
+  };
+
+  const fetchFlags = () => {
+    axios.get(`${API}/flags`, { headers: auth() })
+      .then(({ data }) => setFlags(data || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  };
+  useEffect(fetchFlags, []);
+
+  const handleToggle = async (name: string, enabled: boolean) => {
+    setToggling(name);
+    try {
+      await axios.patch(`${API}/flags/${name}`, { enabled: !enabled }, { headers: auth() });
+      setFlags((prev) => prev.map((f) => f.name === name ? { ...f, enabled: !enabled } : f));
+    } catch { /* ignore */ } finally { setToggling(null); }
+  };
+
   return (
     <div>
-      <h2 style={{ marginTop: 0, color: '#1a3c5e' }}>🚩 Feature Flags</h2>
-      <p style={{ color: '#64748b' }}>Gestion des fonctionnalités activables/désactivables à chaud.</p>
-      <div style={{ background: '#fef3c7', padding: 16, borderRadius: 8, color: '#92400e', fontSize: '0.88rem' }}>
-        Les feature flags sont gérés directement en base (table <code>feature_flags</code>). Endpoint API à implémenter en V2.
-      </div>
+      <h2 style={{ marginTop: 0, color: '#1a3c5e' }}>🚩 Feature Flags — Canaux de notification</h2>
+      <p style={{ color: '#64748b', marginBottom: 20, fontSize: '0.88rem' }}>
+        Activez ou désactivez les canaux de notification à chaud, sans redéploiement.
+      </p>
+      {loading ? <p>Chargement…</p> : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>
+          {flags.map((flag) => {
+            const meta = FLAG_META[flag.name] || { icon: '⚙️', label: flag.name, description: '' };
+            return (
+              <div key={flag.name} style={{
+                background: 'white', borderRadius: 10, padding: '18px 20px',
+                boxShadow: '0 1px 6px rgba(0,0,0,0.07)',
+                borderLeft: `4px solid ${flag.enabled ? '#16a34a' : '#e2e8f0'}`,
+                opacity: toggling === flag.name ? 0.6 : 1,
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                  <div>
+                    <div style={{ fontSize: '1.4rem', marginBottom: 4 }}>{meta.icon}</div>
+                    <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#1a3c5e' }}>{meta.label}</div>
+                    <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: 3, lineHeight: 1.4 }}>{meta.description}</div>
+                  </div>
+                  <button
+                    disabled={toggling === flag.name}
+                    onClick={() => handleToggle(flag.name, flag.enabled)}
+                    style={{
+                      position: 'relative', width: 44, height: 24, borderRadius: 12, border: 'none',
+                      background: flag.enabled ? '#16a34a' : '#d1d5db', cursor: 'pointer',
+                      transition: 'background 0.2s', flexShrink: 0,
+                    }}
+                  >
+                    <span style={{
+                      position: 'absolute', top: 3, left: flag.enabled ? 23 : 3,
+                      width: 18, height: 18, borderRadius: '50%', background: 'white',
+                      transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                      display: 'block',
+                    }} />
+                  </button>
+                </div>
+                <div style={{ fontSize: '0.72rem', color: flag.enabled ? '#16a34a' : '#94a3b8', fontWeight: 700 }}>
+                  {flag.enabled ? '✅ Actif' : '⏸ Désactivé'}
+                  {flag.updatedAt && <span style={{ fontWeight: 400, marginLeft: 8, color: '#94a3b8' }}>
+                    · {new Date(flag.updatedAt).toLocaleDateString('fr-FR')}
+                  </span>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

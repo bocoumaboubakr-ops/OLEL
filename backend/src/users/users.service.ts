@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, ConflictException, ForbiddenException, L
 import { PrismaService } from '../common/prisma/prisma.service';
 import { Role } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import { AuditService } from '../audit/audit.service';
 
 const ROLE_LEVEL: Record<Role, number> = {
   CITOYEN: 0, SENTINELLE: 1, MAIRIE: 2, PREFECTURE: 3,
@@ -12,7 +13,7 @@ const ROLE_LEVEL: Record<Role, number> = {
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private audit: AuditService) {}
 
 
   async findOne(id: string) {
@@ -117,11 +118,13 @@ export class UsersService {
         throw new ForbiddenException('Un mairie ne peut pas changer le rôle d\'une sentinelle');
       }
     }
-    return this.prisma.user.update({
+    const updated = await this.prisma.user.update({
       where: { id },
       data: dto,
       select: { id: true, name: true, phone: true, role: true, isActive: true },
     });
+    this.audit.log({ userId: caller?.id, action: 'user.update', resource: 'user', resourceId: id, details: dto });
+    return updated;
   }
 
   async changePassword(id: string, newPassword: string) {

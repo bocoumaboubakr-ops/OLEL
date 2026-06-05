@@ -20,6 +20,7 @@ import { TrainingsModule } from './trainings/trainings.module';
 import { MissionsModule } from './missions/missions.module';
 import { UploadModule } from './common/upload/upload.module';
 import { SchedulerModule } from './common/scheduler/scheduler.module';
+import { FlagsModule } from './flags/flags.module';
 import { validateEnv } from './common/config/env.validation';
 import { configuration } from './common/config/configuration';
 
@@ -63,6 +64,7 @@ import { configuration } from './common/config/configuration';
     MissionsModule,
     UploadModule,
     SchedulerModule,
+    FlagsModule,
   ],
 })
 export class AppModule {}

@@ -1,10 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CreateTrainingModuleDto, UpdateTrainingModuleDto, CreateLessonDto } from './dto/training.dto';
+import { AuditService } from '../audit/audit.service';
 
 @Injectable()
 export class TrainingsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private audit: AuditService) {}
 
   /** Liste des modules actifs avec leçons, et progression de l'utilisateur. */
   async findAllForUser(userId: string) {
@@ -56,6 +57,7 @@ export class TrainingsService {
     if (status.allRequiredDone) {
       await this.prisma.user.update({ where: { id: userId }, data: { isActive: true, lastActiveAt: new Date() } }).catch(() => {});
     }
+    this.audit.log({ userId, action: 'training.complete', resource: 'training_module', resourceId: moduleId, details: { score } });
     return { progress, status };
   }
 

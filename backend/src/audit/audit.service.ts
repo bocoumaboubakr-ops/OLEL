@@ -6,7 +6,9 @@ export class AuditService {
   constructor(private prisma: PrismaService) {}
 
   async log(entry: { userId?: string; action: string; resource: string; resourceId?: string; details?: any; ip?: string; userAgent?: string }) {
-    return this.prisma.auditLog.create({ data: entry });
+    try {
+      return await this.prisma.auditLog.create({ data: entry });
+    } catch { /* audit non bloquant */ }
   }
 
   findAll(filters: { userId?: string; resource?: string; page?: number; limit?: number }) {

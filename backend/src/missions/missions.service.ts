@@ -2,10 +2,11 @@ import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/commo
 import { PrismaService } from '../common/prisma/prisma.service';
 import { MissionStatus, Role } from '@prisma/client';
 import { CreateMissionDto } from './dto/mission.dto';
+import { AuditService } from '../audit/audit.service';
 
 @Injectable()
 export class MissionsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private audit: AuditService) {}
 
   /** Liste des missions (filtrée par zone pour les sentinelles). */
   async findAll(user: { id: string; role: Role }, zoneId?: string) {
@@ -64,7 +65,9 @@ export class MissionsService {
       update: { status: MissionStatus.ASSIGNED },
       create: { missionId, sentinelId, status: MissionStatus.ASSIGNED },
     });
-    return this.prisma.mission.update({ where: { id: missionId }, data: { status: MissionStatus.ASSIGNED } });
+    const updated = await this.prisma.mission.update({ where: { id: missionId }, data: { status: MissionStatus.ASSIGNED } });
+    this.audit.log({ action: 'mission.assign', resource: 'mission', resourceId: missionId, details: { sentinelId } });
+    return updated;
   }
 
   /** La sentinelle accepte et démarre la mission. */

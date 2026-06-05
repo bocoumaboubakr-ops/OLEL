@@ -2,6 +2,26 @@
 
 import { useState } from 'react';
 import axios from 'axios';
+
+async function compressImage(file: File): Promise<Blob> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const ratio = Math.min(1, 1200 / img.width);
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * ratio);
+      canvas.height = Math.round(img.height * ratio);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { resolve(file); return; }
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob((blob) => resolve(blob || file), 'image/jpeg', 0.75);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+    img.src = url;
+  });
+}
 import { TYPE_META, SEVERITY_COLOR, SEVERITY_LABEL, STATUS_STYLE, WORKFLOW_STEPS, STEP_LABEL } from './AlertsFeed';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
@@ -242,8 +262,9 @@ export function AlertDetail({ alert, currentUser, onClose, onRefetch }: {
                               if (!file) return;
                               setPhotoUploading(true);
                               try {
+                                const compressed = await compressImage(file);
                                 const fd = new FormData();
-                                fd.append('file', file);
+                                fd.append('file', compressed, file.name.replace(/\.[^.]+$/, '.jpg'));
                                 const { data } = await axios.post(`${API}/upload/photo`, fd, { headers: { Authorization: `Bearer ${localStorage.getItem('olel_token')}`, 'Content-Type': 'multipart/form-data' } });
                                 setPhotoUrl(data.url);
                               } catch { setError('Échec de l\'upload photo'); }

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import { useMobileAuth } from '@/hooks/useMobileAuth';
+import { useOfflineQueue, queueSignalement } from '@/hooks/useOfflineQueue';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
 
@@ -49,6 +50,7 @@ export default function MobilePage() {
   const [reportType, setReportType] = useState<AlertType | null>(null);
   const [reportStep, setReportStep] = useState<'type' | 'confirm' | 'done'>('type');
   const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
+  useOfflineQueue();
 
   useEffect(() => {
     const on = () => setIsOnline(true);
@@ -408,18 +410,23 @@ function ReportConfirm({ type, onSent, onBack }: { type: AlertType; onSent: () =
         lat = pos.coords.latitude; lng = pos.coords.longitude;
       } catch { /* GPS non dispo */ }
 
-      const headers = { Authorization: `Bearer ${token}` };
-      // Canal canonique du signalement citoyen (cf. ARCHITECTURE_OLEL.md Workflow 1) :
-      // POST /alerts crée l'alerte à l'étape SIGNALEMENT. La zone est résolue
-      // côté backend (zone fournie → zone de l'utilisateur → zone par défaut Matam).
       const zoneId = process.env.NEXT_PUBLIC_DEFAULT_ZONE_ID || undefined;
-      await axios.post(`${API}/alerts`, {
+      const payload = {
         title: `Signalement : ${label}`,
         description: note.trim() || `Signalement de type ${label} depuis l'application mobile.`,
         type, severity: 2, channel: 'app',
         ...(zoneId ? { zoneId } : {}),
         latitude: lat, longitude: lng,
-      }, { headers });
+      };
+
+      if (!navigator.onLine) {
+        await queueSignalement(payload);
+        onSent();
+        return;
+      }
+
+      const headers = { Authorization: `Bearer ${token}` };
+      await axios.post(`${API}/alerts`, payload, { headers });
       onSent();
     } catch (e: any) {
       const msg = e.response?.data?.message;
