@@ -77,10 +77,25 @@ async function main() {
     { phone: '+221700000011', email: 'citoyen@olel.sn',          name: 'Citoyen Test',            role: 'CITOYEN',            pwd: process.env.SEED_CITOYEN_PASSWORD     || 'Citoyen2024!' },
   ];
 
+  // Libère les emails ciblés détenus par d'anciens enregistrements (réassignation
+  // de rôles entre seeds successifs → évite la collision P2002 sur email).
+  const managedEmails = users.map((u) => u.email);
+  await prisma.user.updateMany({
+    where: { email: { in: managedEmails } },
+    data: { email: null },
+  });
+
   for (const u of users) {
     await prisma.user.upsert({
       where: { phone: u.phone },
-      update: {},
+      update: {
+        email: u.email,
+        name: u.name,
+        role: u.role,
+        passwordHash: await hash(u.pwd),
+        zoneId: matam.id,
+        isActive: true,
+      },
       create: {
         phone: u.phone,
         email: u.email,
