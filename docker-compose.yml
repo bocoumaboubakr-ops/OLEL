@@ -64,9 +64,10 @@ services:
       AFRICAS_TALKING_USER: ${AFRICAS_TALKING_USER:-sandbox}
       BOT_API_KEY:          ${BOT_API_KEY}
       ALLOWED_ORIGINS:      ${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:3001}
-      NODE_ENV:             ${NODE_ENV:-production}
-      PORT:                 4000
-      SENTRY_DSN:           ${SENTRY_DSN:-}
+      NODE_ENV:               ${NODE_ENV:-production}
+      RETURN_OTP_DEV_CODE:    ${RETURN_OTP_DEV_CODE:-false}
+      PORT:                   4000
+      SENTRY_DSN:             ${SENTRY_DSN:-}
     ports:
       - "4000:4000"
     healthcheck:

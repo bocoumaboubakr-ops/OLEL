@@ -77,15 +77,20 @@ export class AuthService {
 
     // Envoi SMS (remplacer par vrai provider en prod : Africa's Talking, Orange SMS, etc.)
     const isDev = this.cfg.get('NODE_ENV') !== 'production';
+    // RETURN_OTP_DEV_CODE=true permet de récupérer le code en staging sans SMS
+    const returnCode = isDev || this.cfg.get('RETURN_OTP_DEV_CODE') === 'true';
     if (isDev) {
       this.logger.log(`[DEV OTP] ${phone} → ${code}`);
     } else {
-      await this.sendSms(phone, `OLEL : votre code de vérification est ${code}. Valable 10 minutes.`);
+      this.logger.log(`[OTP] ${phone} → code généré (SMS ${returnCode ? 'skipped/staging' : 'envoi…'})`);
+      if (!returnCode) {
+        await this.sendSms(phone, `OLEL : votre code de vérification est ${code}. Valable 10 minutes.`);
+      }
     }
 
     return {
       message: `Code envoyé au ${phone}`,
-      ...(isDev ? { dev_code: code } : {}),
+      ...(returnCode ? { dev_code: code } : {}),
     };
   }
 
