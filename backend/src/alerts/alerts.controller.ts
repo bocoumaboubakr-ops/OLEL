@@ -17,6 +17,13 @@ import { Role, AlertStatus, AlertStep, AlertType } from '@prisma/client';
 export class AlertsController {
   constructor(private alerts: AlertsService) {}
 
+  @Get('queue')
+  @Roles(Role.SENTINELLE, Role.MAIRIE, Role.PREFECTURE, Role.GOUVERNORAT, Role.PROTECTION_CIVILE, Role.ADMIN, Role.SUPER_ADMIN)
+  @ApiOperation({ summary: 'File d\'attente personnalisée par rôle (signalements à traiter)' })
+  getQueue(@CurrentUser() user: { id: string; role: Role }) {
+    return this.alerts.getQueue(user);
+  }
+
   @Get()
   @ApiOperation({ summary: 'Liste des alertes' })
   findAll(
@@ -68,5 +75,12 @@ export class AlertsController {
   @ApiOperation({ summary: 'Clôturer une alerte (raison obligatoire)' })
   close(@Param('id') id: string, @Body() dto: CloseAlertDto, @CurrentUser() user: { id: string; role: Role }) {
     return this.alerts.close(id, user, dto.reason);
+  }
+
+  @Post(':id/medical-clearance')
+  @Roles(Role.PROTECTION_CIVILE, Role.ADMIN, Role.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Lever le blocage médical (EPIDEMIE) — Protection Civile uniquement' })
+  medicalClearance(@Param('id') id: string, @CurrentUser() user: { id: string; role: Role }) {
+    return this.alerts.medicalClearance(id, user);
   }
 }

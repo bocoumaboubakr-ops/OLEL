@@ -7,6 +7,9 @@ import { AlertsGateway } from './alerts.gateway';
 import { WORKFLOW, canAdvance, canBroadcast, canClose } from './alert-workflow';
 import { AuditService } from '../audit/audit.service';
 
+/** Types déclenchant l'auto-escalade URGENCE (gravité 3 → skip Mairie+Préfecture). */
+const URGENCE_TYPES: AlertType[] = [AlertType.INCENDIE, AlertType.ACCIDENT_INDUSTRIEL];
+
 @Injectable()
 export class AlertsService {
   private readonly logger = new Logger(AlertsService.name);
@@ -108,9 +111,10 @@ export class AlertsService {
     let currentStep: AlertStep = AlertStep.SIGNALEMENT;
     let status: AlertStatus = AlertStatus.PENDING;
     if (creatorRole === Role.PROTECTION_CIVILE) {
-      // Origine officielle (centre de santé, etc.) → entre directement à PREFECTURE
+      // Origine officielle (centre de santé, etc.) → entre directement à PREFECTURE/VALIDATED
+      // Pas d'étape sentinelle ni mairie (cf. CURSUS_ALERTE.md §Sanitaire)
       currentStep = AlertStep.PREFECTURE;
-      status = AlertStatus.UNDER_REVIEW;
+      status = AlertStatus.VALIDATED;
     }
 
     const zoneId = await this.resolveZoneId(dto.zoneId, userId);
@@ -198,9 +202,20 @@ export class AlertsService {
       }
     }
 
+    // Cas URGENCE : gravité 3 + type critique → auto-escalade direct PREFECTURE/VALIDATED
+    // Skip Mairie+Préfecture (cf. CURSUS_ALERTE.md §URGENCE auto-broadcast)
+    const isUrgence =
+      alert.currentStep === AlertStep.SIGNALEMENT &&
+      body.action !== ValidationAction.REJECTED &&
+      (body.gravity === 3 || alert.severity >= 3) &&
+      URGENCE_TYPES.includes(alert.type as AlertType);
+
     let alertData: any;
     if (body.action === ValidationAction.REJECTED) {
       alertData = { status: AlertStatus.REJECTED, resolvedAt: new Date() };
+    } else if (isUrgence) {
+      alertData = { currentStep: AlertStep.PREFECTURE, status: AlertStatus.VALIDATED };
+      if (body.gravity != null) alertData.severity = body.gravity;
     } else {
       alertData = { currentStep: def.next, status: def.nextStatus };
       if (body.gravity != null) alertData.severity = Math.max(1, body.gravity);
@@ -265,16 +280,71 @@ export class AlertsService {
       throw new ForbiddenException('Consentement requis avant diffusion');
     }
 
+    // Idempotency : update conditionnel sur broadcastAt IS NULL (anti-double-diffusion)
+    const { count } = await this.prisma.alert.updateMany({
+      where: { id: alertId, broadcastAt: null },
+      data: { status: AlertStatus.BROADCAST, currentStep: AlertStep.BROADCAST, broadcastAt: new Date() },
+    });
+    if (count === 0) {
+      throw new ForbiddenException('Alerte déjà diffusée — opération idempotente ignorée');
+    }
+
     await this.enqueueFanout({ alertId, isBroadcast: true });
 
-    const updated = await this.prisma.alert.update({
+    const updated = await this.prisma.alert.findUnique({
       where: { id: alertId },
-      data: { status: AlertStatus.BROADCAST, currentStep: AlertStep.BROADCAST, broadcastAt: new Date() },
       include: { zone: { select: { name: true } } },
     });
 
     this.safeBroadcast(updated);
     this.audit.log({ userId: user.id, action: 'alert.broadcast', resource: 'alert', resourceId: alertId, details: { step: AlertStep.BROADCAST } });
+    return updated;
+  }
+
+  /**
+   * File d'attente personnalisée par rôle :
+   * - SENTINELLE : alertes PENDING (step=SIGNALEMENT) dans la zone du caller
+   * - MAIRIE+    : alertes UNDER_REVIEW step=SENTINELLE dans la zone du caller
+   * - PREFECTURE+: alertes UNDER_REVIEW step=MAIRIE dans la zone du caller
+   */
+  async getQueue(user: { id: string; role: Role }) {
+    const caller = await this.prisma.user.findUnique({ where: { id: user.id }, select: { zoneId: true } });
+    const zoneFilter = caller?.zoneId ? { zoneId: caller.zoneId } : {};
+
+    let where: any = { ...zoneFilter };
+    if (user.role === Role.SENTINELLE) {
+      where = { ...where, currentStep: AlertStep.SIGNALEMENT, status: AlertStatus.PENDING };
+    } else if (user.role === Role.MAIRIE) {
+      where = { ...where, currentStep: AlertStep.SENTINELLE, status: AlertStatus.UNDER_REVIEW };
+    } else {
+      // PREFECTURE+ : alertes en attente de validation préfecture
+      where = { ...where, currentStep: AlertStep.MAIRIE, status: AlertStatus.UNDER_REVIEW };
+    }
+
+    return this.prisma.alert.findMany({
+      where,
+      orderBy: [{ severity: 'desc' }, { createdAt: 'asc' }],
+      include: { zone: { select: { name: true, code: true } } },
+      take: 50,
+    });
+  }
+
+  /** Levée de blocage médical (PROTECTION_CIVILE uniquement). */
+  async medicalClearance(alertId: string, user: { id: string; role: Role }) {
+    if (user.role !== Role.PROTECTION_CIVILE && user.role !== Role.ADMIN && user.role !== Role.SUPER_ADMIN) {
+      throw new ForbiddenException('Seule la Protection Civile peut lever le blocage médical');
+    }
+    const alert = await this.findOne(alertId);
+    if (!alert.requiresMedicalReview) {
+      throw new BadRequestException('Aucun blocage médical actif sur cette alerte');
+    }
+    const updated = await this.prisma.alert.update({
+      where: { id: alertId },
+      data: { requiresMedicalReview: false },
+      include: { zone: { select: { name: true } } },
+    });
+    this.audit.log({ userId: user.id, action: 'alert.medical_clearance', resource: 'alert', resourceId: alertId, details: {} });
+    this.safeBroadcast(updated);
     return updated;
   }
 

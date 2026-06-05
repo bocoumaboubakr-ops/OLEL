@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
 
-const STALE_HOURS = parseInt(process.env.ALERT_AUTO_CLOSE_HOURS || '72', 10);
+const STALE_HOURS = parseInt(process.env.ALERT_AUTO_CLOSE_HOURS || '48', 10);
 
 @Injectable()
 export class AlertsScheduler {
