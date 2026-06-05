@@ -92,6 +92,13 @@ function UsersTab() {
     setUsers((u) => u.map((x) => (x.id === id ? { ...x, isActive: !isActive } : x)));
   };
 
+  const changeRole = async (id: string, role: string) => {
+    await axios.patch(`${API}/users/${id}`, { role }, { headers: auth() });
+    setUsers((u) => u.map((x) => (x.id === id ? { ...x, role } : x)));
+  };
+
+  const ALL_ROLES = ['CITOYEN', 'SENTINELLE', 'RADIO_COMMUNAUTAIRE', 'COORDINATEUR', 'MAIRIE', 'HYDRO_METEO', 'PREFECTURE', 'GOUVERNORAT', 'PROTECTION_CIVILE', 'SUPERVISEUR_REGIONAL', 'ADMIN', 'SUPER_ADMIN'];
+
   return (
     <div>
       <h2 style={{ marginTop: 0, color: '#1a3c5e' }}>👥 Utilisateurs ({users.length})</h2>
@@ -110,7 +117,13 @@ function UsersTab() {
                 <td style={{ padding: '10px 14px', fontWeight: 600 }}>{u.name}</td>
                 <td style={{ padding: '10px 14px', color: '#64748b' }}>{u.phone}</td>
                 <td style={{ padding: '10px 14px' }}>
-                  <span style={{ padding: '2px 8px', borderRadius: 8, background: '#e8f0fe', color: '#1a3c5e', fontSize: '0.75rem', fontWeight: 600 }}>{u.role}</span>
+                  <select
+                    value={u.role}
+                    onChange={(e) => changeRole(u.id, e.target.value)}
+                    style={{ padding: '3px 6px', borderRadius: 6, border: '1px solid #e2e8f0', fontSize: '0.75rem', color: '#1a3c5e', fontWeight: 600, background: '#e8f0fe', cursor: 'pointer' }}
+                  >
+                    {ALL_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+                  </select>
                 </td>
                 <td style={{ padding: '10px 14px', color: '#64748b' }}>{u.zoneId ? '📍' : '—'}</td>
                 <td style={{ padding: '10px 14px' }}>
