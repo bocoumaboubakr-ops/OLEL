@@ -45,7 +45,24 @@ async function main() {
 
   const hash = (pwd: string) => bcrypt.hash(pwd, 10);
 
-  // Compte admin
+  // ── Comptes de test (un par rôle) ─────────────────────────────────────────
+
+  // SUPER_ADMIN
+  await prisma.user.upsert({
+    where: { phone: '+221700000000' },
+    update: {},
+    create: {
+      phone: '+221700000000',
+      email: 'superadmin@olel.sn',
+      name: 'Super Administrateur OLEL',
+      role: Role.SUPER_ADMIN,
+      passwordHash: await hash(process.env.SEED_SUPERADMIN_PASSWORD || 'SuperOlel2024!'),
+      zoneId: matam.id,
+      isActive: true,
+    },
+  });
+
+  // ADMIN
   await prisma.user.upsert({
     where: { phone: '+221700000001' },
     update: {},
@@ -60,7 +77,7 @@ async function main() {
     },
   });
 
-  // Compte préfet
+  // PREFECTURE
   await prisma.user.upsert({
     where: { phone: '+221700000002' },
     update: {},
@@ -75,7 +92,7 @@ async function main() {
     },
   });
 
-  // Compte sentinelle
+  // SENTINELLE
   await prisma.user.upsert({
     where: { phone: '+221700000003' },
     update: {},
@@ -89,7 +106,65 @@ async function main() {
     },
   });
 
-  // Compte bot système
+  // MAIRIE
+  await prisma.user.upsert({
+    where: { phone: '+221700000004' },
+    update: {},
+    create: {
+      phone: '+221700000004',
+      email: 'mairie@olel.sn',
+      name: 'Agent Mairie Matam',
+      role: Role.MAIRIE,
+      passwordHash: await hash(process.env.SEED_MAIRIE_PASSWORD || 'Mairie2024!'),
+      zoneId: matam.id,
+      isActive: true,
+    },
+  });
+
+  // GOUVERNORAT
+  await prisma.user.upsert({
+    where: { phone: '+221700000005' },
+    update: {},
+    create: {
+      phone: '+221700000005',
+      email: 'gouverneur@olel.sn',
+      name: 'Gouverneur Matam',
+      role: Role.GOUVERNORAT,
+      passwordHash: await hash(process.env.SEED_GOUVERNEUR_PASSWORD || 'Gouv2024!'),
+      zoneId: matam.id,
+      isActive: true,
+    },
+  });
+
+  // PROTECTION_CIVILE
+  await prisma.user.upsert({
+    where: { phone: '+221700000006' },
+    update: {},
+    create: {
+      phone: '+221700000006',
+      email: 'protection.civile@olel.sn',
+      name: 'Agent Protection Civile',
+      role: Role.PROTECTION_CIVILE,
+      passwordHash: await hash(process.env.SEED_PCIVILE_PASSWORD || 'PCivile2024!'),
+      zoneId: matam.id,
+      isActive: true,
+    },
+  });
+
+  // CITOYEN (connexion OTP uniquement, pas de mot de passe)
+  await prisma.user.upsert({
+    where: { phone: '+221700000007' },
+    update: {},
+    create: {
+      phone: '+221700000007',
+      name: 'Citoyen Test',
+      role: Role.CITOYEN,
+      zoneId: matam.id,
+      isActive: true,
+    },
+  });
+
+  // BOT système
   const botPhone = process.env.BOT_ACCOUNT_PHONE || '+221700000099';
   await prisma.user.upsert({
     where: { phone: botPhone },
