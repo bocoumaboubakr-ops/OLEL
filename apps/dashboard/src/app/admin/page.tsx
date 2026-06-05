@@ -6,14 +6,14 @@ import axios from 'axios';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
 
-type Tab = 'users' | 'zones' | 'trainings' | 'missions' | 'audit' | 'flags';
+type Tab = 'users' | 'zones' | 'trainings' | 'missions' | 'audit' | 'flags' | 'rbac' | 'broadcasts';
 
 export default function AdminPage() {
   const { user } = useAuth();
   const [tab, setTab] = useState<Tab>('users');
 
   if (!user) return null;
-  if (!['ADMIN', 'PREFECTURE'].includes(user.role)) {
+  if (!['ADMIN', 'SUPER_ADMIN', 'SUPERVISEUR_REGIONAL', 'PREFECTURE'].includes(user.role)) {
     return <div style={{ padding: 40, textAlign: 'center', color: '#dc2626' }}>Accès non autorisé</div>;
   }
 
@@ -35,6 +35,8 @@ export default function AdminPage() {
             { key: 'zones',     icon: '📍', label: 'Zones' },
             { key: 'trainings', icon: '📚', label: 'Formations' },
             { key: 'missions',  icon: '📋', label: 'Missions' },
+            { key: 'rbac',      icon: '🔐', label: 'Permissions RBAC' },
+            { key: 'broadcasts', icon: '📢', label: 'Diffusions' },
             { key: 'audit',     icon: '🔍', label: 'Logs d\'audit' },
             { key: 'flags',     icon: '🚩', label: 'Feature Flags' },
           ] as const).map(({ key, icon, label }) => (
@@ -64,6 +66,8 @@ export default function AdminPage() {
           {tab === 'zones'     && <ZonesTab />}
           {tab === 'trainings' && <TrainingsTab />}
           {tab === 'missions'  && <MissionsTab />}
+          {tab === 'rbac'      && <RbacTab />}
+          {tab === 'broadcasts' && <BroadcastsTab />}
           {tab === 'audit'     && <AuditTab />}
           {tab === 'flags'     && <FlagsTab />}
         </main>
@@ -528,6 +532,134 @@ function MissionsTab() {
             ))}
           </tbody>
         </table>
+      )}
+    </div>
+  );
+}
+
+// ── RbacTab — matrice rôle × permissions ──────────────────────────────────────
+const ROLE_LABELS_RBAC: Record<string, string> = {
+  CITOYEN: 'Citoyen', SENTINELLE: 'Sentinelle', RADIO_COMMUNAUTAIRE: 'Radio',
+  COORDINATEUR: 'Coordinateur', MAIRIE: 'Mairie', HYDRO_METEO: 'Hydro/Météo',
+  PREFECTURE: 'Préfecture', GOUVERNORAT: 'Gouvernance', PROTECTION_CIVILE: 'Protection Civile',
+  SUPERVISEUR_REGIONAL: 'Superviseur', ADMIN: 'Admin', SUPER_ADMIN: 'Super Admin',
+};
+
+function RbacTab() {
+  const [matrix, setMatrix] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const auth = () => ({ Authorization: `Bearer ${localStorage.getItem('olel_token')}` });
+
+  useEffect(() => {
+    axios.get(`${API}/permissions/matrix`, { headers: auth() })
+      .then(({ data }) => setMatrix(data))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <div style={{ color: '#94a3b8' }}>Chargement…</div>;
+
+  // Regrouper : permission → set de rôles
+  const perms = new Map<string, { description: string; category: string; roles: Set<string> }>();
+  for (const rp of matrix) {
+    const name = rp.permission?.name;
+    if (!name) continue;
+    if (!perms.has(name)) perms.set(name, { description: rp.permission.description, category: rp.permission.category, roles: new Set() });
+    perms.get(name)!.roles.add(rp.role);
+  }
+  const roles = Object.keys(ROLE_LABELS_RBAC);
+  const rows = Array.from(perms.entries()).sort((a, b) => a[1].category.localeCompare(b[1].category) || a[0].localeCompare(b[0]));
+
+  return (
+    <div>
+      <h2 style={{ margin: '0 0 6px', fontSize: '1.1rem', color: '#1a3c5e' }}>🔐 Matrice des permissions (RBAC)</h2>
+      <p style={{ margin: '0 0 16px', fontSize: '0.82rem', color: '#94a3b8' }}>
+        Source de vérité : table role_permissions. {rows.length} permissions × {roles.length} rôles.
+      </p>
+      <div style={{ overflowX: 'auto', background: 'white', borderRadius: 10, border: '1px solid #e2e8f0' }}>
+        <table style={{ borderCollapse: 'collapse', fontSize: '0.72rem', minWidth: 900 }}>
+          <thead>
+            <tr style={{ background: '#f1f5f9' }}>
+              <th style={{ ...thRbac, textAlign: 'left', position: 'sticky', left: 0, background: '#f1f5f9', minWidth: 180 }}>Permission</th>
+              {roles.map((r) => (
+                <th key={r} style={{ ...thRbac, writingMode: 'vertical-rl' as const, transform: 'rotate(180deg)', height: 90, whiteSpace: 'nowrap' }}>{ROLE_LABELS_RBAC[r]}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(([name, info]) => (
+              <tr key={name} style={{ borderTop: '1px solid #f1f5f9' }}>
+                <td style={{ padding: '5px 8px', position: 'sticky', left: 0, background: 'white', borderRight: '1px solid #e2e8f0' }}>
+                  <div style={{ fontWeight: 600, color: '#374151' }}>{name}</div>
+                  <div style={{ color: '#94a3b8', fontSize: '0.66rem' }}>{info.description}</div>
+                </td>
+                {roles.map((r) => (
+                  <td key={r} style={{ textAlign: 'center', padding: '5px 4px', color: info.roles.has(r) ? '#16a34a' : '#e2e8f0', fontWeight: 700 }}>
+                    {info.roles.has(r) ? '✓' : '·'}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+const thRbac: React.CSSProperties = { padding: '6px 6px', fontSize: '0.68rem', color: '#475569', fontWeight: 700 };
+
+// ── BroadcastsTab — historique des diffusions ─────────────────────────────────
+const LEVEL_BADGE: Record<string, { label: string; color: string; bg: string; icon: string }> = {
+  BLEU: { label: 'Information', color: '#0EA5E9', bg: '#e0f2fe', icon: 'ℹ️' },
+  JAUNE: { label: 'Vigilance', color: '#F59E0B', bg: '#fef9c3', icon: '⚠️' },
+  ORANGE: { label: 'Pré-alerte', color: '#F97316', bg: '#ffedd5', icon: '🔶' },
+  ROUGE: { label: 'Urgence', color: '#EF4444', bg: '#fee2e2', icon: '🚨' },
+  ROUGE_FONCE: { label: 'Crise Majeure', color: '#7F1D1D', bg: '#fecaca', icon: '🔴' },
+};
+
+function BroadcastsTab() {
+  const [items, setItems] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const auth = () => ({ Authorization: `Bearer ${localStorage.getItem('olel_token')}` });
+
+  useEffect(() => {
+    axios.get(`${API}/alerts/broadcasts`, { headers: auth() })
+      .then(({ data }) => setItems(data))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <div style={{ color: '#94a3b8' }}>Chargement…</div>;
+
+  return (
+    <div>
+      <h2 style={{ margin: '0 0 16px', fontSize: '1.1rem', color: '#1a3c5e' }}>📢 Historique des diffusions</h2>
+      {!items.length ? (
+        <div style={{ color: '#94a3b8', padding: 24, textAlign: 'center' }}>Aucune diffusion enregistrée.</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {items.map((b) => {
+            const lvl = LEVEL_BADGE[b.alert?.alertLevel] || LEVEL_BADGE.BLEU;
+            return (
+              <div key={b.id} style={{ background: 'white', borderRadius: 10, border: '1px solid #e2e8f0', padding: 14 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 6 }}>
+                  <span style={{ fontWeight: 700, color: '#1a3c5e', fontSize: '0.9rem' }}>{b.alert?.title || 'Alerte'}</span>
+                  <span style={{ fontSize: '0.68rem', background: lvl.bg, color: lvl.color, padding: '2px 8px', borderRadius: 10, fontWeight: 700, whiteSpace: 'nowrap' }}>{lvl.icon} {lvl.label}</span>
+                </div>
+                <p style={{ margin: '0 0 8px', fontSize: '0.82rem', color: '#475569' }}>{b.message}</p>
+                <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: '0.72rem', color: '#94a3b8' }}>
+                  <span>👤 {b.author?.name || '—'}</span>
+                  <span>📡 {(b.channels || []).join(', ') || '—'}</span>
+                  <span>👥 {b.totalRecipients ?? 0} destinataires</span>
+                  <span>✅ {b.deliveredCount ?? 0} reçus</span>
+                  {b.costXof > 0 && <span>💰 {b.costXof} XOF</span>}
+                  <span style={{ marginLeft: 'auto' }}>{new Date(b.createdAt).toLocaleString('fr-FR')}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       )}
     </div>
   );

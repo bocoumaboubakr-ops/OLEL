@@ -16,9 +16,11 @@ export function CreateAlertModal({ onClose, onCreated }: { onClose: () => void; 
     alertLevel: 'BLEU',
     severity: 2,
     zoneId: '',
+    municipalityId: '',
     latitude: '',
     longitude: '',
   });
+  const [municipalities, setMunicipalities] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -26,6 +28,7 @@ export function CreateAlertModal({ onClose, onCreated }: { onClose: () => void; 
 
   useEffect(() => {
     axios.get(`${API}/zones`, { headers: auth() }).then(({ data }) => setZones(data)).catch(() => {});
+    axios.get(`${API}/territories/municipalities`, { headers: auth() }).then(({ data }) => setMunicipalities(data)).catch(() => {});
   }, []);
 
   const submit = async (e: React.FormEvent) => {
@@ -36,6 +39,7 @@ export function CreateAlertModal({ onClose, onCreated }: { onClose: () => void; 
       await axios.post(`${API}/alerts`, {
         ...form,
         severity: Number(form.severity),
+        municipalityId: form.municipalityId || undefined,
         latitude: form.latitude ? parseFloat(form.latitude) : undefined,
         longitude: form.longitude ? parseFloat(form.longitude) : undefined,
       }, { headers: auth() });
@@ -119,6 +123,19 @@ export function CreateAlertModal({ onClose, onCreated }: { onClose: () => void; 
               ))}
             </select>
           </Field>
+
+          {municipalities.length > 0 && (
+            <Field label="Commune (optionnel)">
+              <select value={form.municipalityId} onChange={set('municipalityId')} style={inputStyle}>
+                <option value="">-- Aucune commune précise --</option>
+                {municipalities.map((m: any) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}{m.department?.region?.name ? ` · ${m.department.region.name}` : ''}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
 
           <Field label="Description">
             <textarea
