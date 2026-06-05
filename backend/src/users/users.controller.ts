@@ -16,7 +16,7 @@ export class UsersController {
   constructor(private users: UsersService) {}
 
   @Get()
-  @Roles(Role.MAIRIE, Role.PREFECTURE, Role.GOUVERNORAT, Role.PROTECTION_CIVILE, Role.ADMIN, Role.SUPER_ADMIN)
+  @Roles(Role.COORDINATEUR, Role.MAIRIE, Role.PREFECTURE, Role.GOUVERNORAT, Role.PROTECTION_CIVILE, Role.SUPERVISEUR_REGIONAL, Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({ summary: 'Liste des utilisateurs (filtrables par rôle et zone)' })
   @ApiQuery({ name: 'role', required: false, enum: Role })
   @ApiQuery({ name: 'zoneId', required: false })
@@ -38,13 +38,13 @@ export class UsersController {
   }
 
   @Get(':id')
-  @Roles(Role.MAIRIE, Role.PREFECTURE, Role.GOUVERNORAT, Role.PROTECTION_CIVILE, Role.ADMIN, Role.SUPER_ADMIN)
+  @Roles(Role.COORDINATEUR, Role.MAIRIE, Role.PREFECTURE, Role.GOUVERNORAT, Role.PROTECTION_CIVILE, Role.SUPERVISEUR_REGIONAL, Role.ADMIN, Role.SUPER_ADMIN)
   findOne(@Param('id') id: string) {
     return this.users.findOne(id);
   }
 
   @Post()
-  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
+  @Roles(Role.SUPERVISEUR_REGIONAL, Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({ summary: 'Créer un utilisateur (admin seulement — tous rôles possibles)' })
   create(@Body() dto: CreateUserDto) {
     return this.users.create(dto);
@@ -55,7 +55,7 @@ export class UsersController {
    * Génère un mot de passe temporaire et retourne les credentials à transmettre.
    */
   @Post('sentinelle')
-  @Roles(Role.MAIRIE, Role.PREFECTURE, Role.GOUVERNORAT, Role.ADMIN, Role.SUPER_ADMIN)
+  @Roles(Role.COORDINATEUR, Role.MAIRIE, Role.PREFECTURE, Role.GOUVERNORAT, Role.SUPERVISEUR_REGIONAL, Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({ summary: 'Créer une sentinelle (mairie/admin) — génère un mot de passe temporaire' })
   createSentinelle(
     @Body() dto: CreateSentinelleDto,
@@ -65,7 +65,7 @@ export class UsersController {
   }
 
   @Patch(':id')
-  @Roles(Role.MAIRIE, Role.PREFECTURE, Role.GOUVERNORAT, Role.ADMIN, Role.SUPER_ADMIN)
+  @Roles(Role.COORDINATEUR, Role.MAIRIE, Role.PREFECTURE, Role.GOUVERNORAT, Role.SUPERVISEUR_REGIONAL, Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({ summary: 'Modifier un utilisateur' })
   update(
     @Param('id') id: string,
@@ -76,7 +76,7 @@ export class UsersController {
   }
 
   @Post(':id/change-password')
-  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
+  @Roles(Role.SUPERVISEUR_REGIONAL, Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({ summary: 'Changer le mot de passe d\'un utilisateur (admin seulement)' })
   changePassword(
     @Param('id') id: string,
@@ -89,7 +89,7 @@ export class UsersController {
   }
 
   @Delete(':id')
-  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
+  @Roles(Role.SUPERVISEUR_REGIONAL, Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({ summary: 'Désactiver un utilisateur' })
   remove(@Param('id') id: string) {
     return this.users.remove(id);

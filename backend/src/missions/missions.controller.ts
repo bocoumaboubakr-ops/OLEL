@@ -29,35 +29,35 @@ export class MissionsController {
   }
 
   @Post()
-  @Roles(Role.MAIRIE, Role.PREFECTURE, Role.GOUVERNORAT, Role.PROTECTION_CIVILE, Role.ADMIN, Role.SUPER_ADMIN)
-  @ApiOperation({ summary: 'Créer une mission (mairie+)' })
+  @Roles(Role.COORDINATEUR, Role.MAIRIE, Role.PREFECTURE, Role.GOUVERNORAT, Role.PROTECTION_CIVILE, Role.SUPERVISEUR_REGIONAL, Role.ADMIN, Role.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Créer une mission (coordinateur+)' })
   create(@Body() dto: CreateMissionDto, @CurrentUser('id') userId: string) {
     return this.missions.create(dto, userId);
   }
 
   @Post(':id/assign')
-  @Roles(Role.MAIRIE, Role.PREFECTURE, Role.GOUVERNORAT, Role.PROTECTION_CIVILE, Role.ADMIN, Role.SUPER_ADMIN)
+  @Roles(Role.COORDINATEUR, Role.MAIRIE, Role.PREFECTURE, Role.GOUVERNORAT, Role.PROTECTION_CIVILE, Role.SUPERVISEUR_REGIONAL, Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({ summary: 'Assigner une mission à une sentinelle' })
   assign(@Param('id') id: string, @Body() dto: AssignMissionDto) {
     return this.missions.assign(id, dto.sentinelId);
   }
 
   @Post(':id/accept')
-  @Roles(Role.SENTINELLE, Role.MAIRIE, Role.PREFECTURE, Role.GOUVERNORAT, Role.PROTECTION_CIVILE, Role.ADMIN, Role.SUPER_ADMIN)
+  @Roles(Role.SENTINELLE, Role.COORDINATEUR, Role.MAIRIE, Role.PREFECTURE, Role.GOUVERNORAT, Role.PROTECTION_CIVILE, Role.SUPERVISEUR_REGIONAL, Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({ summary: 'Accepter et démarrer une mission assignée' })
   accept(@Param('id') id: string, @CurrentUser('id') userId: string) {
     return this.missions.accept(id, userId);
   }
 
   @Post(':id/complete')
-  @Roles(Role.SENTINELLE, Role.MAIRIE, Role.PREFECTURE, Role.GOUVERNORAT, Role.PROTECTION_CIVILE, Role.ADMIN, Role.SUPER_ADMIN)
+  @Roles(Role.SENTINELLE, Role.COORDINATEUR, Role.MAIRIE, Role.PREFECTURE, Role.GOUVERNORAT, Role.PROTECTION_CIVILE, Role.SUPERVISEUR_REGIONAL, Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({ summary: 'Clôturer une mission avec compte-rendu' })
   complete(@Param('id') id: string, @Body() dto: CompleteMissionDto, @CurrentUser('id') userId: string) {
     return this.missions.complete(id, userId, dto.report);
   }
 
   @Post(':id/reject')
-  @Roles(Role.SENTINELLE, Role.MAIRIE, Role.PREFECTURE, Role.GOUVERNORAT, Role.PROTECTION_CIVILE, Role.ADMIN, Role.SUPER_ADMIN)
+  @Roles(Role.SENTINELLE, Role.COORDINATEUR, Role.MAIRIE, Role.PREFECTURE, Role.GOUVERNORAT, Role.PROTECTION_CIVILE, Role.SUPERVISEUR_REGIONAL, Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({ summary: 'Refuser une mission assignée (sentinelle)' })
   reject(@Param('id') id: string, @CurrentUser('id') userId: string) {
     return this.missions.reject(id, userId);
