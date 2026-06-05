@@ -4,6 +4,9 @@ import axios from 'axios';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
 
+// Timeout pour les zones à faible débit (Matam, réseau mobile instable)
+const axiosWithTimeout = axios.create({ timeout: 15000 });
+
 export type AuthMode = 'password' | 'otp_request' | 'otp_verify';
 
 export function useMobileAuth() {
@@ -27,14 +30,31 @@ export function useMobileAuth() {
     setUser(data.user);
   };
 
+  /** Rafraîchit le profil depuis l'API (ex. après activation sentinelle). */
+  const refreshProfile = async () => {
+    const token = localStorage.getItem('olel_token');
+    if (!token) return;
+    try {
+      const { data } = await axiosWithTimeout.get(`${API}/users/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      localStorage.setItem('olel_user', JSON.stringify(data));
+      setUser(data);
+    } catch { /* ignore — profil local reste inchangé */ }
+  };
+
   /** Connexion par mot de passe (sentinelles, opérateurs, admin). */
   const login = async (phone: string, password: string) => {
     setLoading(true); setError('');
     try {
-      const { data } = await axios.post(`${API}/auth/login`, { phone, password });
+      const { data } = await axiosWithTimeout.post(`${API}/auth/login`, { phone, password });
       _store(data);
     } catch (e: any) {
-      setError(e.response?.data?.message || 'Identifiants incorrects');
+      if (e.code === 'ECONNABORTED') {
+        setError('Délai de connexion dépassé — vérifiez votre réseau');
+      } else {
+        setError(e.response?.data?.message || 'Identifiants incorrects');
+      }
     } finally { setLoading(false); }
   };
 
@@ -42,10 +62,14 @@ export function useMobileAuth() {
   const requestOtp = async (phone: string): Promise<{ dev_code?: string } | null> => {
     setLoading(true); setError('');
     try {
-      const { data } = await axios.post(`${API}/auth/otp/request`, { phone });
+      const { data } = await axiosWithTimeout.post(`${API}/auth/otp/request`, { phone });
       return data; // { message, dev_code? }
     } catch (e: any) {
-      setError(e.response?.data?.message || 'Impossible d\'envoyer le code');
+      if (e.code === 'ECONNABORTED') {
+        setError('Délai dépassé — vérifiez votre réseau et réessayez');
+      } else {
+        setError(e.response?.data?.message || 'Impossible d\'envoyer le code');
+      }
       return null;
     } finally { setLoading(false); }
   };
@@ -54,10 +78,14 @@ export function useMobileAuth() {
   const verifyOtp = async (phone: string, code: string) => {
     setLoading(true); setError('');
     try {
-      const { data } = await axios.post(`${API}/auth/otp/verify`, { phone, code });
+      const { data } = await axiosWithTimeout.post(`${API}/auth/otp/verify`, { phone, code });
       _store(data);
     } catch (e: any) {
-      setError(e.response?.data?.message || 'Code incorrect ou expiré');
+      if (e.code === 'ECONNABORTED') {
+        setError('Délai dépassé — réessayez');
+      } else {
+        setError(e.response?.data?.message || 'Code incorrect ou expiré');
+      }
     } finally { setLoading(false); }
   };
 
@@ -68,5 +96,5 @@ export function useMobileAuth() {
     setUser(null);
   };
 
-  return { user, initialized, loading, error, login, requestOtp, verifyOtp, logout };
+  return { user, initialized, loading, error, login, requestOtp, verifyOtp, logout, refreshProfile };
 }

@@ -31,6 +31,12 @@ export class UsersController {
     return this.users.findAll({ page, limit, role, zoneId });
   }
 
+  @Get('me')
+  @ApiOperation({ summary: 'Mon profil (utilisateur connecté)' })
+  getMe(@CurrentUser() user: { id: string }) {
+    return this.users.findOne(user.id);
+  }
+
   @Get(':id')
   @Roles(Role.MAIRIE, Role.PREFECTURE, Role.GOUVERNORAT, Role.PROTECTION_CIVILE, Role.ADMIN, Role.SUPER_ADMIN)
   findOne(@Param('id') id: string) {

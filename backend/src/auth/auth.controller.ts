@@ -1,4 +1,4 @@
-import { Controller, Post, Body, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, HttpCode, HttpStatus, UnauthorizedException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -6,7 +6,7 @@ import { LoginDto } from './dto/login.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { TotpVerifyDto } from './dto/totp-verify.dto';
 import { OtpRequestDto, OtpVerifyDto } from './dto/otp.dto';
-import { ThrottleStrict } from '../common/decorators/throttle.decorator';
+import { ThrottleStrict, ThrottleNormal } from '../common/decorators/throttle.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 
 @ApiTags('Auth')
@@ -20,11 +20,12 @@ export class AuthController {
   @ApiOperation({ summary: 'Connexion par téléphone + mot de passe' })
   async login(@Body() dto: LoginDto) {
     const user = await this.auth.validateUser(dto.phone, dto.password);
-    if (!user) throw new Error('Identifiants incorrects');
+    if (!user) throw new UnauthorizedException('Identifiants incorrects');
     return this.auth.login(user);
   }
 
   @Post('refresh')
+  @ThrottleNormal()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: "Rafraîchir le token d'accès" })
   refresh(@Body() dto: RefreshDto) {

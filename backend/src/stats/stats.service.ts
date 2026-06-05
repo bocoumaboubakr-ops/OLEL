@@ -18,6 +18,7 @@ export class StatsService {
       usersTotal,
       alertsByTypeRaw,
       alertsBySeverityRaw,
+      notificationsSent,
     ] = await Promise.all([
       this.prisma.alert.count(),
       this.prisma.alert.count({ where: { status: AlertStatus.ACTIVE } }),
@@ -26,6 +27,7 @@ export class StatsService {
       this.prisma.user.count(),
       this.prisma.alert.groupBy({ by: ['type'], _count: { _all: true } }),
       this.prisma.alert.groupBy({ by: ['severity'], _count: { _all: true } }),
+      this.prisma.notificationLog.count({ where: { status: 'sent' } }),
     ]);
 
     const alertsByType: Record<string, number> = {};
@@ -41,9 +43,6 @@ export class StatsService {
     for (const row of alertsBySeverityRaw) {
       alertsBySeverity[String(row.severity)] = row._count._all;
     }
-
-    // notificationsSent — approximation via alerts * average channels if no dedicated table
-    const notificationsSent = alertsTotal * 3;
 
     return {
       alertsTotal,

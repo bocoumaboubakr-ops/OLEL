@@ -188,40 +188,49 @@ export class AlertsService {
       }
     }
 
-    await this.prisma.validation.create({
-      data: {
-        alertId,
-        validatorId: validator.id,
-        approved: body.action !== ValidationAction.REJECTED,
-        action: body.action,
-        step: alert.currentStep,
-        comment: body.comment,
-        photoUrl: body.photoUrl,
-        latitude: body.latitude,
-        longitude: body.longitude,
-        gravity: body.gravity,
-      },
-    });
-
-    let data: any;
+    let alertData: any;
     if (body.action === ValidationAction.REJECTED) {
-      data = { status: AlertStatus.REJECTED, resolvedAt: new Date() };
+      alertData = { status: AlertStatus.REJECTED, resolvedAt: new Date() };
     } else {
-      // VALIDATED ou ESCALATED → avance
-      data = { currentStep: def.next, status: def.nextStatus };
-      if (body.gravity != null) data.severity = Math.max(1, body.gravity);
-      // ESCALATED : on saute directement à PREFECTURE si possible
+      alertData = { currentStep: def.next, status: def.nextStatus };
+      if (body.gravity != null) alertData.severity = Math.max(1, body.gravity);
       if (body.action === ValidationAction.ESCALATED) {
-        data.currentStep = AlertStep.PREFECTURE;
-        data.status = AlertStatus.VALIDATED;
+        alertData.currentStep = AlertStep.PREFECTURE;
+        alertData.status = AlertStatus.VALIDATED;
       }
     }
 
-    const updated = await this.prisma.alert.update({
-      where: { id: alertId },
-      data,
-      include: { zone: { select: { name: true } } },
-    });
+    // Transaction atomique : validation + mise à jour alerte + audit
+    const [, updated] = await this.prisma.$transaction([
+      this.prisma.validation.create({
+        data: {
+          alertId,
+          validatorId: validator.id,
+          approved: body.action !== ValidationAction.REJECTED,
+          action: body.action,
+          step: alert.currentStep,
+          comment: body.comment,
+          photoUrl: body.photoUrl,
+          latitude: body.latitude,
+          longitude: body.longitude,
+          gravity: body.gravity,
+        },
+      }),
+      this.prisma.alert.update({
+        where: { id: alertId },
+        data: alertData,
+        include: { zone: { select: { name: true } } },
+      }),
+      this.prisma.auditLog.create({
+        data: {
+          userId: validator.id,
+          action: `alert.${body.action.toLowerCase()}`,
+          resource: 'alert',
+          resourceId: alertId,
+          details: { step: alert.currentStep, action: body.action, gravity: body.gravity },
+        },
+      }),
+    ]);
 
     this.safeBroadcast(updated);
     return updated;

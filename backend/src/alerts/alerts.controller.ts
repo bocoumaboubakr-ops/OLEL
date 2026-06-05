@@ -7,6 +7,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { ThrottleNormal } from '../common/decorators/throttle.decorator';
 import { Role, AlertStatus, AlertStep, AlertType } from '@prisma/client';
 
 @ApiTags('Alerts')
@@ -35,6 +36,7 @@ export class AlertsController {
   }
 
   @Post()
+  @ThrottleNormal()
   @Roles(Role.CITOYEN, Role.SENTINELLE, Role.MAIRIE, Role.PREFECTURE, Role.GOUVERNORAT, Role.PROTECTION_CIVILE, Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({ summary: 'Créer une alerte (signalement)' })
   create(@Body() dto: CreateAlertDto, @CurrentUser() user: { id: string; role: Role }) {

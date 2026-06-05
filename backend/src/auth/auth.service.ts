@@ -102,6 +102,10 @@ export class AuthService {
     });
 
     if (!otpRecord || otpRecord.code !== code) {
+      // Invalider le code immédiatement : après 1 échec l'attaquant doit redemander
+      if (otpRecord) {
+        await this.prisma.otpRequest.update({ where: { id: otpRecord.id }, data: { used: true } });
+      }
       throw new UnauthorizedException('Code incorrect ou expiré');
     }
 

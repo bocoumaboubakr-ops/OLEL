@@ -64,8 +64,11 @@ async function bootstrap() {
         .split(',')
         .map((o) => o.trim().replace(/\/$/, ''));
       const normalized = origin?.replace(/\/$/, '');
-      if (!origin || allowed.includes(normalized)) return callback(null, true);
-      callback(new Error(`CORS: origin ${origin} non autorisée`));
+      // En production, les requêtes sans Origin (curl, webhooks tiers) sont refusées
+      const isProd = process.env.NODE_ENV === 'production';
+      if (!origin && !isProd) return callback(null, true);
+      if (origin && allowed.includes(normalized)) return callback(null, true);
+      callback(new Error(`CORS: origin ${origin || '(aucune)'} non autorisée`));
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
