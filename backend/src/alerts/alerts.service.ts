@@ -269,8 +269,16 @@ export class AlertsService {
     if (alert.currentStep === AlertStep.BROADCAST || alert.currentStep === AlertStep.CLOSED) {
       throw new ForbiddenException('Étape terminale — utilisez les endpoints dédiés');
     }
+    // Étape PREFECTURE : pour les niveaux < ROUGE_FONCE, c'est l'étape finale avant
+    // diffusion (action Diffuser). Pour ROUGE_FONCE (crise majeure), la gouvernance
+    // doit encore valider → on autorise un advance par GOUVERNORAT+.
     if (alert.currentStep === AlertStep.PREFECTURE && body.action !== ValidationAction.REJECTED) {
-      throw new ForbiddenException('Alerte validée préfecture — utilisez l\'action Diffuser');
+      if (alert.alertLevel !== AlertLevel.ROUGE_FONCE) {
+        throw new ForbiddenException('Alerte validée préfecture — utilisez l\'action Diffuser');
+      }
+      if (!hasLevelMin(validator.role, Role.GOUVERNORAT)) {
+        throw new ForbiddenException('Crise majeure : seule la gouvernance peut valider cette étape');
+      }
     }
 
     // RADIO_COMMUNAUTAIRE ne peut jamais valider
@@ -307,10 +315,6 @@ export class AlertsService {
       ? body.alertLevel
       : (alert.alertLevel as AlertLevel);
 
-    // GOUVERNANCE requis uniquement pour ROUGE_FONCE
-    const skipGouvernance = newLevel !== AlertLevel.ROUGE_FONCE &&
-      alert.currentStep === AlertStep.PREFECTURE;
-
     let alertData: any = {};
     if (body.action === ValidationAction.REJECTED) {
       alertData = { status: AlertStatus.REJECTED, resolvedAt: new Date() };
@@ -320,10 +324,8 @@ export class AlertsService {
     } else if (body.action === ValidationAction.ESCALATED) {
       alertData = { currentStep: AlertStep.PREFECTURE, status: AlertStatus.VALIDATED };
       if (body.gravity != null) alertData.severity = Math.max(1, body.gravity);
-    } else if (skipGouvernance) {
-      // PREFECTURE validée, niveau < ROUGE_FONCE → saute GOUVERNANCE → prête pour broadcast
-      alertData = { currentStep: AlertStep.GOUVERNANCE, status: AlertStatus.VALIDATED };
     } else {
+      // Cursus normal : MAIRIE→PREFECTURE/VALIDATED ; PREFECTURE→GOUVERNANCE/VALIDATED (ROUGE_FONCE)
       alertData = { currentStep: def.next, status: def.nextStatus };
       if (body.gravity != null) alertData.severity = Math.max(1, body.gravity);
     }
@@ -390,9 +392,14 @@ export class AlertsService {
       throw new ForbiddenException('Consentement requis avant diffusion');
     }
 
-    // Vérification niveau ROUGE_FONCE : seul GOUVERNORAT+
-    if (alert.alertLevel === AlertLevel.ROUGE_FONCE && !hasLevelMin(user.role, Role.GOUVERNORAT)) {
-      throw new ForbiddenException('Niveau CRISE MAJEURE : diffusion réservée au Gouvernorat');
+    // Niveau ROUGE_FONCE : diffusion réservée au Gouvernorat ET après validation gouvernance
+    if (alert.alertLevel === AlertLevel.ROUGE_FONCE) {
+      if (!hasLevelMin(user.role, Role.GOUVERNORAT)) {
+        throw new ForbiddenException('Niveau CRISE MAJEURE : diffusion réservée au Gouvernorat');
+      }
+      if (alert.currentStep !== AlertStep.GOUVERNANCE) {
+        throw new ForbiddenException('Crise majeure : validation gouvernance requise avant diffusion');
+      }
     }
 
     // Blocage strict multi-validation pour ORANGE+
