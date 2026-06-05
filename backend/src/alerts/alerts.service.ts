@@ -115,7 +115,10 @@ export class AlertsService {
     zoneId?: string; status?: AlertStatus; type?: AlertType;
     step?: AlertStep; alertLevel?: AlertLevel; page?: number; limit?: number;
   }) {
-    const { zoneId, status, type, step, alertLevel, page = 1, limit = 20 } = filters;
+    const { zoneId, status, type, step, alertLevel } = filters;
+    // Coercition Int : les query params arrivent en string
+    const page = Math.max(1, Number(filters.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(filters.limit) || 20));
     const where: any = {};
     if (zoneId)      where.zoneId = zoneId;
     if (status)      where.status = status;

@@ -87,7 +87,10 @@ export class UsersService {
   }
 
   async findAll(filters: { page?: number; limit?: number; role?: Role; zoneId?: string }) {
-    const { page = 1, limit = 50, role, zoneId } = filters;
+    const { role, zoneId } = filters;
+    // Les query params arrivent en string → coercition en Int (take/skip Prisma)
+    const page = Math.max(1, Number(filters.page) || 1);
+    const limit = Math.min(200, Math.max(1, Number(filters.limit) || 50));
     const skip = (page - 1) * limit;
     const where: any = {};
     if (role) where.role = role;
