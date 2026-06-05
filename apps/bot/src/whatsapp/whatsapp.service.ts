@@ -16,6 +16,19 @@ const RISK_TYPES = [
 
 const TYPES_MENU = RISK_TYPES.map((t) => `${t.code}. ${t.label}`).join('\n');
 
+// Préfixe de diffusion selon le niveau d'alerte officiel
+const LEVEL_PREFIX: Record<string, string> = {
+  BLEU:        'ℹ️ INFORMATION',
+  JAUNE:       '⚠️ VIGILANCE',
+  ORANGE:      '🔶 PRÉ-ALERTE',
+  ROUGE:       '🚨 URGENCE',
+  ROUGE_FONCE: '🔴 CRISE MAJEURE',
+};
+
+export function levelPrefix(level?: string): string {
+  return LEVEL_PREFIX[level || 'BLEU'] || LEVEL_PREFIX.BLEU;
+}
+
 @Injectable()
 export class WhatsappService {
   private readonly logger = new Logger(WhatsappService.name);
@@ -51,7 +64,7 @@ export class WhatsappService {
         if (!alerts.length) {
           await this.sendText(from, '✅ Aucune alerte active dans votre zone pour le moment.\n\nTapez *menu* pour revenir.');
         } else {
-          const list = alerts.slice(0, 5).map((a: any) => `• *${a.title}*\n  📍 ${a.zone?.name || 'Zone inconnue'} — ${a.status}`).join('\n\n');
+          const list = alerts.slice(0, 5).map((a: any) => `• ${levelPrefix(a.alertLevel)}\n  *${a.title}*\n  📍 ${a.zone?.name || 'Zone inconnue'} — ${a.status}`).join('\n\n');
           await this.sendText(from, `🚨 *Alertes actives (${alerts.length}) :*\n\n${list}\n\nTapez *menu* pour revenir.`);
         }
         this.conversations.delete(from);

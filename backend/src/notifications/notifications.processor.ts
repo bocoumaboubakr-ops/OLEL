@@ -47,10 +47,15 @@ export class NotificationsProcessor {
       select: { id: true, phone: true, name: true, role: true },
     });
 
-    const severityLabel = { 1: 'Vigilance', 2: 'Alerte', 3: 'URGENCE' }[alert.severity] ?? 'Alerte';
+    // Préfixe officiel selon le niveau d'alerte (BLEU → ROUGE_FONCE)
+    const levelPrefix: Record<string, string> = {
+      BLEU: 'INFORMATION', JAUNE: 'VIGILANCE', ORANGE: 'PRE-ALERTE',
+      ROUGE: 'URGENCE', ROUGE_FONCE: 'CRISE MAJEURE',
+    };
+    const niveau = levelPrefix[alert.alertLevel as string] || 'ALERTE';
 
     const message = isBroadcast
-      ? `[OLEL] ALERTE OFFICIELLE - ${severityLabel}\n${alert.title}\n${alert.description}\nZone : ${alert.zone.name}\nSuivez les consignes des autorites locales.`
+      ? `[OLEL] ${niveau} - ALERTE OFFICIELLE\n${alert.title}\n${alert.description}\nZone : ${alert.zone.name}\nSuivez les consignes des autorites locales.`
       : `[OLEL] Nouveau signalement a valider\nType : ${alert.type}\n${alert.title}\nZone : ${alert.zone.name}\nConnectez-vous sur la plateforme OLEL.`;
 
     let sent = 0, failed = 0;

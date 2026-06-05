@@ -38,7 +38,26 @@ const STATUS_LABEL: Record<string, string> = {
 };
 const TERMINAL = ['CLOSED', 'RESOLVED', 'REJECTED', 'CANCELLED'];
 
-interface MobileAlert { id: string; title: string; description: string; type: string; severity: number; status: string; zone?: { name: string }; createdAt: string; }
+// Niveaux d'alerte officiels (miroir backend alert-workflow.ts)
+type AlertLevel = 'BLEU' | 'JAUNE' | 'ORANGE' | 'ROUGE' | 'ROUGE_FONCE';
+const LEVEL_CONFIG: Record<AlertLevel, { label: string; color: string; bg: string; icon: string }> = {
+  BLEU:        { label: 'Information',   color: '#0EA5E9', bg: '#e0f2fe', icon: 'ℹ️' },
+  JAUNE:       { label: 'Vigilance',     color: '#F59E0B', bg: '#fef9c3', icon: '⚠️' },
+  ORANGE:      { label: 'Pré-alerte',    color: '#F97316', bg: '#ffedd5', icon: '🔶' },
+  ROUGE:       { label: 'Urgence',       color: '#EF4444', bg: '#fee2e2', icon: '🚨' },
+  ROUGE_FONCE: { label: 'Crise Majeure', color: '#7F1D1D', bg: '#fecaca', icon: '🔴' },
+};
+
+function LevelBadge({ level }: { level?: string }) {
+  const cfg = LEVEL_CONFIG[(level as AlertLevel)] || LEVEL_CONFIG.BLEU;
+  return (
+    <span style={{ fontSize: '0.66rem', background: cfg.bg, color: cfg.color, padding: '2px 7px', borderRadius: 8, fontWeight: 700, whiteSpace: 'nowrap' }}>
+      {cfg.icon} {cfg.label}
+    </span>
+  );
+}
+
+interface MobileAlert { id: string; title: string; description: string; type: string; severity: number; alertLevel?: string; status: string; zone?: { name: string }; createdAt: string; }
 
 // ── App root ──────────────────────────────────────────────────────────────────
 export default function MobilePage() {
@@ -499,7 +518,10 @@ function AlertsScreen({ alerts, loading, onRefresh }: { alerts: MobileAlert[]; l
           <div key={a.id} style={{ background: 'white', borderRadius: 12, padding: '14px', marginBottom: 10, boxShadow: '0 1px 6px rgba(0,0,0,0.07)', borderLeft: `4px solid ${color}` }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
               <span style={{ fontWeight: 700, fontSize: '0.9rem', color: '#1a3c5e', flex: 1 }}>{meta.icon} {a.title}</span>
-              <span style={{ fontSize: '0.68rem', background: color + '22', color, padding: '2px 7px', borderRadius: 8, whiteSpace: 'nowrap', fontWeight: 700 }}>{SEV_LABEL[a.severity]}</span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-end' }}>
+                <LevelBadge level={a.alertLevel} />
+                <span style={{ fontSize: '0.68rem', background: color + '22', color, padding: '2px 7px', borderRadius: 8, whiteSpace: 'nowrap', fontWeight: 700 }}>{SEV_LABEL[a.severity]}</span>
+              </div>
             </div>
             <p style={{ margin: '0 0 8px', color: '#555', fontSize: '0.82rem', lineHeight: 1.4 }}>{a.description}</p>
             <div style={{ display: 'flex', gap: 10, fontSize: '0.72rem', color: '#94a3b8' }}>
@@ -930,6 +952,7 @@ function SentinelValidationScreen({ alerts, onDone }: { alerts: MobileAlert[]; o
 function SentinelValidationForm({ alert, onBack, onDone }: { alert: MobileAlert; onBack: () => void; onDone: () => void }) {
   const [action, setAction] = useState<'VALIDATED' | 'REJECTED' | 'ESCALATED'>('VALIDATED');
   const [gravity, setGravity] = useState(1);
+  const [alertLevel, setAlertLevel] = useState<AlertLevel>((alert.alertLevel as AlertLevel) || 'BLEU');
   const [comment, setComment] = useState('');
   const [photoUrl, setPhotoUrl] = useState('');
   const [gps, setGps] = useState<{ lat: number; lng: number } | null>(null);
@@ -958,6 +981,7 @@ function SentinelValidationForm({ alert, onBack, onDone }: { alert: MobileAlert;
       await axios.post(`${API}/alerts/${alert.id}/advance`, {
         action,
         gravity: action === 'REJECTED' ? undefined : gravity,
+        alertLevel: action === 'REJECTED' ? undefined : alertLevel,
         comment: comment.trim() || undefined,
         photoUrl: action === 'REJECTED' ? undefined : photoUrl.trim(),
         latitude: gps?.lat,
@@ -1005,6 +1029,25 @@ function SentinelValidationForm({ alert, onBack, onDone }: { alert: MobileAlert;
                   {g}
                 </button>
               ))}
+            </div>
+          </div>
+
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ display: 'block', fontWeight: 700, fontSize: '0.82rem', color: '#374151', marginBottom: 6 }}>Niveau d'alerte</label>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {(Object.keys(LEVEL_CONFIG) as AlertLevel[]).map((lvl) => {
+                const cfg = LEVEL_CONFIG[lvl];
+                const on = alertLevel === lvl;
+                return (
+                  <button key={lvl} onClick={() => setAlertLevel(lvl)}
+                    style={{ flex: '1 1 30%', padding: '7px 4px', border: `2px solid ${on ? cfg.color : '#e2e8f0'}`, borderRadius: 8, background: on ? cfg.bg : 'white', color: on ? cfg.color : '#64748b', fontWeight: 700, fontSize: '0.68rem', cursor: 'pointer' }}>
+                    {cfg.icon} {cfg.label}
+                  </button>
+                );
+              })}
+            </div>
+            <div style={{ fontSize: '0.68rem', color: '#94a3b8', marginTop: 4 }}>
+              Orange et plus exigent une triple validation avant diffusion.
             </div>
           </div>
 
