@@ -64,11 +64,13 @@ async function bootstrap() {
         .split(',')
         .map((o) => o.trim().replace(/\/$/, ''));
       const normalized = origin?.replace(/\/$/, '');
-      // En production, les requêtes sans Origin (curl, webhooks tiers) sont refusées
-      const isProd = process.env.NODE_ENV === 'production';
-      if (!origin && !isProd) return callback(null, true);
-      if (origin && allowed.includes(normalized)) return callback(null, true);
-      callback(new Error(`CORS: origin ${origin || '(aucune)'} non autorisée`));
+      // Les requêtes sans Origin (health checks Docker, curl, webhooks tiers,
+      // server-to-server) ne sont pas des requêtes navigateur cross-origin :
+      // CORS ne s'y applique pas et les bloquer n'apporte aucune sécurité
+      // (un client non-navigateur peut forger n'importe quel Origin).
+      if (!origin) return callback(null, true);
+      if (allowed.includes(normalized)) return callback(null, true);
+      callback(new Error(`CORS: origin ${origin} non autorisée`));
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
