@@ -5,7 +5,7 @@ import { useAuth } from '@/hooks/useAuth';
 import axios from 'axios';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
-const AUTH_ROLES = ['MAIRIE', 'PREFECTURE', 'GOUVERNORAT', 'PROTECTION_CIVILE', 'ADMIN', 'SUPER_ADMIN'];
+const AUTH_ROLES = ['COORDINATEUR', 'MAIRIE', 'PREFECTURE', 'GOUVERNORAT', 'PROTECTION_CIVILE', 'SUPERVISEUR_REGIONAL', 'ADMIN', 'SUPER_ADMIN'];
 
 type STab = 'sentinelles' | 'missions';
 

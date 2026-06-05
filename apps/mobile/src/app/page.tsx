@@ -8,7 +8,7 @@ import { useOfflineQueue, queueSignalement } from '@/hooks/useOfflineQueue';
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
 
 type Tab = 'home' | 'alerts' | 'report' | 'map' | 'formations' | 'missions' | 'validate' | 'profile';
-const SENTINEL_ROLES = ['SENTINELLE', 'MAIRIE', 'PREFECTURE', 'GOUVERNORAT', 'PROTECTION_CIVILE', 'ADMIN', 'SUPER_ADMIN'];
+const SENTINEL_ROLES = ['SENTINELLE', 'COORDINATEUR', 'MAIRIE', 'PREFECTURE', 'GOUVERNORAT', 'PROTECTION_CIVILE', 'SUPERVISEUR_REGIONAL', 'ADMIN', 'SUPER_ADMIN'];
 
 const RISK_ICONS: Record<string, { icon: string; label: string; color: string }> = {
   INONDATION:           { icon: '🌊', label: 'Inondation',   color: '#3b82f6' },
