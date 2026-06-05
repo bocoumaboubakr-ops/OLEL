@@ -5,6 +5,7 @@ import {
   HttpException,
   HttpStatus,
   Optional,
+  Logger,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { SentryService } from '../sentry/sentry.service';
@@ -12,6 +13,8 @@ import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
+  private readonly logger = new Logger(HttpExceptionFilter.name);
+
   constructor(@Optional() private readonly sentry?: SentryService) {}
 
   catch(exception: unknown, host: ArgumentsHost) {
@@ -40,8 +43,13 @@ export class HttpExceptionFilter implements ExceptionFilter {
       }
     }
 
-    if (status >= 500 && this.sentry) {
-      this.sentry.captureException(exception, { url: request.url, method: request.method, status });
+    if (status >= 500) {
+      // Journalise la stack complète pour les erreurs serveur (sinon muettes)
+      const err = exception instanceof Error ? exception : new Error(String(exception));
+      this.logger.error(`${request.method} ${request.url} → ${status}: ${err.message}`, err.stack);
+      if (this.sentry) {
+        this.sentry.captureException(exception, { url: request.url, method: request.method, status });
+      }
     }
 
     response.status(status).json({
