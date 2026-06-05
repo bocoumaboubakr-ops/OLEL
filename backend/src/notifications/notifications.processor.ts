@@ -6,7 +6,14 @@ import { WhatsappService } from './channels/whatsapp.service';
 import { SmsService } from './channels/sms.service';
 import { Role } from '@prisma/client';
 
-const OPERATOR_ROLES: Role[] = [Role.SENTINELLE, Role.MAIRIE, Role.PREFECTURE, Role.GOUVERNORAT, Role.PROTECTION_CIVILE, Role.ADMIN, Role.SUPER_ADMIN];
+const OPERATOR_ROLES: Role[] = [
+  Role.SENTINELLE, Role.COORDINATEUR, Role.MAIRIE, Role.HYDRO_METEO,
+  Role.PREFECTURE, Role.GOUVERNORAT, Role.PROTECTION_CIVILE,
+  Role.SUPERVISEUR_REGIONAL, Role.ADMIN, Role.SUPER_ADMIN,
+];
+
+// Coût indicatif par canal (XOF) pour le cost log des diffusions
+const CHANNEL_COST_XOF: Record<string, number> = { whatsapp: 5, sms: 25, ivr: 50 };
 
 @Processor('notifications')
 export class NotificationsProcessor {
@@ -24,8 +31,8 @@ export class NotificationsProcessor {
    * - isBroadcast=true  (diffusion préfecture) → notifie TOUS les habitants actifs de la zone
    */
   @Process('fanout')
-  async handleFanout(job: Job<{ alertId: string; isBroadcast?: boolean }>) {
-    const { alertId, isBroadcast = false } = job.data;
+  async handleFanout(job: Job<{ alertId: string; isBroadcast?: boolean; broadcastId?: string }>) {
+    const { alertId, isBroadcast = false, broadcastId } = job.data;
 
     const alert = await this.prisma.alert.findUnique({
       where: { id: alertId },
@@ -58,7 +65,7 @@ export class NotificationsProcessor {
       ? `[OLEL] ${niveau} - ALERTE OFFICIELLE\n${alert.title}\n${alert.description}\nZone : ${alert.zone.name}\nSuivez les consignes des autorites locales.`
       : `[OLEL] Nouveau signalement a valider\nType : ${alert.type}\n${alert.title}\nZone : ${alert.zone.name}\nConnectez-vous sur la plateforme OLEL.`;
 
-    let sent = 0, failed = 0;
+    let sent = 0, failed = 0, costXof = 0;
     // Traitement par lots de 50 pour éviter la surcharge
     const BATCH_SIZE = 50;
     for (let i = 0; i < users.length; i += BATCH_SIZE) {
@@ -69,7 +76,7 @@ export class NotificationsProcessor {
           await this.prisma.notificationLog.create({
             data: { alertId, channel: 'whatsapp', recipient: user.phone, status: 'sent' },
           });
-          sent++;
+          sent++; costXof += CHANNEL_COST_XOF.whatsapp;
         } catch {
           // Fallback SMS
           try {
@@ -77,7 +84,7 @@ export class NotificationsProcessor {
             await this.prisma.notificationLog.create({
               data: { alertId, channel: 'sms', recipient: user.phone, status: 'sent' },
             });
-            sent++;
+            sent++; costXof += CHANNEL_COST_XOF.sms;
           } catch (smsErr) {
             await this.prisma.notificationLog.create({
               data: { alertId, channel: 'sms', recipient: user.phone, status: 'failed', error: (smsErr as Error).message },
@@ -88,8 +95,20 @@ export class NotificationsProcessor {
       }));
     }
 
+    // Met à jour les statistiques de la diffusion (cost log + couverture)
+    if (isBroadcast && broadcastId) {
+      try {
+        await this.prisma.broadcast.update({
+          where: { id: broadcastId },
+          data: { totalRecipients: users.length, deliveredCount: sent, costXof },
+        });
+      } catch (e) {
+        this.logger.error(`Échec MAJ stats broadcast ${broadcastId}: ${(e as Error).message}`);
+      }
+    }
+
     this.logger.log(
-      `Fanout alerte ${alertId} [${isBroadcast ? 'BROADCAST' : 'signalement'}] → ${users.length} destinataires | envoyé: ${sent} | échoué: ${failed}`,
+      `Fanout alerte ${alertId} [${isBroadcast ? 'BROADCAST' : 'signalement'}] → ${users.length} destinataires | envoyé: ${sent} | échoué: ${failed} | coût: ${costXof} XOF`,
     );
   }
 }

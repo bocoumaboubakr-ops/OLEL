@@ -492,7 +492,10 @@ export class AlertsService {
     const zoneFilter = caller?.zoneId ? { zoneId: caller.zoneId } : {};
 
     let where: any = { ...zoneFilter };
-    if (user.role === Role.SENTINELLE || user.role === Role.RADIO_COMMUNAUTAIRE) {
+    if (user.role === Role.RADIO_COMMUNAUTAIRE) {
+      // Les radios ne valident pas : elles reçoivent les alertes diffusées à relayer
+      where = { ...where, status: AlertStatus.BROADCAST };
+    } else if (user.role === Role.SENTINELLE) {
       where = { ...where, currentStep: AlertStep.SIGNALEMENT, status: AlertStatus.PENDING };
     } else if (user.role === Role.COORDINATEUR) {
       where = { ...where, currentStep: AlertStep.SENTINELLE, status: AlertStatus.UNDER_REVIEW };
