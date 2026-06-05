@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { ALERT_TYPES, SEVERITY_LABELS } from '@/components/alerts/alertTypes';
+import { LEVEL_CONFIG, AlertLevel } from '@/lib/governance';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
 
@@ -12,6 +13,7 @@ export function CreateAlertModal({ onClose, onCreated }: { onClose: () => void; 
     title: '',
     description: '',
     type: 'INONDATION',
+    alertLevel: 'BLEU',
     severity: 2,
     zoneId: '',
     latitude: '',
@@ -76,6 +78,38 @@ export function CreateAlertModal({ onClose, onCreated }: { onClose: () => void; 
               </select>
             </Field>
           </div>
+
+          <Field label="Niveau d'alerte">
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {(Object.keys(LEVEL_CONFIG) as AlertLevel[]).map((lvl) => {
+                const cfg = LEVEL_CONFIG[lvl];
+                const active = form.alertLevel === lvl;
+                return (
+                  <button
+                    type="button"
+                    key={lvl}
+                    onClick={() => setForm((f) => ({ ...f, alertLevel: lvl }))}
+                    style={{
+                      flex: '1 1 auto',
+                      padding: '7px 8px',
+                      borderRadius: 6,
+                      cursor: 'pointer',
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      border: active ? `2px solid ${cfg.color}` : '1px solid #e2e8f0',
+                      background: active ? cfg.bg : 'white',
+                      color: active ? cfg.color : '#64748b',
+                    }}
+                  >
+                    {cfg.icon} {cfg.label}
+                  </button>
+                );
+              })}
+            </div>
+            <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: 4 }}>
+              ORANGE et plus exigent une triple validation (sentinelle + autorité locale + autorité admin) avant diffusion.
+            </div>
+          </Field>
 
           <Field label="Zone concernée">
             <select value={form.zoneId} onChange={set('zoneId')} required style={inputStyle}>

@@ -2,6 +2,7 @@
 
 import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { AlertLevelBadge } from '@/components/governance/AlertLevelBadge';
 
 export const SEVERITY_COLOR: Record<number, string> = {
   1: '#22c55e',
@@ -40,16 +41,18 @@ export const STATUS_STYLE: Record<string, { bg: string; color: string; label: st
   CANCELLED:    { bg: '#f1f5f9', color: '#64748b', label: 'Annulée' },
 };
 
-/** Étapes du cursus (CURSUS_ALERTE.md) dans l'ordre. */
-export const WORKFLOW_STEPS = ['SIGNALEMENT', 'SENTINELLE', 'MAIRIE', 'PREFECTURE', 'BROADCAST', 'CLOSED'] as const;
+/** Étapes du cursus officiel (gouvernance v2) dans l'ordre. */
+export const WORKFLOW_STEPS = ['SIGNALEMENT', 'SENTINELLE', 'COORDINATEUR', 'MAIRIE', 'PREFECTURE', 'GOUVERNANCE', 'BROADCAST', 'CLOSED'] as const;
 
 export const STEP_LABEL: Record<string, string> = {
-  SIGNALEMENT: 'Signalement',
-  SENTINELLE:  'Sentinelle',
-  MAIRIE:      'Mairie',
-  PREFECTURE:  'Préfecture',
-  BROADCAST:   'Diffusion',
-  CLOSED:      'Clôture',
+  SIGNALEMENT:  'Signalement',
+  SENTINELLE:   'Sentinelle',
+  COORDINATEUR: 'Coordinateur',
+  MAIRIE:       'Mairie',
+  PREFECTURE:   'Préfecture',
+  GOUVERNANCE:  'Gouvernance',
+  BROADCAST:    'Diffusion',
+  CLOSED:       'Clôture',
 };
 
 /** Statuts considérés « en cours » (non terminaux) pour le filtre dashboard. */
@@ -88,9 +91,12 @@ export function AlertsFeed({ alerts, onSelect }: { alerts: any[]; onSelect?: (a:
               <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#1a3c5e', flex: 1 }}>
                 {meta.icon} {alert.title}
               </span>
-              <span style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: 10, background: status.bg, color: status.color, whiteSpace: 'nowrap', fontWeight: 600 }}>
-                {status.label}
-              </span>
+              <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0 }}>
+                {alert.alertLevel && <AlertLevelBadge level={alert.alertLevel} size="sm" />}
+                <span style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: 10, background: status.bg, color: status.color, whiteSpace: 'nowrap', fontWeight: 600 }}>
+                  {status.label}
+                </span>
+              </div>
             </div>
             <p style={{ margin: '0 0 8px', fontSize: '0.82rem', color: '#555', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {alert.description}

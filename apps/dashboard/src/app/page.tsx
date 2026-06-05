@@ -9,6 +9,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { StatsBar } from '@/components/layout/StatsBar';
 import { CreateAlertModal } from '@/components/alerts/CreateAlertModal';
 import { ACTIVE_STATUSES } from '@/components/alerts/AlertsFeed';
+import { canCreate as canCreateRole, ROLE_LABELS, ROLE_LEVEL } from '@/lib/governance';
 
 export default function DashboardPage() {
   const { user, initialized, logout } = useAuth();
@@ -20,7 +21,8 @@ export default function DashboardPage() {
   if (!initialized) return null;
   if (!user) return <LoginRedirect />;
 
-  const canCreate = ['CITOYEN', 'SENTINELLE', 'MAIRIE', 'PREFECTURE', 'GOUVERNORAT', 'PROTECTION_CIVILE', 'ADMIN', 'SUPER_ADMIN'].includes(user.role);
+  const canCreate = canCreateRole(user.role);
+  const roleLvl = ROLE_LEVEL[user.role] ?? 0;
   const filteredAlerts = activeTab === 'active'
     ? alerts.filter((a) => ACTIVE_STATUSES.includes(a.status))
     : alerts;
@@ -44,14 +46,14 @@ export default function DashboardPage() {
               + Nouvelle alerte
             </button>
           )}
-          {['MAIRIE', 'PREFECTURE', 'GOUVERNORAT', 'PROTECTION_CIVILE', 'ADMIN', 'SUPER_ADMIN'].includes(user.role) && (
+          {roleLvl >= ROLE_LEVEL.COORDINATEUR && (
             <a href="/sentinelles" style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.85rem', textDecoration: 'none' }}>🔭 Sentinelles</a>
           )}
-          {['ADMIN', 'SUPER_ADMIN'].includes(user.role) && (
+          {roleLvl >= ROLE_LEVEL.ADMIN && (
             <a href="/admin" style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.85rem', textDecoration: 'none' }}>⚙️ Admin</a>
           )}
           <span style={{ fontSize: '0.85rem', opacity: 0.85 }}>{user.name}</span>
-          <span style={{ fontSize: '0.7rem', background: 'rgba(255,255,255,0.15)', padding: '2px 8px', borderRadius: 10 }}>{user.role}</span>
+          <span style={{ fontSize: '0.7rem', background: 'rgba(255,255,255,0.15)', padding: '2px 8px', borderRadius: 10 }}>{ROLE_LABELS[user.role] || user.role}</span>
           <button onClick={logout} style={{ background: 'rgba(255,255,255,0.15)', color: 'white', border: 'none', padding: '5px 12px', borderRadius: 6, cursor: 'pointer', fontSize: '0.8rem' }}>
             Déconnexion
           </button>

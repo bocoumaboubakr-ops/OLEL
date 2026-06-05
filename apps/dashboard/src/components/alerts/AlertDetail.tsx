@@ -23,31 +23,25 @@ async function compressImage(file: File): Promise<Blob> {
   });
 }
 import { TYPE_META, SEVERITY_COLOR, SEVERITY_LABEL, STATUS_STYLE, WORKFLOW_STEPS, STEP_LABEL } from './AlertsFeed';
+import { ROLE_LEVEL, STEP_MIN_LEVEL, CRITICAL_LEVELS, criticalCategory, AlertLevel } from '@/lib/governance';
+import { AlertLevelBadge } from '@/components/governance/AlertLevelBadge';
+import { CriticalValidationStatus } from '@/components/governance/CriticalValidationStatus';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
 
-// Miroir de alert-workflow.ts (backend) — hiérarchie des rôles
-const ROLE_LEVEL: Record<string, number> = {
-  CITOYEN: 0, SENTINELLE: 1, MAIRIE: 2, PREFECTURE: 3,
-  GOUVERNORAT: 4, PROTECTION_CIVILE: 4, ADMIN: 99, SUPER_ADMIN: 99,
-};
-
-// Rôle minimum requis pour agir à chaque étape (advance)
-// PREFECTURE est géré par broadcast(), pas advance() → absent de cette map
-const STEP_MIN_ROLE: Record<string, number> = {
-  SIGNALEMENT: 1,  // SENTINELLE valide sur le terrain
-  SENTINELLE:  2,  // MAIRIE confirme
-  MAIRIE:      3,  // PREFECTURE valide
-};
+// Étapes franchissables via advance() (PREFECTURE/GOUVERNANCE → broadcast dédié)
+const ADVANCE_STEPS = ['SIGNALEMENT', 'SENTINELLE', 'COORDINATEUR', 'MAIRIE'];
 
 // Message d'aide affiché sous l'étape active
 const STEP_NEXT_ACTION: Record<string, string> = {
-  SIGNALEMENT: 'Une sentinelle doit vérifier sur le terrain (photo + GPS + gravité)',
-  SENTINELLE:  'La mairie doit confirmer le signalement',
-  MAIRIE:      'La préfecture doit valider avant diffusion',
-  PREFECTURE:  'La préfecture peut maintenant diffuser l\'alerte',
-  BROADCAST:   'Alerte diffusée — la mairie peut clôturer avec bilan',
-  CLOSED:      'Alerte clôturée',
+  SIGNALEMENT:  'Une sentinelle doit vérifier sur le terrain (photo + GPS + gravité)',
+  SENTINELLE:   'Le coordinateur doit valider la remontée terrain',
+  COORDINATEUR: 'La mairie doit confirmer le signalement',
+  MAIRIE:       'La préfecture doit valider avant diffusion',
+  PREFECTURE:   'La préfecture peut diffuser (ou la gouvernance pour une crise majeure)',
+  GOUVERNANCE:  'La gouvernance valide les crises majeures avant diffusion',
+  BROADCAST:    'Alerte diffusée — la mairie peut clôturer avec bilan',
+  CLOSED:       'Alerte clôturée',
 };
 
 export function AlertDetail({ alert, currentUser, onClose, onRefetch }: {
@@ -63,6 +57,7 @@ export function AlertDetail({ alert, currentUser, onClose, onRefetch }: {
   const [photoUploading, setPhotoUploading] = useState(false);
   const [gravity, setGravity] = useState('2');
   const [reason, setReason] = useState('');
+  const [broadcastMsg, setBroadcastMsg] = useState('');
 
   const meta = TYPE_META[alert.type] || TYPE_META.AUTRE;
   const sev = SEVERITY_COLOR[alert.severity] || '#888';
@@ -70,17 +65,30 @@ export function AlertDetail({ alert, currentUser, onClose, onRefetch }: {
   const level = ROLE_LEVEL[currentUser.role] ?? 0;
   const step = alert.currentStep || 'SIGNALEMENT';
 
+  const isCritical = CRITICAL_LEVELS.includes(alert.alertLevel as AlertLevel);
+  const myCriticalCategory = criticalCategory(currentUser.role);
+  const alreadyValidatedCritical = (alert.criticalValidations || []).some(
+    (v: any) => v.validator?.id === currentUser.id || v.validatorId === currentUser.id,
+  );
+  const criticalCount = new Set(
+    (alert.criticalValidations || []).map((v: any) => v.validatorCategory),
+  ).size;
+  const criticalComplete = !isCritical || criticalCount === 3;
+
   const isTerminal = ['CLOSED', 'RESOLVED', 'REJECTED', 'CANCELLED', 'BROADCAST'].includes(alert.status);
-  // PREFECTURE step → géré uniquement par broadcast(), pas advance()
   const canAdvance = !isTerminal
     && alert.status !== 'BROADCASTING'
-    && ['SIGNALEMENT', 'SENTINELLE', 'MAIRIE'].includes(step)
-    && level >= (STEP_MIN_ROLE[step] ?? 99);
-  // Diffusion : les DEUX conditions doivent être vraies (AND, pas OR)
+    && ADVANCE_STEPS.includes(step)
+    && level >= (STEP_MIN_LEVEL[step] ?? 99);
+  // Diffusion : statut VALIDATED, étape PREFECTURE ou GOUVERNANCE, rôle PREFECTURE+,
+  // et triple validation critique complète si niveau ORANGE+
   const canBroadcast = !isTerminal
     && alert.status === 'VALIDATED'
-    && step === 'PREFECTURE'
-    && level >= ROLE_LEVEL.PREFECTURE;
+    && (step === 'PREFECTURE' || step === 'GOUVERNANCE')
+    && level >= ROLE_LEVEL.PREFECTURE
+    && criticalComplete;
+  // Bouton de validation critique : niveau ORANGE+, rôle habilité, pas déjà validé
+  const canCriticalValidate = isCritical && !isTerminal && !!myCriticalCategory && !alreadyValidatedCritical;
   const canClose = alert.status === 'BROADCAST' && level >= ROLE_LEVEL.MAIRIE;
   const needsProof = step === 'SIGNALEMENT';
 
@@ -123,8 +131,23 @@ export function AlertDetail({ alert, currentUser, onClose, onRefetch }: {
     await axios.post(`${API}/alerts/${alert.id}/advance`, body, { headers: auth() });
   });
 
-  const broadcast = () => run(() => axios.post(`${API}/alerts/${alert.id}/broadcast`, {}, { headers: auth() }));
+  const broadcast = () => run(async () => {
+    if (!broadcastMsg.trim()) throw new Error('Message de diffusion obligatoire');
+    await axios.post(`${API}/alerts/${alert.id}/broadcast`, { message: broadcastMsg }, { headers: auth() });
+  });
   const close = () => run(() => axios.post(`${API}/alerts/${alert.id}/close`, { reason }, { headers: auth() }));
+  // Validation critique : ne ferme pas le panneau, juste refetch pour voir la progression
+  const criticalValidate = async () => {
+    setLoading(true); setError('');
+    try {
+      await axios.post(`${API}/alerts/${alert.id}/critical-validate`, { comment }, { headers: auth() });
+      onRefetch();
+    } catch (e: any) {
+      setError(e.response?.data?.message || 'Erreur');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const currentStepIdx = WORKFLOW_STEPS.indexOf(step as any);
 
@@ -140,7 +163,8 @@ export function AlertDetail({ alert, currentUser, onClose, onRefetch }: {
           <div style={{ fontWeight: 700, fontSize: '1rem', color: '#1a3c5e', marginBottom: 4 }}>
             {meta.icon} {alert.title}
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {alert.alertLevel && <AlertLevelBadge level={alert.alertLevel} size="sm" />}
             <span style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: 10, background: status.bg, color: status.color, fontWeight: 600 }}>
               {status.label}
             </span>
@@ -232,6 +256,30 @@ export function AlertDetail({ alert, currentUser, onClose, onRefetch }: {
           </Section>
         )}
 
+        {/* Validation critique (ORANGE / ROUGE / ROUGE_FONCE) */}
+        {isCritical && (
+          <Section title="Validation critique requise">
+            <CriticalValidationStatus
+              alertLevel={alert.alertLevel}
+              criticalValidations={alert.criticalValidations || []}
+            />
+            {canCriticalValidate && (
+              <button
+                disabled={loading}
+                onClick={criticalValidate}
+                style={{ ...btn('#9a3412'), width: '100%', marginTop: 10 }}
+              >
+                ✍️ Enregistrer ma validation ({myCriticalCategory === 'SENTINELLE_CATEGORY' ? 'Sentinelle' : myCriticalCategory === 'AUTORITE_LOCALE' ? 'Autorité locale' : 'Autorité admin'})
+              </button>
+            )}
+            {alreadyValidatedCritical && (
+              <div style={{ marginTop: 8, fontSize: '0.76rem', color: '#15803d', textAlign: 'center' }}>
+                ✓ Vous avez déjà validé cette alerte
+              </div>
+            )}
+          </Section>
+        )}
+
         {/* Actions du cursus */}
         {(canAdvance || canBroadcast || canClose) && (
           <Section title="Action requise">
@@ -304,10 +352,17 @@ export function AlertDetail({ alert, currentUser, onClose, onRefetch }: {
             )}
 
             {canBroadcast && (
-              <button disabled={loading} onClick={broadcast}
-                style={{ ...btn('#a21caf'), width: '100%', marginTop: 8 }}>
-                📢 Diffuser l'alerte (multi-canal)
-              </button>
+              <>
+                <textarea
+                  value={broadcastMsg} onChange={(e) => setBroadcastMsg(e.target.value)}
+                  placeholder="Message de diffusion (envoyé sur tous les canaux)…" rows={3}
+                  style={{ ...inputS, resize: 'vertical', marginTop: 8 }}
+                />
+                <button disabled={loading} onClick={broadcast}
+                  style={{ ...btn('#a21caf'), width: '100%', marginTop: 8 }}>
+                  📢 Diffuser l'alerte (multi-canal)
+                </button>
+              </>
             )}
 
             {canClose && (
