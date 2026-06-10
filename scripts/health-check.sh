@@ -7,6 +7,7 @@ set -euo pipefail
 API_URL="${API_URL:-http://localhost:4000}"
 DASHBOARD_URL="${DASHBOARD_URL:-http://localhost:3000}"
 MOBILE_URL="${MOBILE_URL:-http://localhost:3001}"
+BOT_URL="${BOT_URL:-http://localhost:3002}"
 
 OK=0
 FAIL=0
@@ -32,9 +33,13 @@ echo ""
 
 check "Backend liveness"   "${API_URL}/api/v1/health/live"
 check "Backend readiness"  "${API_URL}/api/v1/health/ready"
-check "Backend Swagger"    "${API_URL}/api-docs"
+check "Bot WhatsApp"       "${BOT_URL}/health"
 check "Dashboard"          "${DASHBOARD_URL}"
 check "Mobile PWA"         "${MOBILE_URL}"
+# Swagger est désactivé en production (404 attendu) — on ne le teste qu'en dev
+if [ "${NODE_ENV:-production}" != "production" ]; then
+    check "Backend Swagger" "${API_URL}/api-docs"
+fi
 
 # Vérifier les conteneurs Docker
 echo ""
