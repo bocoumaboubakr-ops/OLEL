@@ -2,7 +2,7 @@
   "name": "olel-monorepo",
   "version": "1.0.0",
   "private": true,
-  "description": "OLEL – Plateforme d'alerte précoce multi-risques, projet STOP INONDATION (Matam–Gorgol)",
+  "description": "OLEL – Plateforme d'alerte précoce multi-risques, Région de Matam (Sénégal)",
   "workspaces": [
     "packages/*",
     "apps/*",

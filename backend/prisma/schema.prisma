@@ -1,0 +1,516 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  // Niveau 0 — Population
+  CITOYEN
+  // Niveau 1 — Réseau communautaire
+  SENTINELLE
+  RADIO_COMMUNAUTAIRE
+  // Niveau 2 — Coordination communautaire
+  COORDINATEUR
+  // Niveau 3 — Collectivités / Services techniques
+  MAIRIE
+  HYDRO_METEO
+  // Niveau 4 — Administration territoriale
+  PREFECTURE
+  // Niveau 5 — Gouvernance régionale / Services spécialisés
+  GOUVERNORAT
+  PROTECTION_CIVILE
+  // Niveau 6 — Administration plateforme
+  SUPERVISEUR_REGIONAL
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum AlertLevel {
+  BLEU         // Information
+  JAUNE        // Vigilance
+  ORANGE       // Pré-alerte
+  ROUGE        // Urgence
+  ROUGE_FONCE  // Crise Majeure
+}
+
+enum CriticalValidatorCategory {
+  SENTINELLE_CATEGORY   // SENTINELLE ou COORDINATEUR
+  AUTORITE_LOCALE       // MAIRIE ou PREFECTURE
+  AUTORITE_ADMIN        // GOUVERNORAT, PROTECTION_CIVILE ou SUPERVISEUR_REGIONAL
+}
+
+enum AlertType {
+  INONDATION
+  SECHERESSE
+  INCENDIE
+  TEMPETE
+  EPIDEMIE
+  LOCUSTES
+  ACCIDENT_INDUSTRIEL
+  MOUVEMENT_DE_TERRAIN
+  AUTRE
+}
+
+enum AlertStatus {
+  PENDING
+  ACTIVE
+  RESOLVED
+  CANCELLED
+  UNDER_REVIEW
+  VALIDATED
+  BROADCASTING
+  BROADCAST
+  REJECTED
+  CLOSED
+}
+
+enum AlertStep {
+  SIGNALEMENT
+  SENTINELLE
+  COORDINATEUR
+  MAIRIE
+  PREFECTURE
+  GOUVERNANCE
+  BROADCAST
+  CLOSED
+}
+
+enum ValidationAction {
+  VALIDATED
+  REJECTED
+  ESCALATED
+}
+
+enum TrainingCategory {
+  SECOURISME
+  RISQUE_LOCAL
+  PROCEDURE
+  SENSIBILISATION
+}
+
+enum MissionType {
+  VERIFICATION
+  PATROUILLE
+  SENSIBILISATION
+  EVACUATION
+}
+
+enum MissionStatus {
+  OPEN
+  ASSIGNED
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+enum SignalementStatus {
+  PENDING
+  VALIDATED
+  REJECTED
+}
+
+model User {
+  id            String   @id @default(uuid())
+  phone         String   @unique
+  email         String?  @unique
+  name          String
+  role          Role     @default(CITOYEN)
+  passwordHash  String?
+  otpSecret     String?
+  totpSecret    String?
+  totpEnabled   Boolean  @default(false)
+  isActive      Boolean  @default(true)
+  lastActiveAt  DateTime?
+  zoneId        String?
+  zone          Zone?    @relation(fields: [zoneId], references: [id])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  deletedAt     DateTime?
+
+  signalements  Signalement[]
+  validations   Validation[]
+  auditLogs     AuditLog[]
+  consents      Consent[]
+  trainingProgress         TrainingProgress[]
+  missionAssignments       MissionAssignment[]
+  createdAlerts            Alert[]                   @relation("AlertCreator")
+  createdMissions          Mission[]                 @relation("MissionCreator")
+  criticalValidations      AlertCriticalValidation[] @relation("CriticalValidations")
+  authoredBroadcasts       Broadcast[]               @relation("BroadcastAuthor")
+
+  @@index([phone])
+  @@index([zoneId])
+  @@map("users")
+}
+
+model Zone {
+  id          String   @id @default(uuid())
+  name        String
+  code        String   @unique
+  region      String
+  parentId    String?
+  parent      Zone?    @relation("ZoneHierarchy", fields: [parentId], references: [id])
+  children    Zone[]   @relation("ZoneHierarchy")
+  latitude    Float?
+  longitude   Float?
+  radiusKm    Float?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  users       User[]
+  alerts      Alert[]
+  missions    Mission[]
+
+  @@index([code])
+  @@map("zones")
+}
+
+model Alert {
+  id          String      @id @default(uuid())
+  title       String
+  description String
+  type        AlertType
+  alertLevel  AlertLevel  @default(BLEU)
+  status      AlertStatus @default(PENDING)
+  currentStep AlertStep   @default(SIGNALEMENT)
+  severity    Int         @default(1)
+  zoneId      String
+  zone        Zone        @relation(fields: [zoneId], references: [id])
+  municipalityId String?
+  municipality   Municipality? @relation(fields: [municipalityId], references: [id])
+  createdById String
+  createdBy   User        @relation("AlertCreator", fields: [createdById], references: [id])
+  latitude    Float?
+  longitude   Float?
+  mediaUrls   String[]
+  resolvedAt  DateTime?
+  broadcastAt DateTime?
+  closedAt    DateTime?
+  closureReason String?
+  requiresMedicalReview Boolean @default(false)
+  requiresConsent       Boolean @default(false)
+  consentObtained       Boolean @default(false)
+  criticalValidated     Boolean @default(false)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  signalements         Signalement[]
+  validations          Validation[]
+  notifications        NotificationLog[]
+  criticalValidations  AlertCriticalValidation[]
+  broadcasts           Broadcast[]
+
+  @@index([zoneId, createdAt(sort: Desc)])
+  @@index([status])
+  @@index([alertLevel, status])
+  @@map("alerts")
+}
+
+model Signalement {
+  id          String            @id @default(uuid())
+  userId      String
+  user        User              @relation(fields: [userId], references: [id])
+  alertId     String?
+  alert       Alert?            @relation(fields: [alertId], references: [id])
+  type        AlertType
+  text        String
+  mediaUrls   String[]
+  latitude    Float?
+  longitude   Float?
+  status      SignalementStatus @default(PENDING)
+  channel     String            @default("web")
+  createdAt   DateTime          @default(now())
+
+  @@index([userId])
+  @@index([status, createdAt])
+  @@map("signalements")
+}
+
+model Validation {
+  id          String            @id @default(uuid())
+  alertId     String
+  alert       Alert             @relation(fields: [alertId], references: [id])
+  validatorId String
+  validator   User              @relation(fields: [validatorId], references: [id])
+  approved    Boolean
+  action      ValidationAction?
+  step        AlertStep?
+  comment     String?
+  photoUrl    String?
+  latitude    Float?
+  longitude   Float?
+  gravity     Int?
+  createdAt   DateTime          @default(now())
+
+  @@index([alertId, createdAt])
+  @@map("validations")
+}
+
+model NotificationLog {
+  id        String   @id @default(uuid())
+  alertId   String
+  alert     Alert    @relation(fields: [alertId], references: [id])
+  channel   String
+  recipient String
+  status    String
+  error     String?
+  sentAt    DateTime @default(now())
+
+  @@index([alertId])
+  @@map("notification_logs")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  action     String
+  resource   String
+  resourceId String?
+  details    Json?
+  ip         String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([resource, resourceId])
+  @@map("audit_logs")
+}
+
+model Consent {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  privacyAccepted Boolean  @default(false)
+  termsAccepted   Boolean  @default(false)
+  acceptedAt      DateTime @default(now())
+  ip              String?
+
+  @@unique([userId])
+  @@map("consents")
+}
+
+model FeatureFlag {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  enabled   Boolean  @default(false)
+  scope     String?
+  updatedAt DateTime @updatedAt
+
+  @@map("feature_flags")
+}
+
+// ── Formations sentinelles (CURSUS_ALERTE.md, AUDIT_OLEL_EXHAUSTIF §1.5) ───────
+model TrainingModule {
+  id          String           @id @default(uuid())
+  title       String
+  description String
+  category    TrainingCategory @default(PROCEDURE)
+  order       Int              @default(0)
+  isRequired  Boolean          @default(false)
+  durationMin Int              @default(15)
+  isActive    Boolean          @default(true)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  lessons   TrainingLesson[]
+  progress  TrainingProgress[]
+
+  @@map("training_modules")
+}
+
+model TrainingLesson {
+  id       String         @id @default(uuid())
+  moduleId String
+  module   TrainingModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  title    String
+  content  String
+  mediaUrl String?
+  order    Int            @default(0)
+
+  @@index([moduleId])
+  @@map("training_lessons")
+}
+
+model TrainingProgress {
+  id          String         @id @default(uuid())
+  userId      String
+  user        User           @relation(fields: [userId], references: [id])
+  moduleId    String
+  module      TrainingModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  completed   Boolean        @default(false)
+  score       Int?
+  completedAt DateTime?
+  createdAt   DateTime       @default(now())
+
+  @@unique([userId, moduleId])
+  @@index([userId])
+  @@map("training_progress")
+}
+
+// ── Missions sentinelles ──────────────────────────────────────────────────────
+model Mission {
+  id          String        @id @default(uuid())
+  title       String
+  description String
+  type        MissionType   @default(VERIFICATION)
+  status      MissionStatus @default(OPEN)
+  zoneId      String?
+  zone        Zone?         @relation(fields: [zoneId], references: [id])
+  alertId     String?
+  createdById String
+  createdBy   User?         @relation("MissionCreator", fields: [createdById], references: [id])
+  dueAt       DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  assignments MissionAssignment[]
+
+  @@index([status, createdAt])
+  @@index([zoneId])
+  @@map("missions")
+}
+
+model MissionAssignment {
+  id          String        @id @default(uuid())
+  missionId   String
+  mission     Mission       @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  sentinelId  String
+  sentinel    User          @relation(fields: [sentinelId], references: [id])
+  status      MissionStatus @default(ASSIGNED)
+  report      String?
+  assignedAt  DateTime      @default(now())
+  completedAt DateTime?
+
+  @@unique([missionId, sentinelId])
+  @@index([sentinelId])
+  @@map("mission_assignments")
+}
+
+model OtpRequest {
+  id        String   @id @default(uuid())
+  phone     String
+  code      String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([phone, createdAt])
+  @@map("otp_requests")
+}
+
+// ── Entités territoriales ─────────────────────────────────────────────────────
+
+model Region {
+  id          String       @id @default(uuid())
+  name        String
+  code        String       @unique
+  createdAt   DateTime     @default(now())
+
+  departments Department[]
+
+  @@map("regions")
+}
+
+model Department {
+  id          String         @id @default(uuid())
+  name        String
+  code        String         @unique
+  regionId    String
+  region      Region         @relation(fields: [regionId], references: [id])
+  createdAt   DateTime       @default(now())
+
+  municipalities Municipality[]
+
+  @@index([regionId])
+  @@map("departments")
+}
+
+model Municipality {
+  id           String   @id @default(uuid())
+  name         String
+  code         String   @unique
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id])
+  latitude     Float?
+  longitude    Float?
+  radiusKm     Float?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  alerts       Alert[]
+
+  @@index([departmentId])
+  @@map("municipalities")
+}
+
+// ── RBAC explicite ─────────────────────────────────────────────────────────────
+
+model Permission {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String
+  category    String
+  createdAt   DateTime @default(now())
+
+  rolePermissions RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  id           String     @id @default(uuid())
+  role         Role
+  permissionId String
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  grantedAt    DateTime   @default(now())
+
+  @@unique([role, permissionId])
+  @@index([role])
+  @@map("role_permissions")
+}
+
+// ── Validation critique multi-acteurs (ORANGE / ROUGE / ROUGE_FONCE) ──────────
+
+model AlertCriticalValidation {
+  id                String                     @id @default(uuid())
+  alertId           String
+  alert             Alert                      @relation(fields: [alertId], references: [id])
+  validatorId       String
+  validator         User                       @relation("CriticalValidations", fields: [validatorId], references: [id])
+  validatorCategory CriticalValidatorCategory
+  comment           String?
+  validatedAt       DateTime                   @default(now())
+
+  @@unique([alertId, validatorId])
+  @@index([alertId])
+  @@map("alert_critical_validations")
+}
+
+// ── Diffusion enrichie ─────────────────────────────────────────────────────────
+
+model Broadcast {
+  id               String   @id @default(uuid())
+  alertId          String
+  alert            Alert    @relation(fields: [alertId], references: [id])
+  authorId         String
+  author           User     @relation("BroadcastAuthor", fields: [authorId], references: [id])
+  message          String
+  templateId       String?
+  targetZoneIds    String[]
+  channels         String[]
+  totalRecipients  Int      @default(0)
+  deliveredCount   Int      @default(0)
+  costXof          Float    @default(0)
+  idempotencyKey   String   @unique
+  createdAt        DateTime @default(now())
+
+  @@index([alertId])
+  @@index([authorId])
+  @@map("broadcasts")
+}

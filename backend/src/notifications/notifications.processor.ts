@@ -1,0 +1,114 @@
+import { Process, Processor } from '@nestjs/bull';
+import { Logger } from '@nestjs/common';
+import { Job } from 'bull';
+import { PrismaService } from '../common/prisma/prisma.service';
+import { WhatsappService } from './channels/whatsapp.service';
+import { SmsService } from './channels/sms.service';
+import { Role } from '@prisma/client';
+
+const OPERATOR_ROLES: Role[] = [
+  Role.SENTINELLE, Role.COORDINATEUR, Role.MAIRIE, Role.HYDRO_METEO,
+  Role.PREFECTURE, Role.GOUVERNORAT, Role.PROTECTION_CIVILE,
+  Role.SUPERVISEUR_REGIONAL, Role.ADMIN, Role.SUPER_ADMIN,
+];
+
+// Coût indicatif par canal (XOF) pour le cost log des diffusions
+const CHANNEL_COST_XOF: Record<string, number> = { whatsapp: 5, sms: 25, ivr: 50 };
+
+@Processor('notifications')
+export class NotificationsProcessor {
+  private readonly logger = new Logger(NotificationsProcessor.name);
+
+  constructor(
+    private prisma: PrismaService,
+    private whatsapp: WhatsappService,
+    private sms: SmsService,
+  ) {}
+
+  /**
+   * Fanout différencié :
+   * - isBroadcast=false (création signalement) → notifie UNIQUEMENT les sentinelles/opérateurs de la zone
+   * - isBroadcast=true  (diffusion préfecture) → notifie TOUS les habitants actifs de la zone
+   */
+  @Process('fanout')
+  async handleFanout(job: Job<{ alertId: string; isBroadcast?: boolean; broadcastId?: string }>) {
+    const { alertId, isBroadcast = false, broadcastId } = job.data;
+
+    const alert = await this.prisma.alert.findUnique({
+      where: { id: alertId },
+      include: { zone: true },
+    });
+    if (!alert) return;
+
+    const where: any = { zoneId: alert.zoneId, isActive: true };
+    if (!isBroadcast) {
+      // Notification interne : seulement les opérateurs pour valider
+      where.role = { in: OPERATOR_ROLES };
+    } else {
+      // RGPD : exclure les utilisateurs sans consentement explicite
+      where.consents = { some: { termsAccepted: true } };
+    }
+
+    const users = await this.prisma.user.findMany({
+      where,
+      select: { id: true, phone: true, name: true, role: true },
+    });
+
+    // Préfixe officiel selon le niveau d'alerte (BLEU → ROUGE_FONCE)
+    const levelPrefix: Record<string, string> = {
+      BLEU: 'INFORMATION', JAUNE: 'VIGILANCE', ORANGE: 'PRE-ALERTE',
+      ROUGE: 'URGENCE', ROUGE_FONCE: 'CRISE MAJEURE',
+    };
+    const niveau = levelPrefix[alert.alertLevel as string] || 'ALERTE';
+
+    const message = isBroadcast
+      ? `[OLEL] ${niveau} - ALERTE OFFICIELLE\n${alert.title}\n${alert.description}\nZone : ${alert.zone.name}\nSuivez les consignes des autorites locales.`
+      : `[OLEL] Nouveau signalement a valider\nType : ${alert.type}\n${alert.title}\nZone : ${alert.zone.name}\nConnectez-vous sur la plateforme OLEL.`;
+
+    let sent = 0, failed = 0, costXof = 0;
+    // Traitement par lots de 50 pour éviter la surcharge
+    const BATCH_SIZE = 50;
+    for (let i = 0; i < users.length; i += BATCH_SIZE) {
+      const batch = users.slice(i, i + BATCH_SIZE);
+      await Promise.all(batch.map(async (user) => {
+        try {
+          await this.whatsapp.sendMessage(user.phone, message);
+          await this.prisma.notificationLog.create({
+            data: { alertId, channel: 'whatsapp', recipient: user.phone, status: 'sent' },
+          });
+          sent++; costXof += CHANNEL_COST_XOF.whatsapp;
+        } catch {
+          // Fallback SMS
+          try {
+            await this.sms.sendSms(user.phone, message);
+            await this.prisma.notificationLog.create({
+              data: { alertId, channel: 'sms', recipient: user.phone, status: 'sent' },
+            });
+            sent++; costXof += CHANNEL_COST_XOF.sms;
+          } catch (smsErr) {
+            await this.prisma.notificationLog.create({
+              data: { alertId, channel: 'sms', recipient: user.phone, status: 'failed', error: (smsErr as Error).message },
+            });
+            failed++;
+          }
+        }
+      }));
+    }
+
+    // Met à jour les statistiques de la diffusion (cost log + couverture)
+    if (isBroadcast && broadcastId) {
+      try {
+        await this.prisma.broadcast.update({
+          where: { id: broadcastId },
+          data: { totalRecipients: users.length, deliveredCount: sent, costXof },
+        });
+      } catch (e) {
+        this.logger.error(`Échec MAJ stats broadcast ${broadcastId}: ${(e as Error).message}`);
+      }
+    }
+
+    this.logger.log(
+      `Fanout alerte ${alertId} [${isBroadcast ? 'BROADCAST' : 'signalement'}] → ${users.length} destinataires | envoyé: ${sent} | échoué: ${failed} | coût: ${costXof} XOF`,
+    );
+  }
+}
