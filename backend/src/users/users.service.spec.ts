@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UsersService } from './users.service';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { AuditService } from '../audit/audit.service';
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
@@ -35,6 +36,10 @@ describe('UsersService', () => {
               update: jest.fn(),
             },
           },
+        },
+        {
+          provide: AuditService,
+          useValue: { log: jest.fn() },
         },
       ],
     }).compile();

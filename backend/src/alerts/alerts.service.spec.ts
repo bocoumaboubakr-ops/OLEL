@@ -3,6 +3,7 @@ import { getQueueToken } from '@nestjs/bull';
 import { AlertsService } from './alerts.service';
 import { AlertsGateway } from './alerts.gateway';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { AuditService } from '../audit/audit.service';
 import { NotFoundException, ForbiddenException } from '@nestjs/common';
 
 describe('AlertsService', () => {
@@ -63,6 +64,10 @@ describe('AlertsService', () => {
         {
           provide: AlertsGateway,
           useValue: { broadcastAlert: jest.fn() },
+        },
+        {
+          provide: AuditService,
+          useValue: { log: jest.fn() },
         },
       ],
     }).compile();

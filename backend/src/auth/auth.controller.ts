@@ -5,6 +5,7 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { LoginDto } from './dto/login.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { TotpVerifyDto } from './dto/totp-verify.dto';
+import { MfaSetupDto, MfaLoginDto } from './dto/mfa.dto';
 import { OtpRequestDto, OtpVerifyDto } from './dto/otp.dto';
 import { ThrottleStrict, ThrottleNormal } from '../common/decorators/throttle.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -51,6 +52,22 @@ export class AuthController {
   }
 
   // ── TOTP (2FA) ────────────────────────────────────────────────────────────
+
+  @Post('totp/setup-mfa')
+  @ThrottleStrict()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Enrôlement TOTP au 1er login MFA (avec mfaToken, avant l'access token)" })
+  setupTotpMfa(@Body() dto: MfaSetupDto) {
+    return this.auth.setupTotpWithMfaToken(dto.mfaToken);
+  }
+
+  @Post('totp/login')
+  @ThrottleStrict()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Étape 2 du login MFA : échange mfaToken + code TOTP contre les tokens' })
+  totpLogin(@Body() dto: MfaLoginDto) {
+    return this.auth.totpLogin(dto.mfaToken, dto.code);
+  }
 
   @Post('totp/setup')
   @UseGuards(JwtAuthGuard)

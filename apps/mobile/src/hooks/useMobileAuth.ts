@@ -65,6 +65,11 @@ export function useMobileAuth() {
     setLoading(true); setError('');
     try {
       const { data } = await axiosWithTimeout.post(`${API}/auth/login`, { phone, password });
+      if (data.mfaRequired || data.mfaSetupRequired) {
+        // Rôles MAIRIE+ : le TOTP n'est géré que sur le dashboard
+        setError('Votre rôle exige la double authentification — connectez-vous via le tableau de bord');
+        return;
+      }
       _store(data);
     } catch (e: any) {
       if (e.code === 'ECONNABORTED') {
@@ -96,6 +101,10 @@ export function useMobileAuth() {
     setLoading(true); setError('');
     try {
       const { data } = await axiosWithTimeout.post(`${API}/auth/otp/verify`, { phone, code });
+      if (data.mfaRequired || data.mfaSetupRequired) {
+        setError('Votre rôle exige la double authentification — connectez-vous via le tableau de bord');
+        return;
+      }
       _store(data);
     } catch (e: any) {
       if (e.code === 'ECONNABORTED') {

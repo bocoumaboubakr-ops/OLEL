@@ -5,6 +5,13 @@ const bcrypt = require('bcrypt');
 const prisma = new PrismaClient();
 const hash = (pwd) => bcrypt.hash(pwd, 10);
 
+// En production, les mots de passe par défaut (publics dans le repo) sont
+// interdits : chaque compte sans SEED_*_PASSWORD reçoit un mot de passe
+// aléatoire jetable (connexion possible uniquement après reset par un admin).
+const IS_PROD = process.env.NODE_ENV === 'production';
+const randomPwd = () => require('crypto').randomBytes(18).toString('base64url');
+const seedPwd = (envValue, fallback) => envValue || (IS_PROD ? randomPwd() : fallback);
+
 async function main() {
   // ── Territoire Matam ───────────────────────────────────────────────────────
 
@@ -63,18 +70,18 @@ async function main() {
   // ── Comptes (un par rôle) ──────────────────────────────────────────────────
 
   const users = [
-    { phone: '+221700000000', email: 'superadmin@olel.sn',       name: 'Super Administrateur',    role: 'SUPER_ADMIN',        pwd: process.env.SEED_SUPERADMIN_PASSWORD  || 'SuperOlel2024!' },
-    { phone: '+221700000001', email: 'admin@olel.sn',            name: 'Administrateur OLEL',     role: 'ADMIN',              pwd: process.env.SEED_ADMIN_PASSWORD       || 'OlelAdmin2024!' },
-    { phone: '+221700000002', email: 'superviseur@olel.sn',      name: 'Superviseur Régional',    role: 'SUPERVISEUR_REGIONAL', pwd: process.env.SEED_SUPERVISEUR_PASSWORD || 'Superviseur2024!' },
-    { phone: '+221700000003', email: 'gouverneur@olel.sn',       name: 'Gouverneur Matam',        role: 'GOUVERNORAT',        pwd: process.env.SEED_GOUVERNEUR_PASSWORD  || 'Gouv2024!' },
-    { phone: '+221700000004', email: 'protection@olel.sn',       name: 'Agent Protection Civile', role: 'PROTECTION_CIVILE',  pwd: process.env.SEED_PCIVILE_PASSWORD     || 'PCivile2024!' },
-    { phone: '+221700000005', email: 'prefet@olel.sn',           name: 'Préfet Matam',            role: 'PREFECTURE',         pwd: process.env.SEED_PREFET_PASSWORD      || 'Prefet2024!' },
-    { phone: '+221700000006', email: 'mairie@olel.sn',           name: 'Agent Mairie Ourossogui', role: 'MAIRIE',             pwd: process.env.SEED_MAIRIE_PASSWORD      || 'Mairie2024!' },
-    { phone: '+221700000007', email: 'coordinateur@olel.sn',     name: 'Coordinateur Sentinelles',role: 'COORDINATEUR',       pwd: process.env.SEED_COORD_PASSWORD       || 'Coord2024!' },
-    { phone: '+221700000008', email: 'hydro@olel.sn',            name: 'Agent Hydrologie Matam',  role: 'HYDRO_METEO',        pwd: process.env.SEED_HYDRO_PASSWORD       || 'Hydro2024!' },
-    { phone: '+221700000009', email: 'radio@olel.sn',            name: 'Radio Communautaire FM',  role: 'RADIO_COMMUNAUTAIRE',pwd: process.env.SEED_RADIO_PASSWORD       || 'Radio2024!' },
-    { phone: '+221700000010', email: 'sentinelle@olel.sn',       name: 'Sentinelle Terrain',      role: 'SENTINELLE',         pwd: process.env.SEED_SENTINELLE_PASSWORD  || 'Sent2024!' },
-    { phone: '+221700000011', email: 'citoyen@olel.sn',          name: 'Citoyen Test',            role: 'CITOYEN',            pwd: process.env.SEED_CITOYEN_PASSWORD     || 'Citoyen2024!' },
+    { phone: '+221700000000', email: 'superadmin@olel.sn',       name: 'Super Administrateur',    role: 'SUPER_ADMIN',        pwd: seedPwd(process.env.SEED_SUPERADMIN_PASSWORD, 'SuperOlel2024!') },
+    { phone: '+221700000001', email: 'admin@olel.sn',            name: 'Administrateur OLEL',     role: 'ADMIN',              pwd: seedPwd(process.env.SEED_ADMIN_PASSWORD, 'OlelAdmin2024!') },
+    { phone: '+221700000002', email: 'superviseur@olel.sn',      name: 'Superviseur Régional',    role: 'SUPERVISEUR_REGIONAL', pwd: seedPwd(process.env.SEED_SUPERVISEUR_PASSWORD, 'Superviseur2024!') },
+    { phone: '+221700000003', email: 'gouverneur@olel.sn',       name: 'Gouverneur Matam',        role: 'GOUVERNORAT',        pwd: seedPwd(process.env.SEED_GOUVERNEUR_PASSWORD, 'Gouv2024!') },
+    { phone: '+221700000004', email: 'protection@olel.sn',       name: 'Agent Protection Civile', role: 'PROTECTION_CIVILE',  pwd: seedPwd(process.env.SEED_PCIVILE_PASSWORD, 'PCivile2024!') },
+    { phone: '+221700000005', email: 'prefet@olel.sn',           name: 'Préfet Matam',            role: 'PREFECTURE',         pwd: seedPwd(process.env.SEED_PREFET_PASSWORD, 'Prefet2024!') },
+    { phone: '+221700000006', email: 'mairie@olel.sn',           name: 'Agent Mairie Ourossogui', role: 'MAIRIE',             pwd: seedPwd(process.env.SEED_MAIRIE_PASSWORD, 'Mairie2024!') },
+    { phone: '+221700000007', email: 'coordinateur@olel.sn',     name: 'Coordinateur Sentinelles',role: 'COORDINATEUR',       pwd: seedPwd(process.env.SEED_COORD_PASSWORD, 'Coord2024!') },
+    { phone: '+221700000008', email: 'hydro@olel.sn',            name: 'Agent Hydrologie Matam',  role: 'HYDRO_METEO',        pwd: seedPwd(process.env.SEED_HYDRO_PASSWORD, 'Hydro2024!') },
+    { phone: '+221700000009', email: 'radio@olel.sn',            name: 'Radio Communautaire FM',  role: 'RADIO_COMMUNAUTAIRE',pwd: seedPwd(process.env.SEED_RADIO_PASSWORD, 'Radio2024!') },
+    { phone: '+221700000010', email: 'sentinelle@olel.sn',       name: 'Sentinelle Terrain',      role: 'SENTINELLE',         pwd: seedPwd(process.env.SEED_SENTINELLE_PASSWORD, 'Sent2024!') },
+    { phone: '+221700000011', email: 'citoyen@olel.sn',          name: 'Citoyen Test',            role: 'CITOYEN',            pwd: seedPwd(process.env.SEED_CITOYEN_PASSWORD, 'Citoyen2024!') },
   ];
 
   // Libère les emails ciblés détenus par d'anciens enregistrements (réassignation

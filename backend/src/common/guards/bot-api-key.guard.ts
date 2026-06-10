@@ -1,4 +1,5 @@
 import { Injectable, CanActivate, ExecutionContext, UnauthorizedException } from '@nestjs/common';
+import { timingSafeEqual } from 'crypto';
 
 @Injectable()
 export class BotApiKeyGuard implements CanActivate {
@@ -11,7 +12,10 @@ export class BotApiKeyGuard implements CanActivate {
       throw new UnauthorizedException('BOT_API_KEY non configuré sur le serveur');
     }
 
-    if (!providedKey || providedKey !== expectedKey) {
+    // Comparaison à temps constant (anti timing attack)
+    const provided = Buffer.from(String(providedKey || ''));
+    const expected = Buffer.from(expectedKey);
+    if (provided.length !== expected.length || !timingSafeEqual(provided, expected)) {
       throw new UnauthorizedException('Clé API bot invalide ou manquante');
     }
 

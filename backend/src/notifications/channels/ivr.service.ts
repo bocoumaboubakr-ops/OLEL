@@ -11,16 +11,21 @@ export class IvrService {
   async makeCall(to: string, message: string): Promise<void> {
     const key = this.cfg.get('AFRICAS_TALKING_KEY', 'sandbox');
     const username = this.cfg.get('AFRICAS_TALKING_USER', 'sandbox');
+    const callerId = this.cfg.get<string>('IVR_CALLER_ID');
 
     if (key === 'sandbox') {
       this.logger.log(`IVR simulé (sandbox) → ${to}`);
+      return;
+    }
+    if (!callerId) {
+      this.logger.error('IVR_CALLER_ID non défini — appel IVR annulé (numéro Africa\'s Talking requis)');
       return;
     }
 
     // Africa's Talking Voice API
     await axios.post(
       'https://voice.africastalking.com/call',
-      new URLSearchParams({ username, to, from: '+221XXXXXXXXX' }).toString(),
+      new URLSearchParams({ username, to, from: callerId }).toString(),
       { headers: { apiKey: key, 'Content-Type': 'application/x-www-form-urlencoded' } },
     );
   }

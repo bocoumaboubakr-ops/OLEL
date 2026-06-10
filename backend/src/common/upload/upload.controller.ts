@@ -3,7 +3,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { diskStorage } from 'multer';
 import { extname, join } from 'path';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import { mkdirSync } from 'fs';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 
@@ -27,7 +27,7 @@ export class UploadController {
       storage: diskStorage({
         destination: UPLOAD_DIR,
         filename: (_req, file, cb) => {
-          cb(null, `${uuidv4()}${extname(file.originalname).toLowerCase()}`);
+          cb(null, `${randomUUID()}${extname(file.originalname).toLowerCase()}`);
         },
       }),
       limits: { fileSize: MAX_SIZE_BYTES },

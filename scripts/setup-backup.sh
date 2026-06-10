@@ -15,15 +15,15 @@ echo "║     OLEL — Configuration Backups                     ║"
 echo "╚══════════════════════════════════════════════════════╝"
 echo ""
 
-BACKUP_DIR="${BACKUP_DIR:-/opt/olel-backups}"
+BACKUP_DIR="${BACKUP_DIR:-/opt/olel/backups}"
 mkdir -p "$BACKUP_DIR"
 
 # ── Test de backup immédiat ─────────────────────────────────────────────────
 log "Test de backup base de données..."
 ./scripts/backup-db.sh
 
-if ls "${BACKUP_DIR}"/olel-*.sql.gz &>/dev/null; then
-  LATEST=$(ls -t "${BACKUP_DIR}"/olel-*.sql.gz | head -1)
+if ls "${BACKUP_DIR}"/olel_*.sql.gz &>/dev/null; then
+  LATEST=$(ls -t "${BACKUP_DIR}"/olel_*.sql.gz | head -1)
   SIZE=$(du -sh "$LATEST" | cut -f1)
   log "Backup OK ✓ — ${LATEST} (${SIZE})"
 else
@@ -65,7 +65,7 @@ S3EOF
   fi
 
   log "Test upload S3..."
-  LATEST=$(ls -t "${BACKUP_DIR}"/olel-*.sql.gz 2>/dev/null | head -1)
+  LATEST=$(ls -t "${BACKUP_DIR}"/olel_*.sql.gz 2>/dev/null | head -1)
   if [ -n "$LATEST" ]; then
     AWS_ACCESS_KEY_ID="${S3_KEY}" AWS_SECRET_ACCESS_KEY="${S3_SECRET}" \
       aws s3 cp "$LATEST" "s3://${S3_BUCKET}/backups/" \

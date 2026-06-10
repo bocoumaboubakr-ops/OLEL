@@ -45,6 +45,18 @@ OLEL est une plateforme d'**alerte précoce multi-risques** (inondations, feux, 
 
 ## Dernières mises à jour
 
+### 🛡️ 2026-06-10 — **Audit complet & corrections de sécurité**
+
+- **MFA TOTP obligatoire** pour les rôles MAIRIE+ : login en 2 étapes (`mfaToken` → `/auth/totp/login`), enrôlement forcé au 1ᵉʳ login (`/auth/totp/setup-mfa`).
+- **Secrets TOTP chiffrés au repos** (AES-256-GCM via `TOTP_ENCRYPTION_KEY`), migration transparente des secrets existants.
+- **Verrouillage anti-bruteforce** : 10 échecs de login → blocage 15 min.
+- **Quota OTP journalier** (5/numéro/24 h, anti SMS-pumping) + envoi SMS réel branché sur Africa's Talking.
+- **Webhook WhatsApp corrigé** : `rawBody` activé (le HMAC était calculé sur une chaîne vide → tous les webhooks Meta rejetés en prod), rejet des requêtes sans signature, comparaison timing-safe.
+- **Seed production sécurisé** : les mots de passe par défaut du repo sont refusés en prod (aléatoires si `SEED_*_PASSWORD` absent).
+- **Backups réparés** : conteneur cron fonctionnel (`--profile backup`), incohérences de chemins/noms corrigées.
+- **CI réparée** : configs ESLint manquantes ajoutées (backend, bot, ui, dashboard, mobile), tsconfig `@olel/ui` corrigé, specs Jest mises à jour (33/33 ✅), dépendance `uuid` ESM remplacée par `crypto.randomUUID()`.
+- `.env` retiré du suivi Git ; `IVR_CALLER_ID` configurable (numéro hardcodé supprimé).
+
 ### 🚀 2026-06-03 — **Sprint 0 GO lancé** (`SPRINT_0_GO.md`)
 
 Tableau de bord opérationnel J1 → J14 : préparation infra + comptes externes + cadrage légal.

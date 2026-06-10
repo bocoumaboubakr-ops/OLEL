@@ -29,12 +29,22 @@ export class WhatsappController {
     const signature = req.headers['x-hub-signature-256'] as string;
     const appSecret = this.cfg.get('WHATSAPP_APP_SECRET', '');
 
-    if (appSecret && signature) {
+    if (appSecret) {
+      // Header absent = requête forgée : on rejette (sinon bypass trivial du HMAC)
+      if (!signature) {
+        this.logger.warn('Webhook sans signature HMAC — rejeté');
+        return;
+      }
       const expected = 'sha256=' + crypto.createHmac('sha256', appSecret).update(req.rawBody || '').digest('hex');
-      if (signature !== expected) {
+      const sigBuf = Buffer.from(signature);
+      const expBuf = Buffer.from(expected);
+      if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
         this.logger.warn('Signature HMAC invalide');
         return;
       }
+    } else if (this.cfg.get('NODE_ENV') === 'production') {
+      this.logger.error('WHATSAPP_APP_SECRET non défini en production — webhook rejeté');
+      return;
     }
 
     if (body.object === 'whatsapp_business_account') {

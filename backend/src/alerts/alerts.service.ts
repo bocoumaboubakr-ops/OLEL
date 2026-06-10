@@ -16,7 +16,7 @@ import {
   criticalCategory, protectionCivileEntryStep,
 } from './alert-workflow';
 import { AuditService } from '../audit/audit.service';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 
 @Injectable()
 export class AlertsService {
@@ -422,7 +422,7 @@ export class AlertsService {
       }
     }
 
-    const idempotencyKey = dto.idempotencyKey || uuidv4();
+    const idempotencyKey = dto.idempotencyKey || randomUUID();
     const levelCfg = LEVEL_CONFIG[alert.alertLevel as AlertLevel];
     const channels = dto.channels || levelCfg.channels;
     const targetZoneIds = dto.targetZoneIds || [alert.zoneId];

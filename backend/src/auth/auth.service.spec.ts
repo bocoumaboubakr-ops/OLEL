@@ -3,6 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { SmsService } from '../notifications/channels/sms.service';
 import * as bcrypt from 'bcrypt';
 
 describe('AuthService', () => {
@@ -49,6 +50,10 @@ describe('AuthService', () => {
           provide: ConfigService,
           useValue: { get: jest.fn().mockReturnValue('test-secret') },
         },
+        {
+          provide: SmsService,
+          useValue: { sendSms: jest.fn() },
+        },
       ],
     }).compile();
 
@@ -73,17 +78,46 @@ describe('AuthService', () => {
 
     it('should return null if user not found', async () => {
       (prisma.user.findUnique as jest.Mock).mockResolvedValue(null);
-      const result = await service.validateUser('+221700000001', 'any');
+      const result = await service.validateUser('+221700000002', 'any');
       expect(result).toBeNull();
+    });
+
+    it('should lock the account after 10 failed attempts', async () => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
+      for (let i = 0; i < 10; i++) {
+        await service.validateUser('+221700000099', 'wrong');
+      }
+      await expect(service.validateUser('+221700000099', 'password123')).rejects.toThrow(
+        /verrouillé/,
+      );
     });
   });
 
-  describe('login', () => {
-    it('should return tokens and user info', async () => {
-      const result = await service.login(mockUser as any);
+  describe('login (MFA obligatoire pour MAIRIE+)', () => {
+    it('exige l\'enrôlement TOTP au 1er login d\'un ADMIN sans TOTP', async () => {
+      const result: any = await service.login(mockUser as any);
+      expect(result.mfaSetupRequired).toBe(true);
+      expect(result.mfaToken).toBe('mock-token');
+      expect(result.accessToken).toBeUndefined();
+    });
+
+    it('exige le code TOTP pour un ADMIN avec TOTP actif', async () => {
+      const result: any = await service.login({ ...mockUser, totpEnabled: true } as any);
+      expect(result.mfaRequired).toBe(true);
+      expect(result.mfaToken).toBe('mock-token');
+      expect(result.accessToken).toBeUndefined();
+    });
+
+    it('délivre directement les tokens pour un CITOYEN', async () => {
+      const result: any = await service.login({ ...mockUser, role: 'CITOYEN' } as any);
       expect(result.accessToken).toBe('mock-token');
       expect(result.refreshToken).toBe('mock-token');
       expect(result.user.phone).toBe('+221700000001');
+    });
+
+    it('délivre directement les tokens pour une SENTINELLE', async () => {
+      const result: any = await service.login({ ...mockUser, role: 'SENTINELLE' } as any);
+      expect(result.accessToken).toBe('mock-token');
     });
   });
 
@@ -91,6 +125,11 @@ describe('AuthService', () => {
     it('should throw on invalid token', async () => {
       (jwt.verify as jest.Mock).mockImplementation(() => { throw new Error('invalid'); });
       await expect(service.refreshTokens('bad-token')).rejects.toThrow('Token invalide');
+    });
+
+    it('should reject an mfaToken used as refresh token', async () => {
+      (jwt.verify as jest.Mock).mockReturnValue({ sub: 'user-uuid', mfa: 'totp' });
+      await expect(service.refreshTokens('mfa-token')).rejects.toThrow('Token invalide');
     });
   });
 });
