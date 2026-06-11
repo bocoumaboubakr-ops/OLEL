@@ -44,16 +44,40 @@ export class SignalementsService {
     });
   }
 
-  async createFromBot(dto: { type: any; description?: string; text?: string; latitude?: number; longitude?: number; mediaUrls?: string[] }) {
-    const botPhone = process.env.BOT_ACCOUNT_PHONE || '+221700000099';
-    const botUser = await this.prisma.user.findUnique({ where: { phone: botPhone } });
-    if (!botUser) throw new Error(`Compte bot introuvable (${botPhone}). Vérifiez le seed.`);
+  async createFromBot(dto: { type: any; phone?: string; severity?: number; description?: string; text?: string; latitude?: number; longitude?: number; mediaUrls?: string[] }) {
+    // Attribuer le signalement au citoyen identifié par son numéro WhatsApp ;
+    // création automatique du compte CITOYEN au 1er signalement (comme le flux OTP).
+    let user = null;
+    if (dto.phone) {
+      const phone = dto.phone.startsWith('+') ? dto.phone : `+${dto.phone}`;
+      user = await this.prisma.user.findUnique({ where: { phone } });
+      if (!user) {
+        const defaultZone = await this.prisma.zone.findFirst({
+          where: { parentId: null }, orderBy: { createdAt: 'asc' }, select: { id: true },
+        });
+        user = await this.prisma.user.create({
+          data: {
+            phone,
+            name: `Citoyen ${phone.slice(-4)}`,
+            role: 'CITOYEN',
+            isActive: true,
+            zoneId: defaultZone?.id,
+          },
+        });
+      }
+    }
+    if (!user) {
+      const botPhone = process.env.BOT_ACCOUNT_PHONE || '+221700000099';
+      user = await this.prisma.user.findUnique({ where: { phone: botPhone } });
+      if (!user) throw new Error(`Compte bot introuvable (${botPhone}). Vérifiez le seed.`);
+    }
 
     return this.prisma.signalement.create({
       data: {
-        userId: botUser.id,
+        userId: user.id,
         type: dto.type,
         text: dto.description || dto.text || '',
+        severity: dto.severity,
         mediaUrls: dto.mediaUrls || [],
         latitude: dto.latitude,
         longitude: dto.longitude,

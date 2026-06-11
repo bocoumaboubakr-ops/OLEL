@@ -19,8 +19,8 @@ export class BackendService {
 
   async getActiveAlerts() {
     try {
-      const { data } = await axios.get(`${this.backendUrl}/api/v1/alerts?status=ACTIVE&limit=5`, { headers: this.headers });
-      return data.alerts || [];
+      const { data } = await axios.get(`${this.backendUrl}/api/v1/alerts-bot/active`, { headers: this.headers });
+      return Array.isArray(data) ? data : [];
     } catch (e) {
       this.logger.error(`Erreur getActiveAlerts: ${e.message}`);
       return [];

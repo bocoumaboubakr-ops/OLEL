@@ -2,10 +2,14 @@ import {
   IsString,
   IsEnum,
   IsNumber,
+  IsInt,
   IsOptional,
   IsArray,
   IsUUID,
+  Matches,
+  Max,
   MaxLength,
+  Min,
   IsUrl,
   ArrayMaxSize,
 } from 'class-validator';
@@ -55,6 +59,19 @@ export class CreateSignalementBotDto {
   @ApiProperty({ enum: AlertType })
   @IsEnum(AlertType)
   type: AlertType;
+
+  @ApiPropertyOptional({ description: 'Téléphone E.164 du citoyen signaleur (attribution du signalement)' })
+  @IsOptional()
+  @IsString()
+  @Matches(/^\+?\d{8,15}$/, { message: 'phone doit être au format E.164 (+221XXXXXXXXX)' })
+  phone?: string;
+
+  @ApiPropertyOptional({ description: 'Gravité estimée : 1=vigilance, 2=alerte, 3=urgence' })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(3)
+  severity?: number;
 
   @ApiPropertyOptional()
   @IsOptional()

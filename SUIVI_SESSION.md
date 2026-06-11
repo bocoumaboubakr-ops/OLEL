@@ -3,7 +3,7 @@
 > **Fichier de contexte vivant** — mis à jour à chaque étape pour ne perdre aucune information.
 > **Objectif global** : tester TOUS les workflows et TOUTES les fonctionnalités du système, corriger ce qui doit l'être, et rendre OLEL le plus performant possible avant le pilote Matam.
 
-**Dernière mise à jour** : 2026-06-11 — canal WhatsApp 100 % opérationnel (entrant + sortant). D1 ✅ validé. Suite : D2 (signalement complet via bot) + sections A (auth) et B (workflow alerte).
+**Dernière mise à jour** : 2026-06-11 soir — bugs 6-7-8 trouvés par le test D2 et corrigés en code (DTO bot, alertes bot, dashboard URL). Re-déploiement VPS requis puis re-test D2.
 
 ---
 
@@ -122,7 +122,7 @@ Mots de passe : valeurs `SEED_*_PASSWORD` du `.env` VPS (ou défauts dev si seed
 | # | Test | Statut |
 |---|---|---|
 | D1 | Message texte → bot reçoit (logs) + répond menu | ✅ |
-| D2 | Flux signalement complet via bot → `POST /signalements/bot` → visible dashboard | ⬜ |
+| D2 | Flux signalement complet via bot → `POST /signalements/bot` → visible dashboard | 🔄 conversation bot OK ; enregistrement corrigé (bug 6), re-test après redéploiement |
 | D3 | HMAC : requête forgée sans signature → rejetée (logs) | ⬜ |
 | D4 | Webhook GET verify : token correct → challenge ; incorrect → Forbidden | ⬜ |
 
@@ -203,6 +203,9 @@ Mots de passe : valeurs `SEED_*_PASSWORD` du `.env` VPS (ou défauts dev si seed
 | 3 | 2026-06-11 | .env écrasé par le checkout (placeholders) → P1000 Postgres + bot en mode SIMUL | Bloquant | ✅ RÉSOLU : .env reconstruit, ALTER USER postgres, vraies valeurs WhatsApp réinjectées | (opération VPS) |
 | 4 | 2026-06-11 | Échec d'envoi WhatsApp (Graph 401) → exception → webhook 500 → Meta re-livre le même message en boucle | Élevée | sendText catch + log détail Meta, contrôleur try/catch par message (toujours 200) | (commit bot resilience) |
 | 5 | 2026-06-11 | Token Meta temporaire expiré (24 h) → bot ne peut pas répondre | Bloquant D1 | ✅ RÉSOLU : nouveau token régénéré, D1 validé. **TODO** : System User Token permanent à créer pour ne plus refaire ça chaque jour | — |
+| 6 | 2026-06-11 | **POST /signalements/bot → 400** : le bot envoie phone+severity, le DTO les refuse (whitelist) → AUCUN signalement WhatsApp enregistré (incendie Ogo 16:04 et crue Soubalo 20:56 perdus) | **Critique** | DTO accepte phone (E.164) + severity (1-3) ; service attribue au vrai citoyen (création auto compte CITOYEN) ; migration colonne severity | en cours de push |
+| 7 | 2026-06-11 | Menu bot option 2 (alertes actives) → 401 : GET /alerts exige un JWT, la clé bot ne passe pas | Élevée | Nouveau endpoint GET /alerts-bot/active (BotApiKeyGuard) + bot mis à jour | en cours de push |
+| 8 | 2026-06-11 | Dashboard inaccessible depuis le navigateur : NEXT_PUBLIC_API_URL baked = localhost:4000 (pointe vers la machine du visiteur, pas le VPS) | Bloquant F* | `./scripts/configure-ip.sh 187.124.34.136` + rebuild dashboard/mobile | (opération VPS) |
 
 *(à compléter au fil des tests)*
 
