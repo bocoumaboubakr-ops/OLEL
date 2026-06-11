@@ -3,7 +3,7 @@
 > **Fichier de contexte vivant** — mis à jour à chaque étape pour ne perdre aucune information.
 > **Objectif global** : tester TOUS les workflows et TOUTES les fonctionnalités du système, corriger ce qui doit l'être, et rendre OLEL le plus performant possible avant le pilote Matam.
 
-**Dernière mise à jour** : 2026-06-11 — entrant WhatsApp : webhooks Meta reçus mais HMAC invalide (APP_SECRET à corriger + rebuild bot requis)
+**Dernière mise à jour** : 2026-06-11 — DÉCOUVERTE MAJEURE : le VPS tournait sur la branche pré-audit `gracious-ritchie` (commit 49795d8). Bascule vers `laughing-hawking` + rebuild complet en cours.
 
 ---
 
@@ -13,14 +13,14 @@
 |---|---|---|
 | VPS | Hostinger `187.124.34.136` (srv1464451), Ubuntu 24.04, 95 GB | ✅ Live |
 | Répertoire projet | `/opt/olel` | ✅ |
-| Branche déployée | `claude/laughing-hawking-4olx5k` | ✅ (audit inclus) |
+| Branche déployée | ⚠️ était `gracious-ritchie-ZLtdg`@49795d8 (PRÉ-AUDIT) — bascule vers `laughing-hawking-4olx5k` en cours | 🔄 |
 | PR ouverte | #2 → `main` (mise à jour auto à chaque push) | 🟡 ouverte |
 | Postgres+PostGIS | conteneur `olel-postgres`, port 5434 | ✅ healthy |
 | Redis | conteneur `olel-redis`, port 6380 | ✅ healthy |
 | Backend NestJS | conteneur `olel-backend`, port 4000 | ✅ healthy |
 | Dashboard | conteneur `olel-dashboard`, port 3000 | ✅ |
 | Mobile PWA | conteneur `olel-mobile`, port 3001 | ✅ |
-| Bot WhatsApp | conteneur `olel-bot`, port 3002, endpoint `/health` | ✅ (rebuild fait) |
+| Bot WhatsApp | conteneur `olel-bot`, port 3002 | 🔄 rebuild complet en cours (image pré-audit jusqu'ici) |
 | Tunnel public | ngrok `https://defeat-consent-culinary.ngrok-free.dev` → :3002 | ⚠️ URL volatile (free) |
 | Backup auto | conteneur `--profile backup` (cron 2h00, rétention 7 j) | ❓ à confirmer activé |
 | Nginx + TLS | non configuré (accès par IP/ports) | ⬜ à faire avant pilote |
@@ -198,7 +198,8 @@ Mots de passe : valeurs `SEED_*_PASSWORD` du `.env` VPS (ou défauts dev si seed
 |---|---|---|---|---|---|
 | — | 2026-06-10 | (avant tests) bot sans `/health` → unhealthy | Moyenne | endpoint ajouté | `fad6f37` |
 | — | 2026-06-10 | (avant tests) HMAC sur rawBody absent → webhooks Meta tous rejetés | **Critique** | `rawBody: true` | `109198e` |
-| 1 | 2026-06-11 | Test D1 : webhooks Meta reçus mais « Signature HMAC invalide » — WHATSAPP_APP_SECRET placeholder dans .env VPS + conteneur bot sur image 109198e (pas de /health → rebuild jamais fait, seulement recreate) | Bloquant entrant | Vraie clé secrète Meta dans .env + git pull + docker compose build bot | (opération VPS) |
+| 1 | 2026-06-11 | Test D1 : « Signature HMAC invalide » sur tous les webhooks Meta entrants | Bloquant entrant | Cause racine trouvée : VPS sur branche pré-audit (bug rawBody non corrigé) + APP_SECRET mal écrit dans .env (sed sans le nom de variable) | (opération VPS) |
+| 2 | 2026-06-11 | **VPS sur mauvaise branche** : `gracious-ritchie-ZLtdg`@49795d8 = AUCUN correctif d'audit en prod (pas de MFA, pas de fix HMAC/rawBody, pas de quotas OTP, anciens bugs pagination/workflow inclus) | **Critique** | Sauvegarde .env → git checkout laughing-hawking → restauration .env → docker compose build complet | (opération VPS) |
 
 *(à compléter au fil des tests)*
 
@@ -206,7 +207,7 @@ Mots de passe : valeurs `SEED_*_PASSWORD` du `.env` VPS (ou défauts dev si seed
 
 ## 7. Prochaines étapes immédiates
 
-1. 🔄 **Test entrant WhatsApp** : webhook OK côté Meta ; reste à (a) mettre la vraie « Clé secrète de l'app » Meta dans WHATSAPP_APP_SECRET, (b) git pull + docker compose build bot (l'image VPS date de 109198e, sans /health), (c) renvoyer un message test
+1. 🔄 **Bascule de branche VPS** : sauvegarder .env → checkout `laughing-hawking-4olx5k` → restaurer .env (avec APP_SECRET réparé) → `docker compose build` COMPLET (toute la stack était pré-audit) → vérifier MFA actif via curl login ADMIN → re-test entrant WhatsApp
 2. ⬜ Dérouler le plan §5 section par section (A → I), cocher, noter les bugs en §6
 3. ⬜ Corriger les bugs au fil de l'eau (commits sur la branche → PR #2)
 4. ⬜ Après les tests : token permanent Meta + templates + Nginx/TLS + domaine
@@ -219,3 +220,4 @@ Mots de passe : valeurs `SEED_*_PASSWORD` du `.env` VPS (ou défauts dev si seed
 - ⚠️ Mode test Meta : 5 destinataires max, fenêtre de session 24 h pour messages libres
 - ⚠️ Sandbox Africa's Talking : SMS/IVR simulés (logs uniquement) tant que pas de clé prod
 - 🔐 Aucun secret dans ce fichier ni dans Git — tout est dans `/opt/olel/.env` (VPS)
+- ⚠️ La clé secrète Meta et des tokens temporaires ont transité par le chat de session → **réinitialiser la clé secrète de l'app Meta + régénérer le token après la phase de tests**
