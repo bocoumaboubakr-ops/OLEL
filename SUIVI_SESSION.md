@@ -3,7 +3,7 @@
 > **Fichier de contexte vivant** — mis à jour à chaque étape pour ne perdre aucune information.
 > **Objectif global** : tester TOUS les workflows et TOUTES les fonctionnalités du système, corriger ce qui doit l'être, et rendre OLEL le plus performant possible avant le pilote Matam.
 
-**Dernière mise à jour** : 2026-06-11 — DÉCOUVERTE MAJEURE : le VPS tournait sur la branche pré-audit `gracious-ritchie` (commit 49795d8). Bascule vers `laughing-hawking` + rebuild complet en cours.
+**Dernière mise à jour** : 2026-06-11 — bascule de branche FAITE, stack 5/5, MFA confirmé actif, HMAC entrant OK. Reste : token Meta expiré (24 h) à régénérer pour la réponse du bot.
 
 ---
 
@@ -13,14 +13,14 @@
 |---|---|---|
 | VPS | Hostinger `187.124.34.136` (srv1464451), Ubuntu 24.04, 95 GB | ✅ Live |
 | Répertoire projet | `/opt/olel` | ✅ |
-| Branche déployée | ⚠️ était `gracious-ritchie-ZLtdg`@49795d8 (PRÉ-AUDIT) — bascule vers `laughing-hawking-4olx5k` en cours | 🔄 |
+| Branche déployée | `claude/laughing-hawking-4olx5k` (audit + fixes) — bascule + rebuild complet faits le 11/06 | ✅ confirmé (MFA actif via curl) |
 | PR ouverte | #2 → `main` (mise à jour auto à chaque push) | 🟡 ouverte |
 | Postgres+PostGIS | conteneur `olel-postgres`, port 5434 | ✅ healthy |
 | Redis | conteneur `olel-redis`, port 6380 | ✅ healthy |
 | Backend NestJS | conteneur `olel-backend`, port 4000 | ✅ healthy |
 | Dashboard | conteneur `olel-dashboard`, port 3000 | ✅ |
 | Mobile PWA | conteneur `olel-mobile`, port 3001 | ✅ |
-| Bot WhatsApp | conteneur `olel-bot`, port 3002 | 🔄 rebuild complet en cours (image pré-audit jusqu'ici) |
+| Bot WhatsApp | conteneur `olel-bot`, port 3002, routes /webhook/whatsapp + /health | ✅ healthy |
 | Tunnel public | ngrok `https://defeat-consent-culinary.ngrok-free.dev` → :3002 | ⚠️ URL volatile (free) |
 | Backup auto | conteneur `--profile backup` (cron 2h00, rétention 7 j) | ❓ à confirmer activé |
 | Nginx + TLS | non configuré (accès par IP/ports) | ⬜ à faire avant pilote |
@@ -39,8 +39,8 @@
 | **Test sortant** (API → WhatsApp) | message reçu sur le téléphone | ✅ **VALIDÉ** |
 | Webhook Meta configuré | URL ngrok + verify token | ✅ (webhooks reçus 2026-06-11 12:27) |
 | Abonnement champ `messages` | | ✅ (messages arrivent) |
-| `WHATSAPP_APP_SECRET` dans `.env` | requis pour HMAC entrant | ❌ **valeur incorrecte — cause du rejet HMAC** |
-| **Test entrant** (WhatsApp → bot) | webhooks arrivent mais rejetés (HMAC) | 🔄 en cours de correction |
+| `WHATSAPP_APP_SECRET` dans `.env` | clé secrète Meta | ✅ HMAC validé (messages traités) |
+| **Test entrant** (WhatsApp → bot) | HMAC OK, conversation suivie (menu→choix), MAIS réponse bot bloquée : token Meta 24 h expiré (Graph 401) | 🔄 régénérer token |
 | Token permanent (System User) | à créer après les tests | ⬜ |
 | Templates Meta (4 langues) | requis pour notifier hors session 24 h | ⬜ |
 
@@ -81,7 +81,7 @@ Mots de passe : valeurs `SEED_*_PASSWORD` du `.env` VPS (ou défauts dev si seed
 | # | Test | Statut |
 |---|---|---|
 | A1 | Login mot de passe CITOYEN/SENTINELLE → tokens directs | ⬜ |
-| A2 | Login ADMIN → `mfaSetupRequired` + écran enrôlement TOTP dashboard | ⬜ |
+| A2 | Login ADMIN → `mfaSetupRequired` + écran enrôlement TOTP dashboard | ✅ (curl 11/06 : mfaSetupRequired:true + mfaToken) |
 | A3 | Enrôlement TOTP (Google Authenticator) + login complet | ⬜ |
 | A4 | Re-login ADMIN → `mfaRequired` → code TOTP → tokens | ⬜ |
 | A5 | mfaToken utilisé comme access token → rejet 401 | ⬜ |
@@ -121,7 +121,7 @@ Mots de passe : valeurs `SEED_*_PASSWORD` du `.env` VPS (ou défauts dev si seed
 
 | # | Test | Statut |
 |---|---|---|
-| D1 | Message texte → bot reçoit (logs) + répond menu | ⬜ |
+| D1 | Message texte → bot reçoit (logs) + répond menu | 🔄 réception+HMAC+menu OK ; réponse sortante bloquée par token expiré |
 | D2 | Flux signalement complet via bot → `POST /signalements/bot` → visible dashboard | ⬜ |
 | D3 | HMAC : requête forgée sans signature → rejetée (logs) | ⬜ |
 | D4 | Webhook GET verify : token correct → challenge ; incorrect → Forbidden | ⬜ |
@@ -199,7 +199,10 @@ Mots de passe : valeurs `SEED_*_PASSWORD` du `.env` VPS (ou défauts dev si seed
 | — | 2026-06-10 | (avant tests) bot sans `/health` → unhealthy | Moyenne | endpoint ajouté | `fad6f37` |
 | — | 2026-06-10 | (avant tests) HMAC sur rawBody absent → webhooks Meta tous rejetés | **Critique** | `rawBody: true` | `109198e` |
 | 1 | 2026-06-11 | Test D1 : « Signature HMAC invalide » sur tous les webhooks Meta entrants | Bloquant entrant | Cause racine trouvée : VPS sur branche pré-audit (bug rawBody non corrigé) + APP_SECRET mal écrit dans .env (sed sans le nom de variable) | (opération VPS) |
-| 2 | 2026-06-11 | **VPS sur mauvaise branche** : `gracious-ritchie-ZLtdg`@49795d8 = AUCUN correctif d'audit en prod (pas de MFA, pas de fix HMAC/rawBody, pas de quotas OTP, anciens bugs pagination/workflow inclus) | **Critique** | Sauvegarde .env → git checkout laughing-hawking → restauration .env → docker compose build complet | (opération VPS) |
+| 2 | 2026-06-11 | **VPS sur mauvaise branche** : `gracious-ritchie-ZLtdg`@49795d8 = AUCUN correctif d'audit en prod (pas de MFA, pas de fix HMAC/rawBody, pas de quotas OTP, anciens bugs pagination/workflow inclus) | **Critique** | ✅ RÉSOLU : checkout laughing-hawking + rebuild complet, MFA confirmé actif | (opération VPS) |
+| 3 | 2026-06-11 | .env écrasé par le checkout (placeholders) → P1000 Postgres + bot en mode SIMUL | Bloquant | ✅ RÉSOLU : .env reconstruit, ALTER USER postgres, vraies valeurs WhatsApp réinjectées | (opération VPS) |
+| 4 | 2026-06-11 | Échec d'envoi WhatsApp (Graph 401) → exception → webhook 500 → Meta re-livre le même message en boucle | Élevée | sendText catch + log détail Meta, contrôleur try/catch par message (toujours 200) | (commit bot resilience) |
+| 5 | 2026-06-11 | Token Meta temporaire expiré (24 h) → bot ne peut pas répondre | Bloquant D1 | 🔄 à régénérer (et prévoir System User Token permanent) | — |
 
 *(à compléter au fil des tests)*
 
