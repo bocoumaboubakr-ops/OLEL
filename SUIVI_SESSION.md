@@ -3,7 +3,7 @@
 > **Fichier de contexte vivant** — mis à jour à chaque étape pour ne perdre aucune information.
 > **Objectif global** : tester TOUS les workflows et TOUTES les fonctionnalités du système, corriger ce qui doit l'être, et rendre OLEL le plus performant possible avant le pilote Matam.
 
-**Dernière mise à jour** : 2026-06-10 — bot WhatsApp : envoi sortant validé ✅
+**Dernière mise à jour** : 2026-06-11 — entrant WhatsApp : webhooks Meta reçus mais HMAC invalide (APP_SECRET à corriger + rebuild bot requis)
 
 ---
 
@@ -37,10 +37,10 @@
 | Token | temporaire 24 h — **dans `.env` VPS uniquement, jamais en Git** | ✅ validé |
 | Numéro destinataire test | `+221 77 476 59 07` (vérifié chez Meta) | ✅ |
 | **Test sortant** (API → WhatsApp) | message reçu sur le téléphone | ✅ **VALIDÉ** |
-| Webhook Meta configuré | URL ngrok + verify token | ❓ à confirmer |
-| Abonnement champ `messages` | | ❓ à confirmer |
-| `WHATSAPP_APP_SECRET` dans `.env` | requis pour HMAC entrant | ❓ à confirmer |
-| **Test entrant** (WhatsApp → bot) | | ⬜ **PROCHAINE ÉTAPE** |
+| Webhook Meta configuré | URL ngrok + verify token | ✅ (webhooks reçus 2026-06-11 12:27) |
+| Abonnement champ `messages` | | ✅ (messages arrivent) |
+| `WHATSAPP_APP_SECRET` dans `.env` | requis pour HMAC entrant | ❌ **valeur incorrecte — cause du rejet HMAC** |
+| **Test entrant** (WhatsApp → bot) | webhooks arrivent mais rejetés (HMAC) | 🔄 en cours de correction |
 | Token permanent (System User) | à créer après les tests | ⬜ |
 | Templates Meta (4 langues) | requis pour notifier hors session 24 h | ⬜ |
 
@@ -198,6 +198,7 @@ Mots de passe : valeurs `SEED_*_PASSWORD` du `.env` VPS (ou défauts dev si seed
 |---|---|---|---|---|---|
 | — | 2026-06-10 | (avant tests) bot sans `/health` → unhealthy | Moyenne | endpoint ajouté | `fad6f37` |
 | — | 2026-06-10 | (avant tests) HMAC sur rawBody absent → webhooks Meta tous rejetés | **Critique** | `rawBody: true` | `109198e` |
+| 1 | 2026-06-11 | Test D1 : webhooks Meta reçus mais « Signature HMAC invalide » — WHATSAPP_APP_SECRET placeholder dans .env VPS + conteneur bot sur image 109198e (pas de /health → rebuild jamais fait, seulement recreate) | Bloquant entrant | Vraie clé secrète Meta dans .env + git pull + docker compose build bot | (opération VPS) |
 
 *(à compléter au fil des tests)*
 
@@ -205,7 +206,7 @@ Mots de passe : valeurs `SEED_*_PASSWORD` du `.env` VPS (ou défauts dev si seed
 
 ## 7. Prochaines étapes immédiates
 
-1. ⬜ **Test entrant WhatsApp** : webhook Meta configuré (URL ngrok + verify token + abonnement `messages`) + `WHATSAPP_APP_SECRET` dans `.env` → envoyer un message au +1 555 638 5802 → vérifier logs bot
+1. 🔄 **Test entrant WhatsApp** : webhook OK côté Meta ; reste à (a) mettre la vraie « Clé secrète de l'app » Meta dans WHATSAPP_APP_SECRET, (b) git pull + docker compose build bot (l'image VPS date de 109198e, sans /health), (c) renvoyer un message test
 2. ⬜ Dérouler le plan §5 section par section (A → I), cocher, noter les bugs en §6
 3. ⬜ Corriger les bugs au fil de l'eau (commits sur la branche → PR #2)
 4. ⬜ Après les tests : token permanent Meta + templates + Nginx/TLS + domaine
