@@ -140,10 +140,20 @@ export class WhatsappService {
       this.logger.log(`[SIMUL → ${to}] ${text.replace(/\n/g, ' | ').substring(0, 120)}`);
       return;
     }
-    await axios.post(
-      `https://graph.facebook.com/v19.0/${phoneId}/messages`,
-      { messaging_product: 'whatsapp', to, type: 'text', text: { body: text, preview_url: false } },
-      { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } },
-    );
+    try {
+      await axios.post(
+        `https://graph.facebook.com/v19.0/${phoneId}/messages`,
+        { messaging_product: 'whatsapp', to, type: 'text', text: { body: text, preview_url: false } },
+        { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } },
+      );
+    } catch (err: any) {
+      // Ne JAMAIS faire échouer le webhook : Meta re-livrerait le message en boucle.
+      // On loggue le détail Meta (token expiré, destinataire non autorisé, etc.).
+      const meta = err?.response?.data?.error;
+      this.logger.error(
+        `Envoi WhatsApp → ${to} échoué (HTTP ${err?.response?.status ?? '?'}) : ` +
+        (meta ? `[${meta.code}] ${meta.message}` : err?.message ?? 'erreur inconnue'),
+      );
+    }
   }
 }

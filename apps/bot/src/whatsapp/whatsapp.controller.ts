@@ -51,7 +51,12 @@ export class WhatsappController {
       for (const entry of body.entry || []) {
         for (const change of entry.changes || []) {
           for (const msg of change.value?.messages || []) {
-            await this.whatsapp.handleIncoming(msg, change.value?.metadata);
+            try {
+              await this.whatsapp.handleIncoming(msg, change.value?.metadata);
+            } catch (err) {
+              // Toujours répondre 200 à Meta, sinon le message est re-livré en boucle
+              this.logger.error(`Traitement message ${msg?.id ?? '?'} échoué : ${(err as Error).message}`);
+            }
           }
         }
       }
