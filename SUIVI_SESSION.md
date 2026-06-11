@@ -3,7 +3,7 @@
 > **Fichier de contexte vivant** — mis à jour à chaque étape pour ne perdre aucune information.
 > **Objectif global** : tester TOUS les workflows et TOUTES les fonctionnalités du système, corriger ce qui doit l'être, et rendre OLEL le plus performant possible avant le pilote Matam.
 
-**Dernière mise à jour** : 2026-06-11 — bascule de branche FAITE, stack 5/5, MFA confirmé actif, HMAC entrant OK. Reste : token Meta expiré (24 h) à régénérer pour la réponse du bot.
+**Dernière mise à jour** : 2026-06-11 — canal WhatsApp 100 % opérationnel (entrant + sortant). D1 ✅ validé. Suite : D2 (signalement complet via bot) + sections A (auth) et B (workflow alerte).
 
 ---
 
@@ -40,7 +40,7 @@
 | Webhook Meta configuré | URL ngrok + verify token | ✅ (webhooks reçus 2026-06-11 12:27) |
 | Abonnement champ `messages` | | ✅ (messages arrivent) |
 | `WHATSAPP_APP_SECRET` dans `.env` | clé secrète Meta | ✅ HMAC validé (messages traités) |
-| **Test entrant** (WhatsApp → bot) | HMAC OK, conversation suivie (menu→choix), MAIS réponse bot bloquée : token Meta 24 h expiré (Graph 401) | 🔄 régénérer token |
+| **Test entrant** (WhatsApp → bot) | menu reçu sur le téléphone après nouveau token | ✅ **VALIDÉ** |
 | Token permanent (System User) | à créer après les tests | ⬜ |
 | Templates Meta (4 langues) | requis pour notifier hors session 24 h | ⬜ |
 
@@ -121,7 +121,7 @@ Mots de passe : valeurs `SEED_*_PASSWORD` du `.env` VPS (ou défauts dev si seed
 
 | # | Test | Statut |
 |---|---|---|
-| D1 | Message texte → bot reçoit (logs) + répond menu | 🔄 réception+HMAC+menu OK ; réponse sortante bloquée par token expiré |
+| D1 | Message texte → bot reçoit (logs) + répond menu | ✅ |
 | D2 | Flux signalement complet via bot → `POST /signalements/bot` → visible dashboard | ⬜ |
 | D3 | HMAC : requête forgée sans signature → rejetée (logs) | ⬜ |
 | D4 | Webhook GET verify : token correct → challenge ; incorrect → Forbidden | ⬜ |
@@ -202,7 +202,7 @@ Mots de passe : valeurs `SEED_*_PASSWORD` du `.env` VPS (ou défauts dev si seed
 | 2 | 2026-06-11 | **VPS sur mauvaise branche** : `gracious-ritchie-ZLtdg`@49795d8 = AUCUN correctif d'audit en prod (pas de MFA, pas de fix HMAC/rawBody, pas de quotas OTP, anciens bugs pagination/workflow inclus) | **Critique** | ✅ RÉSOLU : checkout laughing-hawking + rebuild complet, MFA confirmé actif | (opération VPS) |
 | 3 | 2026-06-11 | .env écrasé par le checkout (placeholders) → P1000 Postgres + bot en mode SIMUL | Bloquant | ✅ RÉSOLU : .env reconstruit, ALTER USER postgres, vraies valeurs WhatsApp réinjectées | (opération VPS) |
 | 4 | 2026-06-11 | Échec d'envoi WhatsApp (Graph 401) → exception → webhook 500 → Meta re-livre le même message en boucle | Élevée | sendText catch + log détail Meta, contrôleur try/catch par message (toujours 200) | (commit bot resilience) |
-| 5 | 2026-06-11 | Token Meta temporaire expiré (24 h) → bot ne peut pas répondre | Bloquant D1 | 🔄 à régénérer (et prévoir System User Token permanent) | — |
+| 5 | 2026-06-11 | Token Meta temporaire expiré (24 h) → bot ne peut pas répondre | Bloquant D1 | ✅ RÉSOLU : nouveau token régénéré, D1 validé. **TODO** : System User Token permanent à créer pour ne plus refaire ça chaque jour | — |
 
 *(à compléter au fil des tests)*
 
