@@ -3,7 +3,7 @@
 > **Fichier de contexte vivant** — mis à jour à chaque étape pour ne perdre aucune information.
 > **Objectif global** : tester TOUS les workflows et TOUTES les fonctionnalités du système, corriger ce qui doit l'être, et rendre OLEL le plus performant possible avant le pilote Matam.
 
-**Dernière mise à jour** : 2026-06-12 16:00 — Bug 13 (vérification terrain sentinelle) DÉPLOYÉ sur le VPS : health-check 5/5, migration field_verification appliquée (colonnes + FK + index confirmés en base). En attente : test du scénario citoyen→sentinelle→mairie.
+**Dernière mise à jour** : 2026-06-12 22:30 — Bugs 14-15 corrigés : (14) GPS bloqué en HTTP → saisie manuelle des coordonnées en secours (dashboard + mobile) ; (15) les signalements citoyens n'apparaissaient pas dans l'app mobile → section dédiée dans l'onglet Valider de la sentinelle avec formulaire de vérification terrain.
 
 ---
 
@@ -137,6 +137,7 @@ Mots de passe : valeurs `SEED_*_PASSWORD` du `.env` VPS (ou défauts dev si seed
 | E5 | Bouton SOS header | ⬜ |
 | E6 | Service worker : app se charge offline (cache) | ⬜ |
 | E7 | Sentinelle inactive → login OK mais fonctionnalités restreintes | ⬜ |
+| E8 | Sentinelle mobile : signalements citoyens visibles dans l'onglet Valider + vérification terrain (GPS ou manuel) | 🔄 livré, à tester après redéploiement |
 
 ### F. Dashboard autorités
 

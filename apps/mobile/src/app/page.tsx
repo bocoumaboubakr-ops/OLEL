@@ -59,6 +59,13 @@ function LevelBadge({ level }: { level?: string }) {
 
 interface MobileAlert { id: string; title: string; description: string; type: string; severity: number; alertLevel?: string; status: string; zone?: { name: string }; createdAt: string; }
 
+interface MobileSignalement {
+  id: string; type: string; text: string; severity?: number | null;
+  status: string; channel: string; latitude?: number | null; longitude?: number | null;
+  fieldVerifiedAt?: string | null; fieldNotes?: string | null; createdAt: string;
+  user?: { name: string; phone: string; zone?: { name: string } | null };
+}
+
 // ── App root ──────────────────────────────────────────────────────────────────
 export default function MobilePage() {
   const { user, initialized, login, logout, requestOtp, verifyOtp, loading: authLoading, error: authError } = useMobileAuth();
@@ -89,7 +96,22 @@ export default function MobilePage() {
     } catch { /* offline */ } finally { setAlertsLoading(false); }
   }, []);
 
+  const [signalements, setSignalements] = useState<MobileSignalement[]>([]);
+  const fetchSignalements = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('olel_token');
+      if (!token) return;
+      const { data } = await axios.get(`${API}/signalements?status=PENDING&limit=30`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setSignalements(data.items || []);
+    } catch { /* rôle sans accès ou offline */ }
+  }, []);
+
   useEffect(() => { if (user) fetchAlerts(); }, [fetchAlerts, user]);
+  useEffect(() => {
+    if (user && SENTINEL_ROLES.includes(user.role)) fetchSignalements();
+  }, [fetchSignalements, user]);
   useEffect(() => { if (tab === 'report') { setReportStep('type'); setReportType(null); } }, [tab]);
 
   if (!initialized) return <Splash />;
@@ -159,7 +181,7 @@ export default function MobilePage() {
         {tab === 'map' && <MapScreen alerts={active} />}
         {tab === 'formations' && <FormationsScreen />}
         {tab === 'missions' && <MissionsScreen />}
-        {tab === 'validate' && <SentinelValidationScreen alerts={alerts.filter((a) => a.status === 'PENDING' || a.status === 'UNDER_REVIEW')} onDone={fetchAlerts} />}
+        {tab === 'validate' && <SentinelValidationScreen alerts={alerts.filter((a) => a.status === 'PENDING' || a.status === 'UNDER_REVIEW')} signalements={signalements} onDone={() => { fetchAlerts(); fetchSignalements(); }} />}
         {tab === 'profile' && <ProfileScreen user={user} onLogout={logout} />}
       </div>
 
@@ -915,21 +937,62 @@ function MissionsScreen() {
   );
 }
 // ── SentinelValidationScreen ──────────────────────────────────────────────────
-function SentinelValidationScreen({ alerts, onDone }: { alerts: MobileAlert[]; onDone: () => void }) {
+function SentinelValidationScreen({ alerts, signalements, onDone }: { alerts: MobileAlert[]; signalements: MobileSignalement[]; onDone: () => void }) {
   const [selected, setSelected] = useState<MobileAlert | null>(null);
+  const [verifying, setVerifying] = useState<MobileSignalement | null>(null);
 
   if (selected) {
     return <SentinelValidationForm alert={selected} onBack={() => setSelected(null)} onDone={() => { setSelected(null); onDone(); }} />;
   }
+  if (verifying) {
+    return <SignalementFieldVerifyForm signalement={verifying} onBack={() => setVerifying(null)} onDone={() => { setVerifying(null); onDone(); }} />;
+  }
 
   return (
     <div style={{ padding: 16 }}>
-      <h2 style={{ margin: '0 0 14px', fontSize: '1.05rem', color: '#1a3c5e' }}>✔️ Signalements à valider ({alerts.length})</h2>
-      {alerts.length === 0 ? (
+      {/* ── Signalements citoyens (WhatsApp/USSD) en attente de vérification terrain ── */}
+      {signalements.length > 0 && (
+        <>
+          <h2 style={{ margin: '0 0 10px', fontSize: '1.05rem', color: '#1a3c5e' }}>📢 Signalements citoyens ({signalements.length})</h2>
+          {signalements.map((sg) => {
+            const meta = RISK_ICONS[sg.type] || RISK_ICONS.AUTRE;
+            const needsField = !sg.fieldVerifiedAt && !(sg.latitude && sg.longitude);
+            return (
+              <div key={sg.id} style={{ background: 'white', borderRadius: 12, padding: 14, marginBottom: 10, boxShadow: '0 1px 6px rgba(0,0,0,0.07)', borderLeft: `4px solid ${needsField ? '#f59e0b' : '#16a34a'}` }}>
+                <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#1a3c5e', marginBottom: 4 }}>{meta.icon} {meta.label}</div>
+                <p style={{ margin: '0 0 8px', color: '#555', fontSize: '0.82rem', lineHeight: 1.4 }}>{sg.text}</p>
+                <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginBottom: 8 }}>
+                  {sg.user && <>👤 {sg.user.name} · </>}via {sg.channel} · {new Date(sg.createdAt).toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                </div>
+                {sg.fieldVerifiedAt ? (
+                  <div style={{ background: '#dcfce7', color: '#166534', padding: '6px 10px', borderRadius: 8, fontSize: '0.76rem' }}>
+                    ✔️ Vérifié sur place — en attente de validation mairie
+                  </div>
+                ) : needsField ? (
+                  <button onClick={() => setVerifying(sg)}
+                    style={{ width: '100%', background: '#0ea5e9', color: 'white', border: 'none', padding: '10px', borderRadius: 8, fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer' }}>
+                    🔭 Vérifier sur place →
+                  </button>
+                ) : (
+                  <div style={{ background: '#e0f2fe', color: '#0369a1', padding: '6px 10px', borderRadius: 8, fontSize: '0.76rem' }}>
+                    📍 GPS/photo fournis — en attente de validation mairie
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          <div style={{ height: 8 }} />
+        </>
+      )}
+
+      <h2 style={{ margin: '0 0 14px', fontSize: '1.05rem', color: '#1a3c5e' }}>✔️ Alertes à valider ({alerts.length})</h2>
+      {alerts.length === 0 && signalements.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '40px 20px', color: '#94a3b8' }}>
           <div style={{ fontSize: '2.5rem', marginBottom: 10 }}>✅</div>
           <p style={{ margin: 0 }}>Aucun signalement en attente de validation.</p>
         </div>
+      ) : alerts.length === 0 ? (
+        <p style={{ color: '#94a3b8', fontSize: '0.82rem' }}>Aucune alerte en attente.</p>
       ) : alerts.map((a) => {
         const meta = RISK_ICONS[a.type] || RISK_ICONS.AUTRE;
         const color = SEV_COLOR[a.severity] || '#888';
@@ -1075,6 +1138,106 @@ function SentinelValidationForm({ alert, onBack, onDone }: { alert: MobileAlert;
       <button disabled={sending} onClick={handleSubmit}
         style={{ width: '100%', background: action === 'REJECTED' ? '#dc2626' : '#1a3c5e', color: 'white', border: 'none', padding: '14px', borderRadius: 12, fontSize: '0.95rem', fontWeight: 800, cursor: 'pointer', opacity: sending ? 0.6 : 1 }}>
         {sending ? '⏳ Envoi…' : action === 'VALIDATED' ? '✅ Valider le signalement' : action === 'REJECTED' ? '❌ Rejeter le signalement' : '⬆️ Escalader à la préfecture'}
+      </button>
+    </div>
+  );
+}
+
+// ── SignalementFieldVerifyForm ────────────────────────────────────────────────
+// Vérification terrain d'un signalement citoyen (cursus OLEL) : la sentinelle
+// se rend sur place, relève la position (GPS, ou saisie manuelle quand le
+// navigateur bloque la géolocalisation en HTTP) et ajoute ses observations.
+function SignalementFieldVerifyForm({ signalement, onBack, onDone }: { signalement: MobileSignalement; onBack: () => void; onDone: () => void }) {
+  const [gps, setGps] = useState<{ lat: number; lng: number } | null>(null);
+  const [gpsStatus, setGpsStatus] = useState<'pending' | 'ok' | 'manual'>('pending');
+  const [manualLat, setManualLat] = useState('');
+  const [manualLng, setManualLng] = useState('');
+  const [notes, setNotes] = useState('');
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (navigator.geolocation && window.isSecureContext) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => { setGps({ lat: pos.coords.latitude, lng: pos.coords.longitude }); setGpsStatus('ok'); },
+        () => setGpsStatus('manual'),
+        { enableHighAccuracy: true, timeout: 8000 },
+      );
+    } else {
+      setGpsStatus('manual');
+    }
+  }, []);
+
+  const handleSubmit = async () => {
+    let lat: number, lng: number;
+    if (gps) { lat = gps.lat; lng = gps.lng; }
+    else {
+      lat = parseFloat(manualLat.replace(',', '.'));
+      lng = parseFloat(manualLng.replace(',', '.'));
+      if (Number.isNaN(lat) || Number.isNaN(lng)) { setError('Coordonnées invalides (ex. 15.6556 et -13.2553)'); return; }
+    }
+    setSending(true); setError('');
+    try {
+      const token = localStorage.getItem('olel_token');
+      await axios.patch(`${API}/signalements/${signalement.id}/field-verify`,
+        { latitude: lat, longitude: lng, notes: notes.trim() || undefined },
+        { headers: { Authorization: `Bearer ${token}` } });
+      onDone();
+    } catch (e: any) {
+      const msg = e.response?.data?.message;
+      setError(Array.isArray(msg) ? msg.join(', ') : (msg || 'Erreur lors de la vérification'));
+    } finally { setSending(false); }
+  };
+
+  const meta = RISK_ICONS[signalement.type] || RISK_ICONS.AUTRE;
+  const inp = { width: '100%', padding: '10px 12px', border: '1.5px solid #e2e8f0', borderRadius: 8, fontSize: '0.92rem', boxSizing: 'border-box' as const };
+
+  return (
+    <div style={{ padding: '16px 20px 32px' }}>
+      <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '0.85rem', padding: '0 0 12px', display: 'block' }}>← Retour</button>
+      <h2 style={{ margin: '0 0 14px', fontSize: '1rem', color: '#1a3c5e' }}>🔭 Vérification terrain</h2>
+
+      <div style={{ background: '#f8fafc', borderRadius: 10, padding: '10px 14px', marginBottom: 14, fontSize: '0.88rem' }}>
+        <b>{meta.icon} {meta.label}</b><br />
+        <span style={{ color: '#64748b', fontSize: '0.8rem' }}>{signalement.text}</span>
+      </div>
+
+      {gpsStatus === 'pending' && (
+        <div style={{ background: '#fef9c3', color: '#92400e', padding: '8px 12px', borderRadius: 8, marginBottom: 14, fontSize: '0.8rem' }}>
+          📍 Acquisition GPS en cours…
+        </div>
+      )}
+      {gpsStatus === 'ok' && gps && (
+        <div style={{ background: '#dcfce7', color: '#16a34a', padding: '8px 12px', borderRadius: 8, marginBottom: 14, fontSize: '0.8rem' }}>
+          📍 Position acquise : {gps.lat.toFixed(5)}, {gps.lng.toFixed(5)}
+        </div>
+      )}
+      {gpsStatus === 'manual' && (
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ background: '#fef3c7', color: '#92400e', padding: '8px 12px', borderRadius: 8, marginBottom: 10, fontSize: '0.78rem' }}>
+            ⚠️ GPS bloqué par le navigateur (connexion HTTP). Saisissez la position du lieu :
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input inputMode="decimal" placeholder="Latitude (ex. 15.6556)" value={manualLat}
+              onChange={(e) => setManualLat(e.target.value)} style={inp} />
+            <input inputMode="decimal" placeholder="Longitude (ex. -13.2553)" value={manualLng}
+              onChange={(e) => setManualLng(e.target.value)} style={inp} />
+          </div>
+        </div>
+      )}
+
+      <div style={{ marginBottom: 14 }}>
+        <label style={{ display: 'block', fontWeight: 700, fontSize: '0.82rem', color: '#374151', marginBottom: 6 }}>Observations terrain</label>
+        <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3}
+          placeholder="Ampleur, victimes, accessibilité, besoins urgents…"
+          style={{ width: '100%', padding: '8px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: '0.85rem', resize: 'none', boxSizing: 'border-box' as const, fontFamily: 'inherit' }} />
+      </div>
+
+      {error && <div style={{ background: '#fee2e2', color: '#dc2626', padding: '8px 12px', borderRadius: 8, marginBottom: 12, fontSize: '0.82rem' }}>{error}</div>}
+
+      <button disabled={sending || gpsStatus === 'pending'} onClick={handleSubmit}
+        style={{ width: '100%', background: '#0ea5e9', color: 'white', border: 'none', padding: '14px', borderRadius: 12, fontSize: '0.95rem', fontWeight: 800, cursor: 'pointer', opacity: sending || gpsStatus === 'pending' ? 0.6 : 1 }}>
+        {sending ? '⏳ Envoi…' : '✔️ Confirmer la vérification sur place'}
       </button>
     </div>
   );

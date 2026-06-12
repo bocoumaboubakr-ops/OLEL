@@ -99,29 +99,52 @@ export default function SignalementsPage() {
     }
   };
 
+  // En HTTP (pas de contexte sécurisé), les navigateurs bloquent la géolocalisation :
+  // on bascule alors sur une saisie manuelle des coordonnées.
+  const askManualCoords = (): { latitude: number; longitude: number } | null => {
+    const input = prompt(
+      'GPS indisponible sur cette connexion (HTTP).\nSaisissez les coordonnées manuellement :\nFormat : latitude, longitude — ex. 15.6556, -13.2553',
+    );
+    if (!input) return null;
+    const parts = input.split(',').map((x) => parseFloat(x.trim()));
+    if (parts.length !== 2 || parts.some(Number.isNaN)) {
+      alert('Format invalide. Exemple attendu : 15.6556, -13.2553');
+      return null;
+    }
+    return { latitude: parts[0], longitude: parts[1] };
+  };
+
   const fieldVerify = async (id: string) => {
-    if (!navigator.geolocation) { alert('GPS non disponible sur cet appareil'); return; }
     const notes = prompt('Notes terrain (ampleur, victimes, accès) — optionnel :') || undefined;
     const token = localStorage.getItem('olel_token');
+
+    const submit = async (coords: { latitude: number; longitude: number }) => {
+      try {
+        await axios.patch(`${API}/signalements/${id}/field-verify`, { ...coords, notes }, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        await fetchItems();
+      } catch (e: any) {
+        alert(e.response?.data?.message || 'Erreur vérification');
+      } finally {
+        setActing(null);
+      }
+    };
+
     setActing(id);
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        try {
-          await axios.patch(`${API}/signalements/${id}/field-verify`, {
-            latitude: pos.coords.latitude,
-            longitude: pos.coords.longitude,
-            notes,
-          }, { headers: { Authorization: `Bearer ${token}` } });
-          await fetchItems();
-        } catch (e: any) {
-          alert(e.response?.data?.message || 'Erreur vérification');
-        } finally {
-          setActing(null);
-        }
-      },
-      (err) => { setActing(null); alert(`GPS impossible : ${err.message}`); },
-      { enableHighAccuracy: true, timeout: 10000 },
-    );
+    if (navigator.geolocation && window.isSecureContext) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => submit({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
+        () => {
+          const c = askManualCoords();
+          if (c) submit(c); else setActing(null);
+        },
+        { enableHighAccuracy: true, timeout: 10000 },
+      );
+    } else {
+      const c = askManualCoords();
+      if (c) submit(c); else setActing(null);
+    }
   };
 
   if (!initialized || !user) return null;
