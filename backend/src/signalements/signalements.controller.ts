@@ -74,8 +74,8 @@ export class SignalementsController {
   updateStatus(
     @Param('id') id: string,
     @Body('status') status: SignalementStatus,
-    @CurrentUser('id') userId: string,
+    @CurrentUser() user: { id: string; role: Role },
   ) {
-    return this.signalements.updateStatus(id, status, userId);
+    return this.signalements.updateStatus(id, status, user.id, user.role);
   }
 }

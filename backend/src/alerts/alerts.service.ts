@@ -185,6 +185,7 @@ export class AlertsService {
     },
     userId: string,
     creatorRole?: Role,
+    opts?: { linkSignalementId?: string },
   ) {
     const level: AlertLevel = dto.alertLevel || AlertLevel.BLEU;
 
@@ -227,18 +228,27 @@ export class AlertsService {
     });
 
     try {
-      await this.prisma.signalement.create({
-        data: {
-          userId,
-          alertId: alert.id,
-          type: dto.type,
-          text: dto.description,
-          mediaUrls: dto.mediaUrls || [],
-          latitude: dto.latitude,
-          longitude: dto.longitude,
-          channel: dto.channel || 'app',
-        },
-      });
+      if (opts?.linkSignalementId) {
+        // L'alerte naît d'un signalement existant (validation mairie) :
+        // on le lie au lieu de créer un doublon.
+        await this.prisma.signalement.update({
+          where: { id: opts.linkSignalementId },
+          data: { alertId: alert.id },
+        });
+      } else {
+        await this.prisma.signalement.create({
+          data: {
+            userId,
+            alertId: alert.id,
+            type: dto.type,
+            text: dto.description,
+            mediaUrls: dto.mediaUrls || [],
+            latitude: dto.latitude,
+            longitude: dto.longitude,
+            channel: dto.channel || 'app',
+          },
+        });
+      }
     } catch (e) {
       this.logger.error(`Échec enregistrement signalement: ${(e as Error).message}`);
     }

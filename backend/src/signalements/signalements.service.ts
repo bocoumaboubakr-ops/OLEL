@@ -1,6 +1,21 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
-import { Role, SignalementStatus } from '@prisma/client';
+import { AlertsService } from '../alerts/alerts.service';
+import { AlertLevel, Role, SignalementStatus } from '@prisma/client';
+
+const TYPE_LABEL: Record<string, string> = {
+  INONDATION: 'Inondation', SECHERESSE: 'Sécheresse', INCENDIE: 'Incendie',
+  TEMPETE: 'Tempête', EPIDEMIE: 'Épidémie', LOCUSTES: 'Criquets',
+  ACCIDENT_INDUSTRIEL: 'Accident industriel', MOUVEMENT_DE_TERRAIN: 'Mouvement de terrain',
+  AUTRE: 'Danger signalé',
+};
+
+// Gravité citoyenne (1-3) → niveau d'alerte officiel d'entrée
+const SEVERITY_TO_LEVEL: Record<number, AlertLevel> = {
+  1: AlertLevel.JAUNE,
+  2: AlertLevel.ORANGE,
+  3: AlertLevel.ROUGE,
+};
 
 // Rôles qui voient les signalements sans restriction territoriale
 const GLOBAL_ROLES: Role[] = [
@@ -14,7 +29,9 @@ const GLOBAL_ROLES: Role[] = [
 
 @Injectable()
 export class SignalementsService {
-  constructor(private prisma: PrismaService) {}
+  private readonly logger = new Logger(SignalementsService.name);
+
+  constructor(private prisma: PrismaService, private alerts: AlertsService) {}
 
   /**
    * Zones visibles par un opérateur local : sa zone, tous ses ascendants
@@ -136,8 +153,11 @@ export class SignalementsService {
     });
   }
 
-  async updateStatus(id: string, status: SignalementStatus, reviewerId: string) {
-    const existing = await this.prisma.signalement.findUnique({ where: { id } });
+  async updateStatus(id: string, status: SignalementStatus, reviewerId: string, reviewerRole?: Role) {
+    const existing = await this.prisma.signalement.findUnique({
+      where: { id },
+      include: { user: { select: { zoneId: true, zone: { select: { name: true } } } } },
+    });
     if (!existing) throw new NotFoundException(`Signalement ${id} introuvable`);
 
     const [updated] = await this.prisma.$transaction([
@@ -152,6 +172,36 @@ export class SignalementsService {
         },
       }),
     ]);
+
+    // Cursus OLEL : un signalement VALIDÉ entre dans le cycle de vie alerte.
+    // L'alerte apparaît dans le flux « en cours » (feed + carte + file par rôle).
+    if (status === SignalementStatus.VALIDATED && !existing.alertId) {
+      try {
+        const label = TYPE_LABEL[existing.type] || existing.type;
+        const zoneName = existing.user?.zone?.name;
+        const alert = await this.alerts.create(
+          {
+            title: zoneName ? `${label} — ${zoneName}` : `${label} — signalement citoyen`,
+            description: existing.text,
+            type: existing.type,
+            alertLevel: SEVERITY_TO_LEVEL[existing.severity ?? 1] || AlertLevel.JAUNE,
+            severity: existing.severity ?? 1,
+            zoneId: existing.user?.zoneId || undefined,
+            latitude: existing.latitude ?? undefined,
+            longitude: existing.longitude ?? undefined,
+            mediaUrls: existing.mediaUrls,
+            channel: existing.channel,
+          },
+          reviewerId,
+          reviewerRole,
+          { linkSignalementId: id },
+        );
+        return { ...updated, alertId: alert.id };
+      } catch (e) {
+        // La validation reste acquise même si la création d'alerte échoue
+        this.logger.error(`Transformation signalement ${id} en alerte échouée : ${(e as Error).message}`);
+      }
+    }
 
     return updated;
   }

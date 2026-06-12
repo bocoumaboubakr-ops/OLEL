@@ -3,7 +3,7 @@
 > **Fichier de contexte vivant** — mis à jour à chaque étape pour ne perdre aucune information.
 > **Objectif global** : tester TOUS les workflows et TOUTES les fonctionnalités du système, corriger ce qui doit l'être, et rendre OLEL le plus performant possible avant le pilote Matam.
 
-**Dernière mise à jour** : 2026-06-11 nuit — bugs 9-10-11 corrigés : page Signalements créée côté dashboard, RBAC ouvert à SENTINELLE/COORDINATEUR/HYDRO/RADIO/GOUVERNORAT/PROTECTION_CIVILE, scoping zone (ascendants+descendants) + zoneId injecté dans le JWT.
+**Dernière mise à jour** : 2026-06-12 — D2 visibilité ✅ confirmée (mairie + sentinelle voient le signalement). Bug 12 corrigé : la validation MAIRIE transforme désormais le signalement en ALERTE (entre dans le flux en cours + feed + carte). Redéploiement backend requis.
 
 ---
 
@@ -80,10 +80,10 @@ Mots de passe : valeurs `SEED_*_PASSWORD` du `.env` VPS (ou défauts dev si seed
 
 | # | Test | Statut |
 |---|---|---|
-| A1 | Login mot de passe CITOYEN/SENTINELLE → tokens directs | ⬜ |
+| A1 | Login mot de passe CITOYEN/SENTINELLE → tokens directs | ✅ (login SENTINELLE dashboard sans MFA, 12/06) |
 | A2 | Login ADMIN → `mfaSetupRequired` + écran enrôlement TOTP dashboard | ✅ (curl 11/06 : mfaSetupRequired:true + mfaToken) |
-| A3 | Enrôlement TOTP (Google Authenticator) + login complet | ⬜ |
-| A4 | Re-login ADMIN → `mfaRequired` → code TOTP → tokens | ⬜ |
+| A3 | Enrôlement TOTP (Google Authenticator) + login complet | ✅ (login MAIRIE dashboard 12/06) |
+| A4 | Re-login MAIRIE/ADMIN → `mfaRequired` → code TOTP → tokens | ✅ (12/06) |
 | A5 | mfaToken utilisé comme access token → rejet 401 | ⬜ |
 | A6 | 10 mots de passe faux → verrouillage 15 min | ⬜ |
 | A7 | OTP citoyen : request + verify (RETURN_OTP_DEV_CODE ou SMS réel) | ⬜ |
@@ -122,7 +122,7 @@ Mots de passe : valeurs `SEED_*_PASSWORD` du `.env` VPS (ou défauts dev si seed
 | # | Test | Statut |
 |---|---|---|
 | D1 | Message texte → bot reçoit (logs) + répond menu | ✅ |
-| D2 | Flux signalement complet via bot → `POST /signalements/bot` → visible dashboard | 🔄 enregistrement OK ; visibilité dashboard corrigée (bugs 9-10-11), re-test après redéploiement |
+| D2 | Flux signalement complet via bot → `POST /signalements/bot` → visible dashboard | ✅ (mairie + sentinelle voient le signalement WhatsApp, 12/06) |
 | D3 | HMAC : requête forgée sans signature → rejetée (logs) | ⬜ |
 | D4 | Webhook GET verify : token correct → challenge ; incorrect → Forbidden | ⬜ |
 
@@ -208,7 +208,8 @@ Mots de passe : valeurs `SEED_*_PASSWORD` du `.env` VPS (ou défauts dev si seed
 | 8 | 2026-06-11 | Dashboard inaccessible depuis le navigateur : NEXT_PUBLIC_API_URL baked = localhost:4000 (pointe vers la machine du visiteur, pas le VPS) | Bloquant F* | `./scripts/configure-ip.sh 187.124.34.136` + rebuild dashboard/mobile | (opération VPS) |
 | 9 | 2026-06-11 | Dashboard n'a AUCUNE page « Signalements » (juste un compteur dans StatsBar) | Bloquant D2/F | Création apps/dashboard/src/app/signalements/page.tsx (liste + filtre statut + validation/rejet) + lien dans le header | en cours de push |
 | 10 | 2026-06-11 | `GET /signalements` interdit aux SENTINELLES + autres opérateurs locaux (RBAC limité à ADMIN/PREFECTURE/MAIRIE) | Bloquant pour la sentinelle | RBAC étendu à SENTINELLE/COORDINATEUR/RADIO/HYDRO/GOUVERNORAT/PROTECTION_CIVILE/SUPERVISEUR_REGIONAL | en cours de push |
-| 11 | 2026-06-11 | Pas de scoping par zone : un signalement WhatsApp rattaché à la zone racine Matam n'est pas vu par un maire d'Ourossogui (sous-zone) | Bloquant visibilité dashboard | `visibleZoneIds` (ascendants+descendants) appliqué automatiquement aux rôles locaux ; zoneId injecté dans le JWT (payload + JwtStrategy.validate) | en cours de push |
+| 11 | 2026-06-11 | Pas de scoping par zone : un signalement WhatsApp rattaché à la zone racine Matam n'est pas vu par un maire d'Ourossogui (sous-zone) | Bloquant visibilité dashboard | ✅ RÉSOLU et confirmé sur le VPS (12/06) | déployé |
+| 12 | 2026-06-12 | Valider un signalement ne fait que changer son statut : il ne « remonte » jamais dans le flux des alertes en cours — le cursus s'arrête net après la vérification mairie | **Critique workflow** | La validation MAIRIE/PREFECTURE/ADMIN crée automatiquement une Alerte (titre = type + zone, niveau = gravité 1→JAUNE 2→ORANGE 3→ROUGE, GPS/photos repris, signalement lié via alertId, fanout notifications + WebSocket) | en cours de push |
 
 *(à compléter au fil des tests)*
 
