@@ -46,6 +46,7 @@ export default function DashboardPage() {
               + Nouvelle alerte
             </button>
           )}
+          <a href="/signalements" style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.85rem', textDecoration: 'none' }}>📋 Signalements</a>
           {roleLvl >= ROLE_LEVEL.COORDINATEUR && (
             <a href="/sentinelles" style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.85rem', textDecoration: 'none' }}>🔭 Sentinelles</a>
           )}

@@ -26,15 +26,28 @@ export class SignalementsController {
   @Get()
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN, Role.PREFECTURE, Role.MAIRIE)
-  @ApiOperation({ summary: 'Liste paginée des signalements' })
+  @Roles(
+    Role.SENTINELLE,
+    Role.COORDINATEUR,
+    Role.RADIO_COMMUNAUTAIRE,
+    Role.MAIRIE,
+    Role.HYDRO_METEO,
+    Role.PREFECTURE,
+    Role.GOUVERNORAT,
+    Role.PROTECTION_CIVILE,
+    Role.SUPERVISEUR_REGIONAL,
+    Role.ADMIN,
+    Role.SUPER_ADMIN,
+  )
+  @ApiOperation({ summary: 'Liste paginée des signalements (filtrée par zone selon le rôle)' })
   findAll(
+    @CurrentUser() caller: { id: string; role: Role; zoneId?: string | null },
     @Query('page') page?: number,
     @Query('limit') limit?: number,
     @Query('status') status?: SignalementStatus,
     @Query('zoneId') zoneId?: string,
   ) {
-    return this.signalements.findAll({ page, limit, status, zoneId });
+    return this.signalements.findAll({ page, limit, status, zoneId }, caller);
   }
 
   @Post()

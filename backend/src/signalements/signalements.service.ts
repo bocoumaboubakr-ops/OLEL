@@ -1,19 +1,62 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
-import { SignalementStatus } from '@prisma/client';
+import { Role, SignalementStatus } from '@prisma/client';
+
+// Rôles qui voient les signalements sans restriction territoriale
+const GLOBAL_ROLES: Role[] = [
+  Role.ADMIN,
+  Role.SUPER_ADMIN,
+  Role.PREFECTURE,
+  Role.GOUVERNORAT,
+  Role.PROTECTION_CIVILE,
+  Role.SUPERVISEUR_REGIONAL,
+];
 
 @Injectable()
 export class SignalementsService {
   constructor(private prisma: PrismaService) {}
 
-  async findAll(params: { page?: number; limit?: number; status?: SignalementStatus; zoneId?: string }) {
-    const page = Number(params.page) || 1;
-    const limit = Number(params.limit) || 20;
+  /**
+   * Zones visibles par un opérateur local : sa zone, tous ses ascendants
+   * (zone racine Matam) et tous ses descendants. Permet à une MAIRIE
+   * d'Ourossogui de voir un signalement créé via le bot WhatsApp dont le
+   * citoyen est rattaché à la zone racine (commune inconnue).
+   */
+  private async visibleZoneIds(zoneId: string): Promise<string[]> {
+    const ids = new Set<string>([zoneId]);
+    let cur = await this.prisma.zone.findUnique({
+      where: { id: zoneId }, select: { id: true, parentId: true },
+    });
+    while (cur?.parentId) {
+      ids.add(cur.parentId);
+      cur = await this.prisma.zone.findUnique({
+        where: { id: cur.parentId }, select: { id: true, parentId: true },
+      });
+    }
+    const children = await this.prisma.zone.findMany({
+      where: { parentId: { in: Array.from(ids) } }, select: { id: true },
+    });
+    children.forEach((z) => ids.add(z.id));
+    return Array.from(ids);
+  }
+
+  async findAll(
+    params: { page?: number; limit?: number; status?: SignalementStatus; zoneId?: string },
+    caller?: { role: Role; zoneId?: string | null },
+  ) {
+    const page = Math.max(1, Number(params.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(params.limit) || 20));
     const skip = (page - 1) * limit;
 
     const where: any = {};
     if (params.status) where.status = params.status;
-    if (params.zoneId) where.user = { zoneId: params.zoneId };
+
+    if (caller && !GLOBAL_ROLES.includes(caller.role) && caller.zoneId) {
+      const visible = await this.visibleZoneIds(caller.zoneId);
+      where.user = { zoneId: { in: visible } };
+    } else if (params.zoneId) {
+      where.user = { zoneId: params.zoneId };
+    }
 
     const [items, total] = await Promise.all([
       this.prisma.signalement.findMany({
@@ -21,7 +64,14 @@ export class SignalementsService {
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
-        include: { user: { select: { id: true, name: true, phone: true, zoneId: true } } },
+        include: {
+          user: {
+            select: {
+              id: true, name: true, phone: true, zoneId: true,
+              zone: { select: { name: true } },
+            },
+          },
+        },
       }),
       this.prisma.signalement.count({ where }),
     ]);

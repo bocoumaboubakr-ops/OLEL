@@ -3,7 +3,7 @@
 > **Fichier de contexte vivant** — mis à jour à chaque étape pour ne perdre aucune information.
 > **Objectif global** : tester TOUS les workflows et TOUTES les fonctionnalités du système, corriger ce qui doit l'être, et rendre OLEL le plus performant possible avant le pilote Matam.
 
-**Dernière mise à jour** : 2026-06-11 soir — bugs 6-7-8 trouvés par le test D2 et corrigés en code (DTO bot, alertes bot, dashboard URL). Re-déploiement VPS requis puis re-test D2.
+**Dernière mise à jour** : 2026-06-11 nuit — bugs 9-10-11 corrigés : page Signalements créée côté dashboard, RBAC ouvert à SENTINELLE/COORDINATEUR/HYDRO/RADIO/GOUVERNORAT/PROTECTION_CIVILE, scoping zone (ascendants+descendants) + zoneId injecté dans le JWT.
 
 ---
 
@@ -122,7 +122,7 @@ Mots de passe : valeurs `SEED_*_PASSWORD` du `.env` VPS (ou défauts dev si seed
 | # | Test | Statut |
 |---|---|---|
 | D1 | Message texte → bot reçoit (logs) + répond menu | ✅ |
-| D2 | Flux signalement complet via bot → `POST /signalements/bot` → visible dashboard | 🔄 conversation bot OK ; enregistrement corrigé (bug 6), re-test après redéploiement |
+| D2 | Flux signalement complet via bot → `POST /signalements/bot` → visible dashboard | 🔄 enregistrement OK ; visibilité dashboard corrigée (bugs 9-10-11), re-test après redéploiement |
 | D3 | HMAC : requête forgée sans signature → rejetée (logs) | ⬜ |
 | D4 | Webhook GET verify : token correct → challenge ; incorrect → Forbidden | ⬜ |
 
@@ -206,6 +206,9 @@ Mots de passe : valeurs `SEED_*_PASSWORD` du `.env` VPS (ou défauts dev si seed
 | 6 | 2026-06-11 | **POST /signalements/bot → 400** : le bot envoie phone+severity, le DTO les refuse (whitelist) → AUCUN signalement WhatsApp enregistré (incendie Ogo 16:04 et crue Soubalo 20:56 perdus) | **Critique** | DTO accepte phone (E.164) + severity (1-3) ; service attribue au vrai citoyen (création auto compte CITOYEN) ; migration colonne severity | en cours de push |
 | 7 | 2026-06-11 | Menu bot option 2 (alertes actives) → 401 : GET /alerts exige un JWT, la clé bot ne passe pas | Élevée | Nouveau endpoint GET /alerts-bot/active (BotApiKeyGuard) + bot mis à jour | en cours de push |
 | 8 | 2026-06-11 | Dashboard inaccessible depuis le navigateur : NEXT_PUBLIC_API_URL baked = localhost:4000 (pointe vers la machine du visiteur, pas le VPS) | Bloquant F* | `./scripts/configure-ip.sh 187.124.34.136` + rebuild dashboard/mobile | (opération VPS) |
+| 9 | 2026-06-11 | Dashboard n'a AUCUNE page « Signalements » (juste un compteur dans StatsBar) | Bloquant D2/F | Création apps/dashboard/src/app/signalements/page.tsx (liste + filtre statut + validation/rejet) + lien dans le header | en cours de push |
+| 10 | 2026-06-11 | `GET /signalements` interdit aux SENTINELLES + autres opérateurs locaux (RBAC limité à ADMIN/PREFECTURE/MAIRIE) | Bloquant pour la sentinelle | RBAC étendu à SENTINELLE/COORDINATEUR/RADIO/HYDRO/GOUVERNORAT/PROTECTION_CIVILE/SUPERVISEUR_REGIONAL | en cours de push |
+| 11 | 2026-06-11 | Pas de scoping par zone : un signalement WhatsApp rattaché à la zone racine Matam n'est pas vu par un maire d'Ourossogui (sous-zone) | Bloquant visibilité dashboard | `visibleZoneIds` (ascendants+descendants) appliqué automatiquement aux rôles locaux ; zoneId injecté dans le JWT (payload + JwtStrategy.validate) | en cours de push |
 
 *(à compléter au fil des tests)*
 

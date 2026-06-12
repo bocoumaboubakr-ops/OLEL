@@ -94,14 +94,14 @@ export class AuthService {
   }
 
   private issueTokens(user: User) {
-    const payload = { sub: user.id, phone: user.phone, role: user.role };
+    const payload = { sub: user.id, phone: user.phone, role: user.role, zoneId: user.zoneId };
     return {
       accessToken: this.jwt.sign(payload),
       refreshToken: this.jwt.sign(payload, {
         secret: this.cfg.get('JWT_REFRESH_SECRET'),
         expiresIn: '7d',
       }),
-      user: { id: user.id, name: user.name, role: user.role, phone: user.phone },
+      user: { id: user.id, name: user.name, role: user.role, phone: user.phone, zoneId: user.zoneId },
     };
   }
 

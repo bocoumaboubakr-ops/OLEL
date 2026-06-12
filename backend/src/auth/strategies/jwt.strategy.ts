@@ -18,6 +18,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     if (payload.mfa) {
       throw new UnauthorizedException('Authentification MFA incomplète');
     }
-    return { id: payload.sub, phone: payload.phone, role: payload.role };
+    return { id: payload.sub, phone: payload.phone, role: payload.role, zoneId: payload.zoneId };
   }
 }
