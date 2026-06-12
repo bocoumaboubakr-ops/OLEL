@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { AlertsService } from '../alerts/alerts.service';
 import { AlertLevel, Role, SignalementStatus } from '@prisma/client';
@@ -88,6 +88,7 @@ export class SignalementsService {
               zone: { select: { name: true } },
             },
           },
+          fieldVerifiedBy: { select: { id: true, name: true, phone: true } },
         },
       }),
       this.prisma.signalement.count({ where }),
@@ -153,12 +154,88 @@ export class SignalementsService {
     });
   }
 
+  /**
+   * Le cursus OLEL exige une vérification terrain par une SENTINELLE avant
+   * validation MAIRIE quand le signalement initial ne porte aucune preuve
+   * (pas de GPS ET pas de photo) — typique d'un signalement WhatsApp texte.
+   * Les rôles supérieurs (PREFECTURE et au-dessus) peuvent passer outre.
+   */
+  private needsFieldVerification(s: { latitude?: number | null; longitude?: number | null; mediaUrls: string[]; fieldVerifiedAt: Date | null }): boolean {
+    if (s.fieldVerifiedAt) return false;
+    const hasGps = s.latitude != null && s.longitude != null;
+    const hasMedia = (s.mediaUrls?.length ?? 0) > 0;
+    return !hasGps && !hasMedia;
+  }
+
+  /** Vérification terrain par une sentinelle/coordinateur (avec GPS obligatoire). */
+  async fieldVerify(
+    id: string,
+    dto: { latitude: number; longitude: number; mediaUrls?: string[]; notes?: string },
+    verifier: { id: string; role: Role; zoneId?: string | null },
+  ) {
+    const existing = await this.prisma.signalement.findUnique({
+      where: { id },
+      include: { user: { select: { zoneId: true } } },
+    });
+    if (!existing) throw new NotFoundException(`Signalement ${id} introuvable`);
+    if (existing.status !== SignalementStatus.PENDING) {
+      throw new BadRequestException('Le signalement n\'est plus en attente');
+    }
+    if (existing.fieldVerifiedAt) {
+      throw new BadRequestException('Vérification terrain déjà effectuée');
+    }
+    // Scoping : la sentinelle doit appartenir à la zone (arbre) du signalement
+    if (!GLOBAL_ROLES.includes(verifier.role) && verifier.zoneId && existing.user?.zoneId) {
+      const visible = await this.visibleZoneIds(verifier.zoneId);
+      if (!visible.includes(existing.user.zoneId)) {
+        throw new ForbiddenException('Hors de votre zone de couverture');
+      }
+    }
+
+    const [updated] = await this.prisma.$transaction([
+      this.prisma.signalement.update({
+        where: { id },
+        data: {
+          latitude: dto.latitude,
+          longitude: dto.longitude,
+          mediaUrls: dto.mediaUrls?.length ? [...existing.mediaUrls, ...dto.mediaUrls] : existing.mediaUrls,
+          fieldVerifiedAt: new Date(),
+          fieldVerifiedById: verifier.id,
+          fieldNotes: dto.notes,
+        },
+      }),
+      this.prisma.auditLog.create({
+        data: {
+          userId: verifier.id,
+          action: 'signalement.field_verified',
+          resource: 'signalement',
+          resourceId: id,
+          details: { latitude: dto.latitude, longitude: dto.longitude, photos: dto.mediaUrls?.length || 0 },
+        },
+      }),
+    ]);
+    return updated;
+  }
+
   async updateStatus(id: string, status: SignalementStatus, reviewerId: string, reviewerRole?: Role) {
     const existing = await this.prisma.signalement.findUnique({
       where: { id },
       include: { user: { select: { zoneId: true, zone: { select: { name: true } } } } },
     });
     if (!existing) throw new NotFoundException(`Signalement ${id} introuvable`);
+
+    // Garde du cursus : on ne valide pas en aveugle un signalement WhatsApp
+    // sans preuve. Seul PREFECTURE+ peut passer outre (cas exceptionnel).
+    const isLocalMairie = reviewerRole === Role.MAIRIE;
+    if (
+      status === SignalementStatus.VALIDATED &&
+      isLocalMairie &&
+      this.needsFieldVerification(existing)
+    ) {
+      throw new BadRequestException(
+        'Vérification terrain par une sentinelle requise (signalement sans GPS ni photo). Demandez à une sentinelle de confirmer sur place avant validation.',
+      );
+    }
 
     const [updated] = await this.prisma.$transaction([
       this.prisma.signalement.update({ where: { id }, data: { status } }),

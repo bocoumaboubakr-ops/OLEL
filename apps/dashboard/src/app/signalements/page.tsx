@@ -17,6 +17,9 @@ interface Signalement {
   longitude?: number | null;
   createdAt: string;
   mediaUrls: string[];
+  fieldVerifiedAt?: string | null;
+  fieldVerifiedBy?: { id: string; name: string; phone: string } | null;
+  fieldNotes?: string | null;
   user?: { id: string; name: string; phone: string; zone?: { name: string } | null };
 }
 
@@ -96,8 +99,34 @@ export default function SignalementsPage() {
     }
   };
 
+  const fieldVerify = async (id: string) => {
+    if (!navigator.geolocation) { alert('GPS non disponible sur cet appareil'); return; }
+    const notes = prompt('Notes terrain (ampleur, victimes, accès) — optionnel :') || undefined;
+    const token = localStorage.getItem('olel_token');
+    setActing(id);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          await axios.patch(`${API}/signalements/${id}/field-verify`, {
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
+            notes,
+          }, { headers: { Authorization: `Bearer ${token}` } });
+          await fetchItems();
+        } catch (e: any) {
+          alert(e.response?.data?.message || 'Erreur vérification');
+        } finally {
+          setActing(null);
+        }
+      },
+      (err) => { setActing(null); alert(`GPS impossible : ${err.message}`); },
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
+  };
+
   if (!initialized || !user) return null;
-  const canAct = ['MAIRIE', 'PREFECTURE', 'ADMIN', 'SUPER_ADMIN'].includes(user.role);
+  const canValidate = ['MAIRIE', 'PREFECTURE', 'ADMIN', 'SUPER_ADMIN', 'GOUVERNORAT', 'PROTECTION_CIVILE', 'SUPERVISEUR_REGIONAL'].includes(user.role);
+  const canFieldVerify = ['SENTINELLE', 'COORDINATEUR'].includes(user.role) || canValidate;
 
   return (
     <div style={{ minHeight: '100vh', background: '#f1f5f9' }}>
@@ -162,18 +191,48 @@ export default function SignalementsPage() {
                   </span>
                 </div>
 
-                {canAct && s.status === 'PENDING' && (
-                  <div style={{ marginTop: 12, display: 'flex', gap: 8, borderTop: '1px solid #f1f5f9', paddingTop: 10 }}>
-                    <button onClick={() => updateStatus(s.id, 'VALIDATED')} disabled={acting === s.id}
-                      style={{ background: '#16a34a', color: 'white', border: 'none', padding: '6px 14px', borderRadius: 6, cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600 }}>
-                      ✅ Valider
-                    </button>
-                    <button onClick={() => updateStatus(s.id, 'REJECTED')} disabled={acting === s.id}
-                      style={{ background: '#dc2626', color: 'white', border: 'none', padding: '6px 14px', borderRadius: 6, cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600 }}>
-                      ❌ Rejeter
-                    </button>
-                  </div>
-                )}
+                {(() => {
+                  const needsField = !s.fieldVerifiedAt && !(s.latitude && s.longitude) && (s.mediaUrls?.length ?? 0) === 0;
+                  return (
+                    <>
+                      {s.fieldVerifiedAt && (
+                        <div style={{ marginTop: 10, padding: '8px 12px', background: '#dcfce7', color: '#166534', borderRadius: 6, fontSize: '0.82rem' }}>
+                          ✔️ Vérifié sur place par <strong>{s.fieldVerifiedBy?.name || 'sentinelle'}</strong> le {new Date(s.fieldVerifiedAt).toLocaleString('fr-FR')}
+                          {s.fieldNotes && <div style={{ marginTop: 4, fontStyle: 'italic' }}>« {s.fieldNotes} »</div>}
+                        </div>
+                      )}
+                      {needsField && s.status === 'PENDING' && (
+                        <div style={{ marginTop: 10, padding: '8px 12px', background: '#fef3c7', color: '#92400e', borderRadius: 6, fontSize: '0.82rem' }}>
+                          ⚠️ Aucun GPS ni photo — vérification terrain par une sentinelle requise avant validation
+                        </div>
+                      )}
+                      {s.status === 'PENDING' && (
+                        <div style={{ marginTop: 10, display: 'flex', gap: 8, borderTop: '1px solid #f1f5f9', paddingTop: 10, flexWrap: 'wrap' }}>
+                          {canFieldVerify && !s.fieldVerifiedAt && (
+                            <button onClick={() => fieldVerify(s.id)} disabled={acting === s.id}
+                              style={{ background: '#0ea5e9', color: 'white', border: 'none', padding: '6px 14px', borderRadius: 6, cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600 }}>
+                              🔭 Vérifier sur place (GPS)
+                            </button>
+                          )}
+                          {canValidate && (
+                            <button onClick={() => updateStatus(s.id, 'VALIDATED')}
+                              disabled={acting === s.id || (user.role === 'MAIRIE' && needsField)}
+                              title={user.role === 'MAIRIE' && needsField ? 'Vérification sentinelle requise' : ''}
+                              style={{ background: user.role === 'MAIRIE' && needsField ? '#94a3b8' : '#16a34a', color: 'white', border: 'none', padding: '6px 14px', borderRadius: 6, cursor: user.role === 'MAIRIE' && needsField ? 'not-allowed' : 'pointer', fontSize: '0.85rem', fontWeight: 600 }}>
+                              ✅ Valider
+                            </button>
+                          )}
+                          {canValidate && (
+                            <button onClick={() => updateStatus(s.id, 'REJECTED')} disabled={acting === s.id}
+                              style={{ background: '#dc2626', color: 'white', border: 'none', padding: '6px 14px', borderRadius: 6, cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600 }}>
+                              ❌ Rejeter
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             );
           })}

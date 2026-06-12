@@ -3,7 +3,7 @@
 > **Fichier de contexte vivant** — mis à jour à chaque étape pour ne perdre aucune information.
 > **Objectif global** : tester TOUS les workflows et TOUTES les fonctionnalités du système, corriger ce qui doit l'être, et rendre OLEL le plus performant possible avant le pilote Matam.
 
-**Dernière mise à jour** : 2026-06-12 — D2 visibilité ✅ confirmée (mairie + sentinelle voient le signalement). Bug 12 corrigé : la validation MAIRIE transforme désormais le signalement en ALERTE (entre dans le flux en cours + feed + carte). Redéploiement backend requis.
+**Dernière mise à jour** : 2026-06-12 — Bug 13 : la mairie pouvait valider en aveugle un signalement WhatsApp sans GPS ni photo. Désormais une vérification terrain sentinelle (PATCH /signalements/:id/field-verify avec GPS + notes) est obligatoire avant validation MAIRIE.
 
 ---
 

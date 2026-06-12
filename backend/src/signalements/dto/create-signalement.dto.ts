@@ -102,3 +102,27 @@ export class CreateSignalementBotDto {
   @ArrayMaxSize(10)
   mediaUrls?: string[];
 }
+
+/** Vérification terrain par une SENTINELLE (avant validation MAIRIE). */
+export class FieldVerifySignalementDto {
+  @ApiProperty({ description: 'Latitude relevée par la sentinelle sur place' })
+  @IsNumber()
+  latitude: number;
+
+  @ApiProperty({ description: 'Longitude relevée par la sentinelle sur place' })
+  @IsNumber()
+  longitude: number;
+
+  @ApiPropertyOptional({ description: 'Photo(s) prise(s) sur place (URLs)' })
+  @IsOptional()
+  @IsArray()
+  @IsUrl({}, { each: true })
+  @ArrayMaxSize(10)
+  mediaUrls?: string[];
+
+  @ApiPropertyOptional({ description: 'Notes terrain : ampleur, victimes, accessibilité' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  notes?: string;
+}

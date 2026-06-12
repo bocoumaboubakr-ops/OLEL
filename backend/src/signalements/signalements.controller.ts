@@ -10,7 +10,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiHeader } from '@nestjs/swagger';
 import { SignalementsService } from './signalements.service';
-import { CreateSignalementDto, CreateSignalementBotDto } from './dto/create-signalement.dto';
+import { CreateSignalementDto, CreateSignalementBotDto, FieldVerifySignalementDto } from './dto/create-signalement.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -64,6 +64,24 @@ export class SignalementsController {
   @ApiOperation({ summary: 'Créer un signalement via le bot (auth par header)' })
   createFromBot(@Body() dto: CreateSignalementBotDto) {
     return this.signalements.createFromBot(dto);
+  }
+
+  @Patch(':id/field-verify')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(
+    Role.SENTINELLE, Role.COORDINATEUR,
+    Role.MAIRIE, Role.PREFECTURE, Role.GOUVERNORAT,
+    Role.PROTECTION_CIVILE, Role.SUPERVISEUR_REGIONAL,
+    Role.ADMIN, Role.SUPER_ADMIN,
+  )
+  @ApiOperation({ summary: 'Vérification terrain par une sentinelle (GPS + photo + notes)' })
+  fieldVerify(
+    @Param('id') id: string,
+    @Body() dto: FieldVerifySignalementDto,
+    @CurrentUser() user: { id: string; role: Role; zoneId?: string | null },
+  ) {
+    return this.signalements.fieldVerify(id, dto, user);
   }
 
   @Patch(':id/status')
