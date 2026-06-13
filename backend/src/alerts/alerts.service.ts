@@ -11,9 +11,12 @@ import {
 } from '@prisma/client';
 import { AlertsGateway } from './alerts.gateway';
 import {
-  WORKFLOW, CRITICAL_LEVELS, URGENCE_TYPES, LEVEL_CONFIG,
-  canAdvance, canBroadcast, canClose,
-  criticalCategory, protectionCivileEntryStep,
+  LEVEL_CONFIG, CRITICAL_LEVELS,
+  canBroadcast, canClose,
+  criticalCategory,
+  protectionCivileEntryStep, normalizePhase, nextStepFor, canAdvanceAt,
+  mayEmergencyBypass, needsConfirmation, PHASE,
+  AUTO_ESCALATION_MINUTES,
 } from './alert-workflow';
 import { AuditService } from '../audit/audit.service';
 import { randomUUID } from 'crypto';
@@ -270,207 +273,229 @@ export class AlertsService {
     },
   ) {
     const alert = await this.findOne(alertId);
-    const def = WORKFLOW[alert.currentStep];
 
     const TERMINAL: string[] = [
-      AlertStatus.REJECTED, AlertStatus.CLOSED,
-      AlertStatus.CANCELLED, AlertStatus.BROADCAST, AlertStatus.BROADCASTING,
+      AlertStatus.REJECTED, AlertStatus.CLOSED, AlertStatus.CANCELLED,
+      AlertStatus.BROADCAST, AlertStatus.BROADCASTING,
     ];
     if (TERMINAL.includes(alert.status as string)) {
-      throw new ForbiddenException('Alerte déjà clôturée ou diffusée');
+      throw new ForbiddenException('Alerte deja cloturee ou diffusee');
     }
-    if (alert.currentStep === AlertStep.BROADCAST || alert.currentStep === AlertStep.CLOSED) {
-      throw new ForbiddenException('Étape terminale — utilisez les endpoints dédiés');
+    if (alert.currentStep === PHASE.DIFFUSEE || alert.currentStep === PHASE.CLOTUREE) {
+      throw new ForbiddenException('Etape terminale');
     }
-    // Étape PREFECTURE : pour les niveaux < ROUGE_FONCE, c'est l'étape finale avant
-    // diffusion (action Diffuser). Pour ROUGE_FONCE (crise majeure), la gouvernance
-    // doit encore valider → on autorise un advance par GOUVERNORAT+.
-    if (alert.currentStep === AlertStep.PREFECTURE && body.action !== ValidationAction.REJECTED) {
-      if (alert.alertLevel !== AlertLevel.ROUGE_FONCE) {
-        throw new ForbiddenException('Alerte validée préfecture — utilisez l\'action Diffuser');
-      }
-      if (!hasLevelMin(validator.role, Role.GOUVERNORAT)) {
-        throw new ForbiddenException('Crise majeure : seule la gouvernance peut valider cette étape');
-      }
+    if (validator.role === Role.RADIO_COMMUNAUTAIRE || validator.role === Role.CITOYEN) {
+      throw new ForbiddenException('Role non habilite a valider une alerte');
     }
 
-    // RADIO_COMMUNAUTAIRE ne peut jamais valider
-    if (validator.role === Role.RADIO_COMMUNAUTAIRE) {
-      throw new ForbiddenException('Les radios communautaires ne peuvent pas valider une alerte');
+    const effectiveLevel = (body.alertLevel || alert.alertLevel) as AlertLevel;
+
+    if (!canAdvanceAt(validator.role, alert.currentStep, effectiveLevel) && body.action !== ValidationAction.REJECTED) {
+      throw new ForbiddenException(
+        `Role ${validator.role} insuffisant pour faire avancer cette alerte (etape ${alert.currentStep} / niveau ${effectiveLevel})`,
+      );
     }
 
-    if (!canAdvance(validator.role, alert.currentStep)) {
-      throw new ForbiddenException(`Rôle ${validator.role} insuffisant pour l'étape ${alert.currentStep}`);
-    }
-
-    // Règles métier SIGNALEMENT : GPS + photo + gravité
-    if (alert.currentStep === AlertStep.SIGNALEMENT && body.action !== ValidationAction.REJECTED) {
+    const phase = normalizePhase(alert.currentStep);
+    if (phase === PHASE.RECEPTION && body.action !== ValidationAction.REJECTED) {
       if (body.latitude == null || body.longitude == null) {
         throw new BadRequestException('Position GPS obligatoire');
       }
-      if (!body.photoUrl) {
+      if (!body.photoUrl && !(alert.mediaUrls && alert.mediaUrls.length)) {
         throw new BadRequestException('Photo de preuve obligatoire');
       }
       if (body.gravity == null || body.gravity < 0 || body.gravity > 3) {
-        throw new BadRequestException('Niveau de gravité (0-3) obligatoire');
+        throw new BadRequestException('Niveau de gravite (0-3) obligatoire');
       }
     }
 
-    // Auto-escalade URGENCE : gravité 3 + type critique
-    const isUrgence =
-      alert.currentStep === AlertStep.SIGNALEMENT &&
-      body.action !== ValidationAction.REJECTED &&
-      (body.gravity === 3 || alert.severity >= 3) &&
-      URGENCE_TYPES.includes(alert.type as string);
-
-    // Promotion du niveau par le coordinateur/mairie si fourni
-    const newLevel = body.alertLevel && body.alertLevel !== alert.alertLevel
-      ? body.alertLevel
-      : (alert.alertLevel as AlertLevel);
-
     let alertData: any = {};
+    let willDiffuse = false;
+
     if (body.action === ValidationAction.REJECTED) {
       alertData = { status: AlertStatus.REJECTED, resolvedAt: new Date() };
-    } else if (isUrgence) {
-      alertData = { currentStep: AlertStep.PREFECTURE, status: AlertStatus.VALIDATED };
-      if (body.gravity != null) alertData.severity = body.gravity;
-    } else if (body.action === ValidationAction.ESCALATED) {
-      alertData = { currentStep: AlertStep.PREFECTURE, status: AlertStatus.VALIDATED };
-      if (body.gravity != null) alertData.severity = Math.max(1, body.gravity);
     } else {
-      // Cursus normal : MAIRIE→PREFECTURE/VALIDATED ; PREFECTURE→GOUVERNANCE/VALIDATED (ROUGE_FONCE)
-      alertData = { currentStep: def.next, status: def.nextStatus };
+      const next = nextStepFor(alert.currentStep, effectiveLevel);
+      if (!next) throw new ForbiddenException('Aucune transition possible');
+      alertData.currentStep = next;
+      alertData.status = AlertStatus.VALIDATED;
+      if (next === PHASE.VERIFIEE || phase === PHASE.RECEPTION) alertData.verifiedAt = new Date();
       if (body.gravity != null) alertData.severity = Math.max(1, body.gravity);
+      willDiffuse = next === PHASE.DIFFUSEE;
     }
 
-    if (newLevel !== alert.alertLevel) alertData.alertLevel = newLevel;
+    if (effectiveLevel !== alert.alertLevel) alertData.alertLevel = effectiveLevel;
 
     const [, updated] = await this.prisma.$transaction([
       this.prisma.validation.create({
         data: {
-          alertId,
-          validatorId: validator.id,
+          alertId, validatorId: validator.id,
           approved: body.action !== ValidationAction.REJECTED,
-          action: body.action,
-          step: alert.currentStep,
-          comment: body.comment,
-          photoUrl: body.photoUrl,
-          latitude: body.latitude,
-          longitude: body.longitude,
-          gravity: body.gravity,
+          action: body.action, step: alert.currentStep,
+          comment: body.comment, photoUrl: body.photoUrl,
+          latitude: body.latitude, longitude: body.longitude, gravity: body.gravity,
         },
       }),
       this.prisma.alert.update({
-        where: { id: alertId },
-        data: alertData,
+        where: { id: alertId }, data: alertData,
         include: { zone: { select: { name: true } } },
       }),
       this.prisma.auditLog.create({
         data: {
           userId: validator.id,
           action: `alert.${body.action.toLowerCase()}`,
-          resource: 'alert',
-          resourceId: alertId,
-          details: { step: alert.currentStep, action: body.action, gravity: body.gravity, alertLevel: newLevel },
+          resource: 'alert', resourceId: alertId,
+          details: { step: alert.currentStep, action: body.action, gravity: body.gravity, alertLevel: effectiveLevel },
         },
       }),
     ]);
 
     this.safeBroadcast(updated);
+
+    const cfg = LEVEL_CONFIG[effectiveLevel];
+    const updatedPhase = normalizePhase(updated.currentStep);
+    if (
+      body.action !== ValidationAction.REJECTED &&
+      cfg.notifyCitizensFromStep === PHASE.VERIFIEE &&
+      updatedPhase === PHASE.VERIFIEE &&
+      !updated.citizensNotifiedAt
+    ) {
+      await this.enqueueFanout({ alertId, isBroadcast: true, preview: true });
+      await this.prisma.alert.update({ where: { id: alertId }, data: { citizensNotifiedAt: new Date() } });
+    }
+
+    if (willDiffuse) await this.autoBroadcast(updated.id, validator);
     return updated;
+  }
+
+  /** Diffusion auto en bout de cursus (advance qui aboutit a DIFFUSEE). */
+  private async autoBroadcast(alertId: string, validator: { id: string; role: Role }) {
+    const alert = await this.prisma.alert.findUnique({ where: { id: alertId } });
+    if (!alert || alert.broadcastAt) return;
+    const cfg = LEVEL_CONFIG[alert.alertLevel as AlertLevel];
+    const channels = cfg.channels;
+    const message = `[OLEL] ${cfg.label.toUpperCase()} - ${alert.title}\n${alert.description}` +
+      (alert.latitude && alert.longitude ? `\nPosition : ${alert.latitude.toFixed(4)},${alert.longitude.toFixed(4)}` : '');
+    const broadcast = await this.prisma.broadcast.create({
+      data: { alertId, authorId: validator.id, message, targetZoneIds: [alert.zoneId], channels, idempotencyKey: randomUUID() },
+    });
+    await this.prisma.alert.update({
+      where: { id: alertId },
+      data: { status: AlertStatus.BROADCAST, currentStep: PHASE.DIFFUSEE, broadcastAt: new Date(), criticalValidated: true },
+    });
+    await this.enqueueFanout({ alertId, isBroadcast: true, broadcastId: broadcast.id, channels });
+    this.audit.log({
+      userId: validator.id, action: 'alert.broadcast_auto', resource: 'alert', resourceId: alertId,
+      details: { trigger: 'cursus_complete', channels },
+    });
+  }
+
+  /** Bypass d'urgence MAIRIE+ : court-circuit vers DIFFUSION. */
+  async emergencyBypass(alertId: string, user: { id: string; role: Role }, body: { justification: string }) {
+    if (!mayEmergencyBypass(user.role)) {
+      throw new ForbiddenException("Diffusion d'urgence reservee a MAIRIE ou superieur");
+    }
+    if (!body.justification || body.justification.trim().length < 10) {
+      throw new BadRequestException("Justification (>= 10 caracteres) obligatoire");
+    }
+    const alert = await this.findOne(alertId);
+    if (alert.broadcastAt) throw new ForbiddenException('Alerte deja diffusee');
+    const cfg = LEVEL_CONFIG[alert.alertLevel as AlertLevel];
+    const channels = cfg.channels;
+    const message = `[OLEL] ${cfg.label.toUpperCase()} (URGENCE) - ${alert.title}\n${alert.description}` +
+      (alert.latitude && alert.longitude ? `\nPosition : ${alert.latitude.toFixed(4)},${alert.longitude.toFixed(4)}` : '');
+    const broadcast = await this.prisma.broadcast.create({
+      data: { alertId, authorId: user.id, message, targetZoneIds: [alert.zoneId], channels, idempotencyKey: randomUUID() },
+    });
+    const updated = await this.prisma.alert.update({
+      where: { id: alertId },
+      data: {
+        status: AlertStatus.BROADCAST, currentStep: PHASE.DIFFUSEE,
+        broadcastAt: new Date(), verifiedAt: new Date(),
+        emergencyBypass: true, bypassJustification: body.justification,
+        bypassById: user.id, criticalValidated: true,
+      },
+      include: { zone: { select: { name: true } } },
+    });
+    await this.enqueueFanout({ alertId, isBroadcast: true, broadcastId: broadcast.id, channels });
+    this.safeBroadcast(updated);
+    this.audit.log({
+      userId: user.id, action: 'alert.emergency_bypass', resource: 'alert', resourceId: alertId,
+      details: { justification: body.justification, channels, role: user.role },
+    });
+    return updated;
+  }
+
+  /** Scheduler : auto-diffusion des ROUGE/ROUGE_FONCE non confirmees a temps. */
+  async autoEscalateStale(): Promise<number> {
+    const cutoff = new Date(Date.now() - AUTO_ESCALATION_MINUTES * 60 * 1000);
+    const stale = await this.prisma.alert.findMany({
+      where: {
+        currentStep: PHASE.VERIFIEE,
+        alertLevel: { in: [AlertLevel.ROUGE, AlertLevel.ROUGE_FONCE] },
+        broadcastAt: null,
+        verifiedAt: { lt: cutoff },
+      },
+    });
+    for (const a of stale) {
+      const cfg = LEVEL_CONFIG[a.alertLevel as AlertLevel];
+      const broadcast = await this.prisma.broadcast.create({
+        data: {
+          alertId: a.id, authorId: a.createdById,
+          message: `[OLEL] ${cfg.label.toUpperCase()} (non confirmee par l'autorite - auto-diffusion ${AUTO_ESCALATION_MINUTES} min) - ${a.title}\n${a.description}`,
+          targetZoneIds: [a.zoneId], channels: cfg.channels, idempotencyKey: randomUUID(),
+        },
+      });
+      await this.prisma.alert.update({
+        where: { id: a.id },
+        data: { status: AlertStatus.BROADCAST, currentStep: PHASE.DIFFUSEE, broadcastAt: new Date(), autoEscalated: true },
+      });
+      await this.enqueueFanout({ alertId: a.id, isBroadcast: true, broadcastId: broadcast.id, channels: cfg.channels });
+      this.audit.log({
+        userId: a.createdById, action: 'alert.auto_escalated', resource: 'alert', resourceId: a.id,
+        details: { reason: `non confirmee apres ${AUTO_ESCALATION_MINUTES} min`, level: a.alertLevel },
+      });
+    }
+    if (stale.length) this.logger.warn(`Auto-escalade : ${stale.length} alerte(s) diffusee(s) faute de confirmation`);
+    return stale.length;
   }
 
   async broadcast(
     alertId: string,
     user: { id: string; role: Role },
-    dto: { message: string; targetZoneIds?: string[]; channels?: string[]; idempotencyKey?: string },
+    dto: { message?: string; targetZoneIds?: string[]; channels?: string[]; idempotencyKey?: string },
   ) {
     const alert = await this.findOne(alertId);
-
     if (!canBroadcast(user.role)) {
-      throw new ForbiddenException('Seule la préfecture (ou plus) peut diffuser');
+      throw new ForbiddenException('Diffusion reservee a MAIRIE ou superieur');
     }
-    if (
-      (alert.currentStep !== AlertStep.PREFECTURE && alert.currentStep !== AlertStep.GOUVERNANCE) ||
-      alert.status !== AlertStatus.VALIDATED
-    ) {
-      throw new ForbiddenException(
-        `Diffusion impossible : étape ${alert.currentStep} / statut ${alert.status}`,
-      );
+    if (alert.broadcastAt) throw new ForbiddenException('Alerte deja diffusee');
+    const phase = normalizePhase(alert.currentStep);
+    const needsConf = needsConfirmation(alert.alertLevel as AlertLevel);
+    if (phase === PHASE.RECEPTION) {
+      throw new ForbiddenException('Alerte non verifiee - passez par /advance');
     }
-    if (alert.requiresMedicalReview) {
-      throw new ForbiddenException('Validation médicale requise avant diffusion');
-    }
-    if (alert.requiresConsent && !alert.consentObtained) {
-      throw new ForbiddenException('Consentement requis avant diffusion');
+    if (needsConf && phase !== PHASE.CONFIRMEE && !alert.emergencyBypass) {
+      throw new ForbiddenException('Niveau ROUGE/ROUGE_FONCE : confirmation autorite requise');
     }
 
-    // Niveau ROUGE_FONCE : diffusion réservée au Gouvernorat ET après validation gouvernance
-    if (alert.alertLevel === AlertLevel.ROUGE_FONCE) {
-      if (!hasLevelMin(user.role, Role.GOUVERNORAT)) {
-        throw new ForbiddenException('Niveau CRISE MAJEURE : diffusion réservée au Gouvernorat');
-      }
-      if (alert.currentStep !== AlertStep.GOUVERNANCE) {
-        throw new ForbiddenException('Crise majeure : validation gouvernance requise avant diffusion');
-      }
-    }
-
-    // Blocage strict multi-validation pour ORANGE+
-    if (CRITICAL_LEVELS.includes(alert.alertLevel as AlertLevel)) {
-      const cvs = await this.prisma.alertCriticalValidation.findMany({ where: { alertId } });
-      const hasSentinelle = cvs.some(v => v.validatorCategory === CriticalValidatorCategory.SENTINELLE_CATEGORY);
-      const hasLocal      = cvs.some(v => v.validatorCategory === CriticalValidatorCategory.AUTORITE_LOCALE);
-      const hasAdmin      = cvs.some(v => v.validatorCategory === CriticalValidatorCategory.AUTORITE_ADMIN);
-      if (!hasSentinelle || !hasLocal || !hasAdmin) {
-        const missing: string[] = [];
-        if (!hasSentinelle) missing.push('1 Sentinelle ou Coordinateur');
-        if (!hasLocal)      missing.push('1 Mairie ou Préfecture');
-        if (!hasAdmin)      missing.push('1 Gouvernorat, Protection Civile ou Superviseur');
-        throw new ForbiddenException(
-          `Alerte ${alert.alertLevel} — validations critiques manquantes : ${missing.join(' + ')}`,
-        );
-      }
-    }
-
-    const idempotencyKey = dto.idempotencyKey || randomUUID();
-    const levelCfg = LEVEL_CONFIG[alert.alertLevel as AlertLevel];
-    const channels = dto.channels || levelCfg.channels;
+    const cfg = LEVEL_CONFIG[alert.alertLevel as AlertLevel];
+    const channels = dto.channels || cfg.channels;
     const targetZoneIds = dto.targetZoneIds || [alert.zoneId];
+    const message = dto.message || `[OLEL] ${cfg.label.toUpperCase()} - ${alert.title}\n${alert.description}`;
 
-    // Idempotency : update conditionnel sur broadcastAt IS NULL
-    const { count } = await this.prisma.alert.updateMany({
-      where: { id: alertId, broadcastAt: null },
-      data: { status: AlertStatus.BROADCAST, currentStep: AlertStep.BROADCAST, broadcastAt: new Date(), criticalValidated: true },
-    });
-    if (count === 0) {
-      throw new ForbiddenException('Alerte déjà diffusée — opération idempotente ignorée');
-    }
-
-    // Enregistrement de la diffusion enrichie
     const broadcastRecord = await this.prisma.broadcast.create({
-      data: {
-        alertId,
-        authorId: user.id,
-        message: dto.message,
-        targetZoneIds,
-        channels,
-        idempotencyKey,
-      },
+      data: { alertId, authorId: user.id, message, targetZoneIds, channels, idempotencyKey: dto.idempotencyKey || randomUUID() },
     });
-
-    await this.enqueueFanout({ alertId, isBroadcast: true, broadcastId: broadcastRecord.id, channels });
-
-    const updated = await this.prisma.alert.findUnique({
+    const updated = await this.prisma.alert.update({
       where: { id: alertId },
+      data: { status: AlertStatus.BROADCAST, currentStep: PHASE.DIFFUSEE, broadcastAt: new Date(), criticalValidated: true },
       include: { zone: { select: { name: true } } },
     });
-
+    await this.enqueueFanout({ alertId, isBroadcast: true, broadcastId: broadcastRecord.id, channels });
     this.safeBroadcast(updated);
     this.audit.log({
-      userId: user.id,
-      action: 'alert.broadcast',
-      resource: 'alert',
-      resourceId: alertId,
+      userId: user.id, action: 'alert.broadcast', resource: 'alert', resourceId: alertId,
       details: { alertLevel: alert.alertLevel, channels, targetZoneIds },
     });
     return { alert: updated, broadcast: broadcastRecord };

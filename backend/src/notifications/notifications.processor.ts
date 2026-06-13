@@ -30,6 +30,21 @@ export class NotificationsProcessor {
    * - isBroadcast=false (création signalement) → notifie UNIQUEMENT les sentinelles/opérateurs de la zone
    * - isBroadcast=true  (diffusion préfecture) → notifie TOUS les habitants actifs de la zone
    */
+  /** Etend une zone vers son arbre complet : ascendants + zone + descendants. */
+  private async expandZoneTree(zoneId: string): Promise<string[]> {
+    const ids = new Set<string>([zoneId]);
+    let cur = await this.prisma.zone.findUnique({ where: { id: zoneId }, select: { id: true, parentId: true } });
+    while (cur?.parentId) {
+      ids.add(cur.parentId);
+      cur = await this.prisma.zone.findUnique({ where: { id: cur.parentId }, select: { id: true, parentId: true } });
+    }
+    const children = await this.prisma.zone.findMany({
+      where: { parentId: { in: Array.from(ids) } }, select: { id: true },
+    });
+    children.forEach((z) => ids.add(z.id));
+    return Array.from(ids);
+  }
+
   @Process('fanout')
   async handleFanout(job: Job<{ alertId: string; isBroadcast?: boolean; broadcastId?: string }>) {
     const { alertId, isBroadcast = false, broadcastId } = job.data;
@@ -40,19 +55,30 @@ export class NotificationsProcessor {
     });
     if (!alert) return;
 
-    const where: any = { zoneId: alert.zoneId, isActive: true };
+    // Scoping zone arborescent : on englobe l'arbre (ascendants + descendants)
+    // pour qu'un citoyen rattache a la zone racine Matam recoive aussi les
+    // alertes des sous-zones, et vice-versa.
+    const zoneIds = await this.expandZoneTree(alert.zoneId);
+
+    const where: any = { zoneId: { in: zoneIds }, isActive: true };
     if (!isBroadcast) {
-      // Notification interne : seulement les opérateurs pour valider
+      // Notification interne : seulement les operateurs pour valider/agir
       where.role = { in: OPERATOR_ROLES };
     } else {
-      // RGPD : exclure les utilisateurs sans consentement explicite
-      where.consents = { some: { termsAccepted: true } };
+      // RGPD non bloquant : on EXCLUT les users qui ont expressement opte out
+      // (au lieu d'exiger un consent explicite, ce qui bloquait tout le monde
+      //  faute d'opt-in). Cadre legal senegalais : alerte de securite publique.
+      where.OR = [
+        { consents: { none: {} } },
+        { consents: { none: { optedOut: true } } },
+      ];
     }
 
     const users = await this.prisma.user.findMany({
       where,
       select: { id: true, phone: true, name: true, role: true },
     });
+    this.logger.log(`Fanout ${isBroadcast ? 'broadcast' : 'interne'} : ${users.length} destinataire(s) dans ${zoneIds.length} zone(s)`);
 
     // Préfixe officiel selon le niveau d'alerte (BLEU → ROUGE_FONCE)
     const levelPrefix: Record<string, string> = {

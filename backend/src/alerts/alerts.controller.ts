@@ -90,10 +90,17 @@ export class AlertsController {
   }
 
   @Post(':id/broadcast')
-  @Roles(Role.PREFECTURE, Role.GOUVERNORAT, Role.PROTECTION_CIVILE, Role.SUPERVISEUR_REGIONAL, Role.ADMIN, Role.SUPER_ADMIN)
+  @Roles(Role.MAIRIE, Role.PREFECTURE, Role.GOUVERNORAT, Role.PROTECTION_CIVILE, Role.SUPERVISEUR_REGIONAL, Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({ summary: 'Diffuser une alerte validée (multi-canal)' })
   broadcast(@Param('id') id: string, @Body() dto: BroadcastAlertDto, @CurrentUser() user: { id: string; role: Role }) {
     return this.alerts.broadcast(id, user, dto);
+  }
+
+  @Post(':id/emergency-bypass')
+  @Roles(Role.MAIRIE, Role.PREFECTURE, Role.GOUVERNORAT, Role.PROTECTION_CIVILE, Role.SUPERVISEUR_REGIONAL, Role.ADMIN, Role.SUPER_ADMIN)
+  @ApiOperation({ summary: "Diffusion d'urgence (court-circuit cursus, justification obligatoire)" })
+  emergencyBypass(@Param('id') id: string, @Body() body: { justification: string }, @CurrentUser() user: { id: string; role: Role }) {
+    return this.alerts.emergencyBypass(id, user, body);
   }
 
   @Post(':id/close')

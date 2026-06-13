@@ -39,6 +39,10 @@ describe('NotificationsProcessor', () => {
             alert: { findUnique: jest.fn() },
             user: { findMany: jest.fn() },
             notificationLog: { create: jest.fn() },
+            zone: {
+              findUnique: jest.fn().mockResolvedValue({ id: 'zone-1', parentId: null }),
+              findMany: jest.fn().mockResolvedValue([]),
+            },
           },
         },
         {

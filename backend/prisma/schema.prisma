@@ -143,6 +143,7 @@ model User {
   criticalValidations      AlertCriticalValidation[] @relation("CriticalValidations")
   authoredBroadcasts       Broadcast[]               @relation("BroadcastAuthor")
   fieldVerifiedSignalements Signalement[]            @relation("FieldVerifications")
+  alertsBypassed            Alert[]                   @relation("AlertBypassBy")
 
   @@index([phone])
   @@index([zoneId])
@@ -206,6 +207,14 @@ model Alert {
   criticalValidations  AlertCriticalValidation[]
   broadcasts           Broadcast[]
 
+  // Workflow v3 : bypass urgence + auto-escalade + horodatage des phases
+  emergencyBypass     Boolean   @default(false)
+  bypassJustification String?
+  bypassById          String?
+  bypassBy            User?     @relation("AlertBypassBy", fields: [bypassById], references: [id], onDelete: SetNull)
+  autoEscalated       Boolean   @default(false)
+  verifiedAt          DateTime?
+  citizensNotifiedAt  DateTime?
   @@index([zoneId, createdAt(sort: Desc)])
   @@index([status])
   @@index([alertLevel, status])
@@ -292,6 +301,7 @@ model AuditLog {
 }
 
 model Consent {
+  optedOut Boolean @default(false)
   id              String   @id @default(uuid())
   userId          String
   user            User     @relation(fields: [userId], references: [id])

@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
+import { AlertsService } from '../../alerts/alerts.service';
 
 const STALE_HOURS = parseInt(process.env.ALERT_AUTO_CLOSE_HOURS || '48', 10);
 
@@ -8,7 +9,22 @@ const STALE_HOURS = parseInt(process.env.ALERT_AUTO_CLOSE_HOURS || '48', 10);
 export class AlertsScheduler {
   private readonly logger = new Logger(AlertsScheduler.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private alerts: AlertsService) {}
+
+  /**
+   * Auto-escalade : toutes les 5 min, scanne les alertes ROUGE/ROUGE_FONCE
+   * vérifiées mais non confirmées depuis AUTO_ESCALATION_MINUTES → diffuse
+   * automatiquement avec mention « non confirmée par l'autorité ».
+   * Évite qu'un week-end ou une nuit ne retarde une urgence vitale.
+   */
+  @Cron(CronExpression.EVERY_5_MINUTES)
+  async autoEscalateUrgentAlerts() {
+    try {
+      await this.alerts.autoEscalateStale();
+    } catch (e) {
+      this.logger.error(`Auto-escalade échouée : ${(e as Error).message}`);
+    }
+  }
 
   /** Ferme automatiquement les alertes sans activité depuis STALE_HOURS heures. */
   @Cron(CronExpression.EVERY_HOUR)
