@@ -41,17 +41,28 @@ export const STATUS_STYLE: Record<string, { bg: string; color: string; label: st
   CANCELLED:    { bg: '#f1f5f9', color: '#64748b', label: 'Annulée' },
 };
 
-/** Étapes du cursus officiel (gouvernance v2) dans l'ordre. */
-export const WORKFLOW_STEPS = ['SIGNALEMENT', 'SENTINELLE', 'COORDINATEUR', 'MAIRIE', 'PREFECTURE', 'GOUVERNANCE', 'BROADCAST', 'CLOSED'] as const;
+/**
+ * Workflow v3 — cursus court urgence-first.
+ * 3 phases logiques : RÉCEPTION → VÉRIFIÉE → [CONFIRMÉE si ROUGE+] → DIFFUSÉE
+ * (anciens steps SENTINELLE/COORDINATEUR/GOUVERNANCE encore en DB sont mappés
+ *  par STEP_LABEL pour rétrocompat mais ne sont plus des étapes UI.)
+ */
+export const WORKFLOW_STEPS = ['SIGNALEMENT', 'MAIRIE', 'PREFECTURE', 'BROADCAST', 'CLOSED'] as const;
+
+/** Vue compacte 3 ronds (pour le timeline header). */
+export const COMPACT_STEPS = ['SIGNALEMENT', 'MAIRIE', 'BROADCAST'] as const;
+export const COMPACT_LABELS: Record<string, string> = {
+  SIGNALEMENT: 'Reçue', MAIRIE: 'Vérifiée', BROADCAST: 'Diffusée',
+};
 
 export const STEP_LABEL: Record<string, string> = {
-  SIGNALEMENT:  'Signalement',
-  SENTINELLE:   'Sentinelle',
-  COORDINATEUR: 'Coordinateur',
-  MAIRIE:       'Mairie',
-  PREFECTURE:   'Préfecture',
-  GOUVERNANCE:  'Gouvernance',
-  BROADCAST:    'Diffusion',
+  SIGNALEMENT:  'Reçue',
+  SENTINELLE:   'Reçue',
+  COORDINATEUR: 'Vérifiée',
+  MAIRIE:       'Vérifiée',
+  PREFECTURE:   'Confirmée',
+  GOUVERNANCE:  'Confirmée',
+  BROADCAST:    'Diffusée',
   CLOSED:       'Clôture',
 };
 

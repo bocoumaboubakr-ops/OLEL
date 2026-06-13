@@ -135,6 +135,19 @@ export function AlertDetail({ alert, currentUser, onClose, onRefetch }: {
     if (!broadcastMsg.trim()) throw new Error('Message de diffusion obligatoire');
     await axios.post(`${API}/alerts/${alert.id}/broadcast`, { message: broadcastMsg }, { headers: auth() });
   });
+
+  const emergencyBypass = () => run(async () => {
+    const justification = window.prompt(
+      "🚨 DIFFUSION D'URGENCE\n\nVa contourner toutes les vérifications et diffuser MAINTENANT.\nUne notification de contrôle sera envoyée à la préfecture.\n\nJustification (obligatoire, ≥ 10 caractères) :",
+    );
+    if (!justification || justification.trim().length < 10) {
+      throw new Error('Justification trop courte (≥ 10 caractères requis)');
+    }
+    if (!window.confirm(`Diffuser cette alerte EN URGENCE avec la justification :\n« ${justification.trim()} » ?`)) {
+      return;
+    }
+    await axios.post(`${API}/alerts/${alert.id}/emergency-bypass`, { justification: justification.trim() }, { headers: auth() });
+  });
   const close = () => run(() => axios.post(`${API}/alerts/${alert.id}/close`, { reason }, { headers: auth() }));
   // Validation critique : ne ferme pas le panneau, juste refetch pour voir la progression
   const criticalValidate = async () => {
@@ -363,6 +376,24 @@ export function AlertDetail({ alert, currentUser, onClose, onRefetch }: {
                   📢 Diffuser l'alerte (multi-canal)
                 </button>
               </>
+            )}
+
+            {/* Bouton diffusion d'urgence — visible MAIRIE+ tant que l'alerte n'est pas diffusée */}
+            {!alert.broadcastAt && ['MAIRIE','PREFECTURE','GOUVERNORAT','PROTECTION_CIVILE','SUPERVISEUR_REGIONAL','ADMIN','SUPER_ADMIN'].includes(currentUser?.role) && (
+              <button disabled={loading} onClick={emergencyBypass}
+                style={{ ...btn('#dc2626'), width: '100%', marginTop: 12, padding: '12px', fontWeight: 800, boxShadow: '0 2px 8px rgba(220,38,38,0.4)' }}>
+                🚨 DIFFUSION D'URGENCE — court-circuit cursus
+              </button>
+            )}
+            {alert.emergencyBypass && (
+              <div style={{ marginTop: 8, padding: '8px 12px', background: '#fee2e2', borderRadius: 8, fontSize: '0.78rem', color: '#991b1b' }}>
+                ⚠️ Diffusée en urgence — justification : « {alert.bypassJustification} »
+              </div>
+            )}
+            {alert.autoEscalated && (
+              <div style={{ marginTop: 8, padding: '8px 12px', background: '#fef3c7', borderRadius: 8, fontSize: '0.78rem', color: '#92400e' }}>
+                ⏱ Auto-diffusée faute de confirmation autorité dans le délai (15 min)
+              </div>
             )}
 
             {canClose && (

@@ -3,7 +3,7 @@
 > **Fichier de contexte vivant** — mis à jour à chaque étape pour ne perdre aucune information.
 > **Objectif global** : tester TOUS les workflows et TOUTES les fonctionnalités du système, corriger ce qui doit l'être, et rendre OLEL le plus performant possible avant le pilote Matam.
 
-**Dernière mise à jour** : 2026-06-12 22:30 — Bugs 14-15 corrigés : (14) GPS bloqué en HTTP → saisie manuelle des coordonnées en secours (dashboard + mobile) ; (15) les signalements citoyens n'apparaissaient pas dans l'app mobile → section dédiée dans l'onglet Valider de la sentinelle avec formulaire de vérification terrain.
+**Dernière mise à jour** : 2026-06-13 — REFONTE WORKFLOW v3 (cursus court urgence-first) : 3 phases au lieu de 7, bypass d'urgence MAIRIE+, auto-escalade 15 min, fanout RGPD réparé (cause racine du « pas de WhatsApp reçu »). Bugs 16-19 résolus. Backend déployé, UI mise à jour. À tester sur VPS.
 
 ---
 
