@@ -73,6 +73,12 @@ export class CreateSignalementBotDto {
   @Max(3)
   severity?: number;
 
+  @ApiPropertyOptional({ description: 'Langue préférée du citoyen : fr | ff | wo | snk' })
+  @IsOptional()
+  @IsString()
+  @Matches(/^(fr|ff|wo|snk)$/)
+  language?: string;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()

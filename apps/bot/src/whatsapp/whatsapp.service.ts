@@ -2,37 +2,27 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { BackendService } from '../services/backend.service';
 import axios from 'axios';
+import { Lang, t, riskMenu, RISK_ORDER, RISK_LABELS, DICT } from './i18n';
 
-const RISK_TYPES = [
-  { code: '1', value: 'INONDATION',           label: '🌊 Inondation' },
-  { code: '2', value: 'SECHERESSE',            label: '☀️ Sécheresse' },
-  { code: '3', value: 'INCENDIE',              label: '🔥 Incendie' },
-  { code: '4', value: 'TEMPETE',               label: '🌪️ Tempête / Vent fort' },
-  { code: '5', value: 'EPIDEMIE',              label: '🦠 Épidémie / Maladie' },
-  { code: '6', value: 'LOCUSTES',              label: '🦗 Criquets / Nuisibles' },
-  { code: '7', value: 'MOUVEMENT_DE_TERRAIN',  label: '⛰️ Mouvement de terrain' },
-  { code: '8', value: 'AUTRE',                 label: '⚠️ Autre danger' },
-];
-
-const TYPES_MENU = RISK_TYPES.map((t) => `${t.code}. ${t.label}`).join('\n');
-
-// Préfixe de diffusion selon le niveau d'alerte officiel
+// Préfixe de diffusion selon le niveau d'alerte officiel (lecture des alertes)
 const LEVEL_PREFIX: Record<string, string> = {
-  BLEU:        'ℹ️ INFORMATION',
-  JAUNE:       '⚠️ VIGILANCE',
-  ORANGE:      '🔶 PRÉ-ALERTE',
-  ROUGE:       '🚨 URGENCE',
-  ROUGE_FONCE: '🔴 CRISE MAJEURE',
+  BLEU: 'ℹ️ INFORMATION', JAUNE: '⚠️ VIGILANCE', ORANGE: '🔶 PRÉ-ALERTE',
+  ROUGE: '🚨 URGENCE', ROUGE_FONCE: '🔴 CRISE MAJEURE',
 };
-
 export function levelPrefix(level?: string): string {
   return LEVEL_PREFIX[level || 'BLEU'] || LEVEL_PREFIX.BLEU;
+}
+
+interface Session {
+  step: string;
+  lang?: Lang;
+  data: any;
 }
 
 @Injectable()
 export class WhatsappService {
   private readonly logger = new Logger(WhatsappService.name);
-  private conversations = new Map<string, { step: string; data: any }>();
+  private conversations = new Map<string, Session>();
 
   constructor(private cfg: ConfigService, private backend: BackendService) {}
 
@@ -40,93 +30,113 @@ export class WhatsappService {
     const from = msg.from;
     const raw = msg.text?.body?.trim() || '';
     const text = raw.toLowerCase();
-    const session = this.conversations.get(from) || { step: 'menu', data: {} };
+    const session = this.conversations.get(from) || { step: 'choose_lang', data: {} };
+    const lang: Lang = session.lang || 'fr';
 
-    this.logger.log(`Message de ${from}: "${raw}" (step: ${session.step})`);
+    this.logger.log(`Message de ${from}: "${raw}" (step: ${session.step}, lang: ${session.lang || '-'})`);
 
-    // Mot-clé de réinitialisation
-    if (text === 'menu' || text === '0' || text === 'stop' || text === 'aide') {
-      await this.showMainMenu(from);
+    // ── Choix de langue au tout premier contact (ou commande "langue") ──
+    if (!session.lang || session.step === 'choose_lang') {
+      await this.sendText(from, DICT.fr.chooseLang);
+      this.conversations.set(from, { step: 'awaiting_lang', data: {} });
+      return;
+    }
+    if (session.step === 'awaiting_lang') {
+      const map: Record<string, Lang> = { '1': 'fr', '2': 'ff', '3': 'wo', '4': 'snk' };
+      const chosen = map[raw.trim()];
+      if (!chosen) {
+        await this.sendText(from, DICT.fr.chooseLang);
+        return;
+      }
+      this.conversations.set(from, { step: 'awaiting_choice', lang: chosen, data: {} });
+      await this.sendText(from, t(chosen).menu);
       return;
     }
 
-    if (session.step === 'menu' || session.step === 'awaiting_choice') {
-      if (session.step === 'menu') {
-        await this.showMainMenu(from);
-        return;
-      }
+    // Commandes globales
+    if (text === 'langue' || text === 'lang' || text === 'ɗemngal' || text === 'làkk') {
+      await this.sendText(from, DICT.fr.chooseLang);
+      this.conversations.set(from, { step: 'awaiting_lang', data: {} });
+      return;
+    }
+    if (text === 'menu' || text === '0' || text === 'stop' || text === 'aide') {
+      await this.showMainMenu(from, lang);
+      return;
+    }
 
+    const tr = t(lang);
+
+    if (session.step === 'awaiting_choice') {
       if (text === '1') {
-        await this.sendText(from, `📋 *Type de risque à signaler :*\n\n${TYPES_MENU}\n\nRépondez avec le numéro (1-8).`);
-        this.conversations.set(from, { step: 'report_type', data: {} });
+        await this.sendText(from, `${tr.reportTypePrompt}\n\n${riskMenu(lang)}`);
+        this.conversations.set(from, { step: 'report_type', lang, data: {} });
       } else if (text === '2') {
         const alerts = await this.backend.getActiveAlerts();
         if (!alerts.length) {
-          await this.sendText(from, '✅ Aucune alerte active dans votre zone pour le moment.\n\nTapez *menu* pour revenir.');
+          await this.sendText(from, tr.alertsNone);
         } else {
-          const list = alerts.slice(0, 5).map((a: any) => `• ${levelPrefix(a.alertLevel)}\n  *${a.title}*\n  📍 ${a.zone?.name || 'Zone inconnue'} — ${a.status}`).join('\n\n');
-          await this.sendText(from, `🚨 *Alertes actives (${alerts.length}) :*\n\n${list}\n\nTapez *menu* pour revenir.`);
+          const list = alerts.slice(0, 5).map((a: any) =>
+            `• ${levelPrefix(a.alertLevel)}\n  *${a.title}*\n  📍 ${a.zone?.name || 'Matam'} — ${a.status}`).join('\n\n');
+          await this.sendText(from, `${tr.alertsHeader(alerts.length)}\n\n${list}`);
         }
-        this.conversations.delete(from);
+        this.conversations.set(from, { step: 'awaiting_choice', lang, data: {} });
       } else if (text === '3') {
-        await this.sendText(from, `ℹ️ *Votre compte OLEL*\n\nNuméro enregistré : ${from}\n\nPour toute modification, contactez votre mairie ou la préfecture de Matam.\n\nTapez *menu* pour revenir.`);
-        this.conversations.delete(from);
+        await this.sendText(from, tr.profile(from));
+        this.conversations.set(from, { step: 'awaiting_choice', lang, data: {} });
       } else {
-        await this.sendText(from, '❓ Option non reconnue. Répondez *1*, *2* ou *3*, ou tapez *menu*.');
+        await this.sendText(from, tr.invalidOption);
       }
       return;
     }
 
     if (session.step === 'report_type') {
-      const found = RISK_TYPES.find((t) => t.code === raw.trim());
-      if (!found) {
-        await this.sendText(from, `Option invalide. Répondez avec un numéro de 1 à ${RISK_TYPES.length}.`);
+      const idx = parseInt(raw.trim(), 10) - 1;
+      const value = RISK_ORDER[idx];
+      if (!value) {
+        await this.sendText(from, tr.invalidNumber(RISK_ORDER.length));
         return;
       }
-      session.data.type = found.value;
-      session.data.typeLabel = found.label;
-      await this.sendText(from, `${found.label} sélectionné.\n\nDécrivez la situation : lieu précis, ampleur, personnes touchées.`);
-      this.conversations.set(from, { step: 'report_desc', data: session.data });
+      session.data.type = value;
+      session.data.typeLabel = RISK_LABELS[value][lang];
+      await this.sendText(from, tr.describePrompt(session.data.typeLabel));
+      this.conversations.set(from, { step: 'report_desc', lang, data: session.data });
       return;
     }
 
     if (session.step === 'report_desc') {
       session.data.description = raw;
-      await this.sendText(from, `Niveau de gravité :\n1. 🟢 Vigilance (surveiller)\n2. 🟡 Alerte (agir rapidement)\n3. 🔴 Urgence (danger immédiat)\n\nRépondez 1, 2 ou 3.`);
-      this.conversations.set(from, { step: 'report_severity', data: session.data });
+      await this.sendText(from, tr.severityPrompt);
+      this.conversations.set(from, { step: 'report_severity', lang, data: session.data });
       return;
     }
 
     if (session.step === 'report_severity') {
-      const severityMap: Record<string, number> = { '1': 1, '2': 2, '3': 3 };
-      const sev = severityMap[raw.trim()];
+      const sev = ({ '1': 1, '2': 2, '3': 3 } as Record<string, number>)[raw.trim()];
       if (!sev) {
-        await this.sendText(from, 'Répondez 1, 2 ou 3.');
+        await this.sendText(from, tr.invalidSeverity);
         return;
       }
       session.data.severity = sev;
-
       try {
         await this.backend.createSignalement({
           phone: from,
           type: session.data.type,
           description: session.data.description,
           severity: sev,
+          language: lang,
+          mediaUrls: session.data.mediaUrls,
         });
-        await this.sendText(from, `✅ *Signalement enregistré !*\n\nType : ${session.data.typeLabel}\nGravité : ${{ 1: '🟢 Vigilance', 2: '🟡 Alerte', 3: '🔴 Urgence' }[sev]}\n\nLes autorités compétentes ont été notifiées. Merci pour votre vigilance.\n\nTapez *menu* pour recommencer.`);
+        await this.sendText(from, tr.reportSaved(session.data.typeLabel, tr.sevLabels[sev - 1]));
       } catch {
-        await this.sendText(from, '❌ Erreur lors de l\'enregistrement. Réessayez plus tard.\n\nTapez *menu* pour recommencer.');
+        await this.sendText(from, tr.reportError);
       }
-      this.conversations.delete(from);
+      this.conversations.set(from, { step: 'awaiting_choice', lang, data: {} });
     }
   }
 
-  private async showMainMenu(from: string) {
-    await this.sendText(
-      from,
-      '🚨 *OLEL – Alerte Précoce Multi-Risques*\n_Région de Matam_\n\n1️⃣ Signaler une situation\n2️⃣ Consulter les alertes actives\n3️⃣ Mon profil\n\nRépondez avec le numéro ou tapez *menu* à tout moment.',
-    );
-    this.conversations.set(from, { step: 'awaiting_choice', data: {} });
+  private async showMainMenu(from: string, lang: Lang) {
+    await this.sendText(from, t(lang).menu);
+    this.conversations.set(from, { step: 'awaiting_choice', lang, data: {} });
   }
 
   async sendMessage(to: string, text: string): Promise<void> {
@@ -147,8 +157,6 @@ export class WhatsappService {
         { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } },
       );
     } catch (err: any) {
-      // Ne JAMAIS faire échouer le webhook : Meta re-livrerait le message en boucle.
-      // On loggue le détail Meta (token expiré, destinataire non autorisé, etc.).
       const meta = err?.response?.data?.error;
       this.logger.error(
         `Envoi WhatsApp → ${to} échoué (HTTP ${err?.response?.status ?? '?'}) : ` +

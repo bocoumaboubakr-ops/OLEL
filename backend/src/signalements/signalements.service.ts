@@ -112,9 +112,10 @@ export class SignalementsService {
     });
   }
 
-  async createFromBot(dto: { type: any; phone?: string; severity?: number; description?: string; text?: string; latitude?: number; longitude?: number; mediaUrls?: string[] }) {
+  async createFromBot(dto: { type: any; phone?: string; severity?: number; language?: string; description?: string; text?: string; latitude?: number; longitude?: number; mediaUrls?: string[] }) {
     // Attribuer le signalement au citoyen identifié par son numéro WhatsApp ;
     // création automatique du compte CITOYEN au 1er signalement (comme le flux OTP).
+    const lang = ['fr', 'ff', 'wo', 'snk'].includes(dto.language || '') ? dto.language! : 'fr';
     let user = null;
     if (dto.phone) {
       const phone = dto.phone.startsWith('+') ? dto.phone : `+${dto.phone}`;
@@ -129,9 +130,13 @@ export class SignalementsService {
             name: `Citoyen ${phone.slice(-4)}`,
             role: 'CITOYEN',
             isActive: true,
+            language: lang,
             zoneId: defaultZone?.id,
           },
         });
+      } else if (dto.language && user.language !== lang) {
+        // Mémoriser la langue choisie sur WhatsApp pour les futures notifications
+        await this.prisma.user.update({ where: { id: user.id }, data: { language: lang } });
       }
     }
     if (!user) {

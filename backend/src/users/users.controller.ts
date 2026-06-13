@@ -37,6 +37,12 @@ export class UsersController {
     return this.users.findOne(user.id);
   }
 
+  @Patch('me/language')
+  @ApiOperation({ summary: 'Changer ma langue préférée (fr | ff | wo | snk)' })
+  setLanguage(@CurrentUser() user: { id: string }, @Body('language') language: string) {
+    return this.users.setLanguage(user.id, language);
+  }
+
   @Get(':id')
   @Roles(Role.COORDINATEUR, Role.MAIRIE, Role.PREFECTURE, Role.GOUVERNORAT, Role.PROTECTION_CIVILE, Role.SUPERVISEUR_REGIONAL, Role.ADMIN, Role.SUPER_ADMIN)
   findOne(@Param('id') id: string) {

@@ -119,6 +119,7 @@ model User {
   email         String?  @unique
   name          String
   role          Role     @default(CITOYEN)
+  language      String   @default("fr") // fr | ff (Pulaar) | wo (Wolof) | snk (Soninké)
   passwordHash  String?
   otpSecret     String?
   totpSecret    String?

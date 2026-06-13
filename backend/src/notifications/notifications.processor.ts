@@ -5,6 +5,7 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { WhatsappService } from './channels/whatsapp.service';
 import { SmsService } from './channels/sms.service';
 import { Role } from '@prisma/client';
+import { broadcastMessage, operatorMessage, normalizeLang } from '../common/i18n/alert-messages';
 
 const OPERATOR_ROLES: Role[] = [
   Role.SENTINELLE, Role.COORDINATEUR, Role.MAIRIE, Role.HYDRO_METEO,
@@ -76,20 +77,16 @@ export class NotificationsProcessor {
 
     const users = await this.prisma.user.findMany({
       where,
-      select: { id: true, phone: true, name: true, role: true },
+      select: { id: true, phone: true, name: true, role: true, language: true },
     });
     this.logger.log(`Fanout ${isBroadcast ? 'broadcast' : 'interne'} : ${users.length} destinataire(s) dans ${zoneIds.length} zone(s)`);
 
-    // Préfixe officiel selon le niveau d'alerte (BLEU → ROUGE_FONCE)
-    const levelPrefix: Record<string, string> = {
-      BLEU: 'INFORMATION', JAUNE: 'VIGILANCE', ORANGE: 'PRE-ALERTE',
-      ROUGE: 'URGENCE', ROUGE_FONCE: 'CRISE MAJEURE',
-    };
-    const niveau = levelPrefix[alert.alertLevel as string] || 'ALERTE';
-
-    const message = isBroadcast
-      ? `[OLEL] ${niveau} - ALERTE OFFICIELLE\n${alert.title}\n${alert.description}\nZone : ${alert.zone.name}\nSuivez les consignes des autorites locales.`
-      : `[OLEL] Nouveau signalement a valider\nType : ${alert.type}\n${alert.title}\nZone : ${alert.zone.name}\nConnectez-vous sur la plateforme OLEL.`;
+    // Chaque destinataire reçoit le message dans SA langue (broadcast citoyen).
+    // Les messages internes (opérateurs) restent en français.
+    const buildMessage = (lang: string): string =>
+      isBroadcast
+        ? broadcastMessage(alert.alertLevel as string, alert.title, alert.description, alert.zone.name, normalizeLang(lang))
+        : operatorMessage(alert.type as string, alert.title, alert.zone.name);
 
     let sent = 0, failed = 0, costXof = 0;
     // Traitement par lots de 50 pour éviter la surcharge
@@ -97,6 +94,7 @@ export class NotificationsProcessor {
     for (let i = 0; i < users.length; i += BATCH_SIZE) {
       const batch = users.slice(i, i + BATCH_SIZE);
       await Promise.all(batch.map(async (user) => {
+        const message = buildMessage((user as any).language);
         try {
           await this.whatsapp.sendMessage(user.phone, message);
           await this.prisma.notificationLog.create({

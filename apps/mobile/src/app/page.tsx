@@ -4,8 +4,30 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import { useMobileAuth } from '@/hooks/useMobileAuth';
 import { useOfflineQueue, queueSignalement } from '@/hooks/useOfflineQueue';
+import { useI18n, LANGS } from '@/lib/i18n';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
+
+// Sélecteur de langue réutilisable (persiste localStorage + propage backend)
+function LanguageSelector({ compact }: { compact?: boolean }) {
+  const { lang, setLang } = useI18n();
+  return (
+    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'center' }}>
+      {LANGS.map((l) => (
+        <button key={l.code} onClick={() => setLang(l.code)}
+          style={{
+            padding: compact ? '6px 12px' : '8px 14px',
+            border: `1.5px solid ${lang === l.code ? '#1a3c5e' : '#e2e8f0'}`,
+            background: lang === l.code ? '#1a3c5e' : 'white',
+            color: lang === l.code ? 'white' : '#475569',
+            borderRadius: 10, fontSize: '0.82rem', fontWeight: 700, cursor: 'pointer',
+          }}>
+          {l.flag} {l.label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 type Tab = 'home' | 'alerts' | 'report' | 'map' | 'formations' | 'missions' | 'validate' | 'profile';
 const SENTINEL_ROLES = ['SENTINELLE', 'COORDINATEUR', 'MAIRIE', 'PREFECTURE', 'GOUVERNORAT', 'PROTECTION_CIVILE', 'SUPERVISEUR_REGIONAL', 'ADMIN', 'SUPER_ADMIN'];
@@ -256,9 +278,12 @@ function MobileLoginScreen({
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 24px 24px', color: 'white' }}>
         <div style={{ fontSize: '4rem', marginBottom: 8 }}>🚨</div>
         <h1 style={{ margin: '0 0 4px', fontSize: '2rem', fontWeight: 900, letterSpacing: '-1px' }}>OLEL</h1>
-        <p style={{ margin: '0 0 32px', fontSize: '0.85rem', opacity: 0.8, textAlign: 'center' }}>
+        <p style={{ margin: '0 0 16px', fontSize: '0.85rem', opacity: 0.8, textAlign: 'center' }}>
           Alerte précoce multi-risques · Matam
         </p>
+        <div style={{ marginBottom: 24 }}>
+          <LanguageSelector compact />
+        </div>
 
         <div style={{ background: 'white', borderRadius: 20, padding: '28px 24px', width: '100%', maxWidth: 360 }}>
 
@@ -668,6 +693,12 @@ function ProfileScreen({ user, onLogout }: { user: { id: string; name: string; p
           <div style={{ width: 8, height: 8, borderRadius: '50%', background: roleInfo.color }} />
           <span style={{ fontSize: '0.82rem', fontWeight: 700, color: roleInfo.color }}>{roleInfo.label}</span>
         </div>
+      </div>
+
+      <div style={{ background: 'white', borderRadius: 12, padding: '14px 16px', marginBottom: 16, boxShadow: '0 1px 6px rgba(0,0,0,0.07)' }}>
+        <div style={{ fontSize: '0.72rem', color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>🌍 Langue / Ɗemngal / Làkk</div>
+        <LanguageSelector />
+        <p style={{ fontSize: '0.68rem', color: '#94a3b8', margin: '8px 0 0' }}>Vos alertes vous seront envoyées dans cette langue.</p>
       </div>
 
       <div style={{ background: '#f8fafc', borderRadius: 12, padding: '14px 16px', marginBottom: 20 }}>

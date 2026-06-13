@@ -21,10 +21,18 @@ export class UsersService {
   async findOne(id: string) {
     const user = await this.prisma.user.findUnique({
       where: { id },
-      select: { id: true, name: true, phone: true, email: true, role: true, zoneId: true, isActive: true, createdAt: true, totpEnabled: true },
+      select: { id: true, name: true, phone: true, email: true, role: true, language: true, zoneId: true, isActive: true, createdAt: true, totpEnabled: true },
     });
     if (!user) throw new NotFoundException('Utilisateur introuvable');
     return user;
+  }
+
+  async setLanguage(id: string, language: string) {
+    if (!['fr', 'ff', 'wo', 'snk'].includes(language)) {
+      throw new ConflictException('Langue non supportée (fr | ff | wo | snk)');
+    }
+    await this.prisma.user.update({ where: { id }, data: { language } });
+    return { success: true, language };
   }
 
   async create(dto: { name: string; phone: string; email?: string; role: Role; password: string; zoneId?: string }) {

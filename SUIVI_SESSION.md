@@ -3,7 +3,7 @@
 > **Fichier de contexte vivant** — mis à jour à chaque étape pour ne perdre aucune information.
 > **Objectif global** : tester TOUS les workflows et TOUTES les fonctionnalités du système, corriger ce qui doit l'être, et rendre OLEL le plus performant possible avant le pilote Matam.
 
-**Dernière mise à jour** : 2026-06-13 — REFONTE WORKFLOW v3 (cursus court urgence-first) : 3 phases au lieu de 7, bypass d'urgence MAIRIE+, auto-escalade 15 min, fanout RGPD réparé (cause racine du « pas de WhatsApp reçu »). Bugs 16-19 résolus. Backend déployé, UI mise à jour. À tester sur VPS.
+**Dernière mise à jour** : 2026-06-13 — CHANTIER 1/3 LANGUES livré : i18n Pulaar/Wolof/Soninké/Français. Bot WhatsApp 100% multilingue (choix langue au 1er contact), notifications d'alerte envoyées dans la langue de chaque destinataire, sélecteur de langue mobile (profil+login) propagé au backend. ⚠️ Traductions à FAIRE RELIRE par natifs avant pilote. Reste : chantier 2 (audio) + chantier 3 (photo caméra).
 
 ---
 
