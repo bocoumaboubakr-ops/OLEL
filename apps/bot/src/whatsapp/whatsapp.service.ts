@@ -31,17 +31,26 @@ export class WhatsappService {
     const raw = msg.text?.body?.trim() || '';
     const text = raw.toLowerCase();
     const session = this.conversations.get(from) || { step: 'choose_lang', data: {} };
-    const lang: Lang = session.lang || 'fr';
 
     this.logger.log(`Message de ${from}: "${raw}" (step: ${session.step}, lang: ${session.lang || '-'})`);
 
-    // ── Choix de langue au tout premier contact (ou commande "langue") ──
-    if (!session.lang || session.step === 'choose_lang') {
+    // ── Commandes globales (avant tout traitement) ─────────────────────────
+    // « langue » force le re-choix peu importe l'étape courante.
+    if (text === 'langue' || text === 'lang' || text === 'ɗemngal' || text === 'làkk') {
       await this.sendText(from, DICT.fr.chooseLang);
-      this.conversations.set(from, { step: 'awaiting_lang', data: {} });
+      this.conversations.set(from, { step: 'awaiting_lang', data: session.data || {} });
       return;
     }
-    if (session.step === 'awaiting_lang') {
+
+    // ── Choix de langue (1er contact OU avant qu'une langue ne soit fixée) ──
+    if (!session.lang) {
+      if (session.step !== 'awaiting_lang') {
+        // 1er contact : afficher le menu de choix de langue
+        await this.sendText(from, DICT.fr.chooseLang);
+        this.conversations.set(from, { step: 'awaiting_lang', data: {} });
+        return;
+      }
+      // On attend ici une réponse 1/2/3/4
       const map: Record<string, Lang> = { '1': 'fr', '2': 'ff', '3': 'wo', '4': 'snk' };
       const chosen = map[raw.trim()];
       if (!chosen) {
@@ -53,18 +62,14 @@ export class WhatsappService {
       return;
     }
 
-    // Commandes globales
-    if (text === 'langue' || text === 'lang' || text === 'ɗemngal' || text === 'làkk') {
-      await this.sendText(from, DICT.fr.chooseLang);
-      this.conversations.set(from, { step: 'awaiting_lang', data: {} });
-      return;
-    }
+    const lang: Lang = session.lang;
+    const tr = t(lang);
+
+    // « menu » réinitialise (langue conservée)
     if (text === 'menu' || text === '0' || text === 'stop' || text === 'aide') {
       await this.showMainMenu(from, lang);
       return;
     }
-
-    const tr = t(lang);
 
     if (session.step === 'awaiting_choice') {
       if (text === '1') {
