@@ -65,6 +65,14 @@ export class WhatsappService {
     const lang: Lang = session.lang;
     const tr = t(lang);
 
+    // ── Message vocal reçu (inclusion des citoyens analphabètes) ───────────
+    // Un vocal vaut un signalement : on le télécharge, on le stocke, et selon
+    // le contexte on l'attache au flux en cours ou on crée un signalement direct.
+    if (msg.type === 'audio' || msg.audio) {
+      await this.handleAudio(from, msg.audio?.id, lang, session);
+      return;
+    }
+
     // « menu » réinitialise (langue conservée)
     if (text === 'menu' || text === '0' || text === 'stop' || text === 'aide') {
       await this.showMainMenu(from, lang);
@@ -137,6 +145,66 @@ export class WhatsappService {
       }
       this.conversations.set(from, { step: 'awaiting_choice', lang, data: {} });
     }
+  }
+
+  /** Télécharge un média WhatsApp (audio) et le réuploade vers le backend. */
+  private async downloadWhatsappMedia(mediaId: string): Promise<{ url: string } | null> {
+    const token = this.cfg.get('WHATSAPP_TOKEN', '');
+    if (!token || !mediaId) return null;
+    try {
+      // 1. Récupérer l'URL temporaire + le mime du média
+      const meta = await axios.get(`https://graph.facebook.com/v19.0/${mediaId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const mimetype = String(meta.data?.mime_type || 'audio/ogg').split(';')[0].trim();
+      // 2. Télécharger le binaire (auth Bearer requise)
+      const bin = await axios.get(meta.data.url, {
+        headers: { Authorization: `Bearer ${token}` },
+        responseType: 'arraybuffer',
+      });
+      const buffer = Buffer.from(bin.data);
+      const ext = mimetype.includes('mpeg') ? '.mp3' : mimetype.includes('mp4') ? '.m4a' : '.ogg';
+      const url = await this.backend.uploadMedia(buffer, `voice-${Date.now()}${ext}`, mimetype);
+      return url ? { url } : null;
+    } catch (e) {
+      this.logger.error(`downloadWhatsappMedia échoué : ${(e as Error).message}`);
+      return null;
+    }
+  }
+
+  private async handleAudio(from: string, mediaId: string | undefined, lang: Lang, session: Session) {
+    const tr = t(lang);
+    if (!mediaId) { await this.sendText(from, tr.reportError); return; }
+
+    const media = await this.downloadWhatsappMedia(mediaId);
+    if (!media) { await this.sendText(from, tr.reportError); return; }
+
+    const inReportFlow = ['report_type', 'report_desc', 'report_severity'].includes(session.step);
+
+    if (inReportFlow) {
+      // Attacher le vocal au signalement en préparation et poursuivre le flux
+      session.data.mediaUrls = [...(session.data.mediaUrls || []), media.url];
+      this.conversations.set(from, { ...session, lang });
+      await this.sendText(from, tr.audioPrompt);
+      return;
+    }
+
+    // Vocal envoyé hors flux → créer directement un signalement vocal.
+    // L'opérateur local (qui parle la langue) écoutera et qualifiera.
+    try {
+      await this.backend.createSignalement({
+        phone: from,
+        type: 'AUTRE',
+        description: '🎙️ Signalement vocal — à écouter par un agent',
+        severity: 2,
+        language: lang,
+        mediaUrls: [media.url],
+      });
+      await this.sendText(from, tr.audioReceived);
+    } catch {
+      await this.sendText(from, tr.reportError);
+    }
+    this.conversations.set(from, { step: 'awaiting_choice', lang, data: {} });
   }
 
   private async showMainMenu(from: string, lang: Lang) {

@@ -84,8 +84,14 @@ interface MobileAlert { id: string; title: string; description: string; type: st
 interface MobileSignalement {
   id: string; type: string; text: string; severity?: number | null;
   status: string; channel: string; latitude?: number | null; longitude?: number | null;
+  mediaUrls?: string[];
   fieldVerifiedAt?: string | null; fieldNotes?: string | null; createdAt: string;
   user?: { name: string; phone: string; zone?: { name: string } | null };
+}
+
+/** Détermine si une URL de média est un fichier audio (vocal). */
+function isAudioUrl(url: string): boolean {
+  return /\.(ogg|mp3|m4a|aac|webm|amr|3gp)(\?|$)/i.test(url);
 }
 
 // ── App root ──────────────────────────────────────────────────────────────────
@@ -992,6 +998,22 @@ function SentinelValidationScreen({ alerts, signalements, onDone }: { alerts: Mo
               <div key={sg.id} style={{ background: 'white', borderRadius: 12, padding: 14, marginBottom: 10, boxShadow: '0 1px 6px rgba(0,0,0,0.07)', borderLeft: `4px solid ${needsField ? '#f59e0b' : '#16a34a'}` }}>
                 <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#1a3c5e', marginBottom: 4 }}>{meta.icon} {meta.label}</div>
                 <p style={{ margin: '0 0 8px', color: '#555', fontSize: '0.82rem', lineHeight: 1.4 }}>{sg.text}</p>
+                {(sg as any).mediaUrls?.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}>
+                    {(sg as any).mediaUrls.map((url: string, i: number) => (
+                      isAudioUrl(url) ? (
+                        <div key={i} style={{ background: '#f1f5f9', borderRadius: 8, padding: '6px 8px' }}>
+                          <div style={{ fontSize: '0.7rem', color: '#475569', marginBottom: 3, fontWeight: 600 }}>🎙️ Vocal — écoutez</div>
+                          <audio controls preload="none" src={url} style={{ width: '100%', height: 32 }} />
+                        </div>
+                      ) : (
+                        <a key={i} href={url} target="_blank" rel="noreferrer">
+                          <img src={url} alt="preuve" style={{ maxWidth: 120, maxHeight: 120, borderRadius: 8, objectFit: 'cover' }} />
+                        </a>
+                      )
+                    ))}
+                  </div>
+                )}
                 <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginBottom: 8 }}>
                   {sg.user && <>👤 {sg.user.name} · </>}via {sg.channel} · {new Date(sg.createdAt).toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
                 </div>

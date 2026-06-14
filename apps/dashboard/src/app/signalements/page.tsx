@@ -50,6 +50,11 @@ const CHANNEL_LABEL: Record<string, string> = {
 
 const STATUS_OPTIONS = ['PENDING', 'VALIDATED', 'REJECTED'];
 
+/** Détermine si une URL de média est un fichier audio (vocal). */
+function isAudioUrl(url: string): boolean {
+  return /\.(ogg|mp3|m4a|aac|webm|amr|3gp)(\?|$)/i.test(url);
+}
+
 export default function SignalementsPage() {
   const { user, initialized, logout } = useAuth();
   const [items, setItems] = useState<Signalement[]>([]);
@@ -204,6 +209,24 @@ export default function SignalementsPage() {
                 </div>
 
                 <p style={{ margin: '4px 0 10px', color: '#334155', fontSize: '0.92rem', lineHeight: 1.5 }}>{s.text}</p>
+
+                {/* Médias : photos affichées, vocaux écoutables par l'opérateur */}
+                {s.mediaUrls?.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, margin: '0 0 10px' }}>
+                    {s.mediaUrls.map((url, i) => (
+                      isAudioUrl(url) ? (
+                        <div key={i} style={{ background: '#f1f5f9', borderRadius: 8, padding: '8px 10px' }}>
+                          <div style={{ fontSize: '0.74rem', color: '#475569', marginBottom: 4, fontWeight: 600 }}>🎙️ Message vocal — écoutez et qualifiez</div>
+                          <audio controls preload="none" src={url} style={{ width: '100%', height: 36 }} />
+                        </div>
+                      ) : (
+                        <a key={i} href={url} target="_blank" rel="noreferrer">
+                          <img src={url} alt="preuve" style={{ maxWidth: 160, maxHeight: 160, borderRadius: 8, border: '1px solid #e2e8f0', objectFit: 'cover' }} />
+                        </a>
+                      )
+                    ))}
+                  </div>
+                )}
 
                 <div style={{ fontSize: '0.78rem', color: '#64748b', display: 'flex', gap: 14, flexWrap: 'wrap' }}>
                   {s.user && <span>👤 {s.user.name} ({s.user.phone})</span>}

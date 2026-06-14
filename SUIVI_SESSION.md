@@ -3,7 +3,7 @@
 > **Fichier de contexte vivant** — mis à jour à chaque étape pour ne perdre aucune information.
 > **Objectif global** : tester TOUS les workflows et TOUTES les fonctionnalités du système, corriger ce qui doit l'être, et rendre OLEL le plus performant possible avant le pilote Matam.
 
-**Dernière mise à jour** : 2026-06-13 — CHANTIER 1/3 LANGUES livré : i18n Pulaar/Wolof/Soninké/Français. Bot WhatsApp 100% multilingue (choix langue au 1er contact), notifications d'alerte envoyées dans la langue de chaque destinataire, sélecteur de langue mobile (profil+login) propagé au backend. ⚠️ Traductions à FAIRE RELIRE par natifs avant pilote. Reste : chantier 2 (audio) + chantier 3 (photo caméra).
+**Dernière mise à jour** : 2026-06-14 — CHANTIER 1 LANGUES ✅ validé sur VPS (bug 20 boucle choix langue corrigé). CHANTIER 2 AUDIO livré : vocal WhatsApp → signalement (download Meta + stockage), lecteur audio côté opérateur (dashboard + mobile sentinelle). Reste : enregistrement audio in-app (HTTPS requis) + chantier 3 (photo caméra).
 
 ---
 

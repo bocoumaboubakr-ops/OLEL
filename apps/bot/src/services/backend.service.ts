@@ -35,4 +35,25 @@ export class BackendService {
     );
     return data;
   }
+
+  /**
+   * Réuploade vers le backend un média (audio/photo) téléchargé depuis WhatsApp.
+   * Retourne l'URL publique stockée, ou null en cas d'échec.
+   */
+  async uploadMedia(buffer: Buffer, filename: string, mimetype: string): Promise<string | null> {
+    try {
+      const form = new FormData();
+      // Node 18+ : Blob/FormData globaux, supportés par axios
+      form.append('file', new Blob([new Uint8Array(buffer)], { type: mimetype }), filename);
+      const { data } = await axios.post(
+        `${this.backendUrl}/api/v1/upload/bot-media`,
+        form,
+        { headers: this.headers, maxBodyLength: Infinity, maxContentLength: Infinity },
+      );
+      return data?.url || null;
+    } catch (e) {
+      this.logger.error(`Erreur uploadMedia: ${(e as Error).message}`);
+      return null;
+    }
+  }
 }
