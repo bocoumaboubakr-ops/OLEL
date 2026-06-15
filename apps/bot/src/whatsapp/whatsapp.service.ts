@@ -140,7 +140,12 @@ export class WhatsappService {
           mediaUrls: session.data.mediaUrls,
         });
         await this.sendText(from, tr.reportSaved(session.data.typeLabel, tr.sevLabels[sev - 1]));
-      } catch {
+      } catch (e: any) {
+        // Log détaillé pour diagnostic (le détail backend est précieux)
+        this.logger.error(
+          `createSignalement échoué pour ${from} : HTTP ${e?.response?.status} — ` +
+          `${JSON.stringify(e?.response?.data || e?.message)} | payload type=${session.data.type} sev=${sev} lang=${lang}`,
+        );
         await this.sendText(from, tr.reportError);
       }
       this.conversations.set(from, { step: 'awaiting_choice', lang, data: {} });
