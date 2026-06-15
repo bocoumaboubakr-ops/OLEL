@@ -18,7 +18,10 @@ const AUDIO_MAX = 16 * 1024 * 1024; // 16 MB (~limite média WhatsApp)
 mkdirSync(UPLOAD_DIR, { recursive: true });
 
 function publicUrl(filename: string): string {
-  const base = process.env.NEXT_PUBLIC_API_URL?.replace('/api/v1', '') || `http://localhost:${process.env.PORT || 4000}`;
+  // PUBLIC_API_URL doit pointer vers une adresse joignable par le navigateur
+  // des opérateurs (IP du VPS ou domaine), PAS localhost.
+  const base = (process.env.PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_URL || `http://localhost:${process.env.PORT || 4000}`)
+    .replace(/\/api\/v1\/?$/, '');
   return `${base}/uploads/${filename}`;
 }
 

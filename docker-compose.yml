@@ -65,6 +65,9 @@ services:
       IVR_CALLER_ID:        ${IVR_CALLER_ID:-}
       WS_PUBLIC_ORIGIN:     ${WS_PUBLIC_ORIGIN:-ws://localhost:4000}
       BOT_API_KEY:          ${BOT_API_KEY}
+      # Base d'URL publique pour servir les médias uploadés (photos/vocaux).
+      # DOIT être joignable depuis le navigateur des opérateurs (IP ou domaine).
+      PUBLIC_API_URL:       ${NEXT_PUBLIC_API_URL:-http://localhost:4000/api/v1}
       ALLOWED_ORIGINS:      ${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:3001}
       NODE_ENV:               ${NODE_ENV:-production}
       RETURN_OTP_DEV_CODE:    ${RETURN_OTP_DEV_CODE:-false}
