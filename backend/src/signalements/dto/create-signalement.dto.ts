@@ -50,7 +50,7 @@ export class CreateSignalementDto {
   @ApiPropertyOptional({ type: [String] })
   @IsOptional()
   @IsArray()
-  @IsUrl({}, { each: true })
+  @IsUrl({ require_tld: false }, { each: true })
   @ArrayMaxSize(10)
   mediaUrls?: string[];
 }
@@ -104,7 +104,7 @@ export class CreateSignalementBotDto {
   @ApiPropertyOptional({ type: [String] })
   @IsOptional()
   @IsArray()
-  @IsUrl({}, { each: true })
+  @IsUrl({ require_tld: false }, { each: true })
   @ArrayMaxSize(10)
   mediaUrls?: string[];
 }
@@ -122,7 +122,7 @@ export class FieldVerifySignalementDto {
   @ApiPropertyOptional({ description: 'Photo(s) prise(s) sur place (URLs)' })
   @IsOptional()
   @IsArray()
-  @IsUrl({}, { each: true })
+  @IsUrl({ require_tld: false }, { each: true })
   @ArrayMaxSize(10)
   mediaUrls?: string[];
 
