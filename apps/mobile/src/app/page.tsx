@@ -5,6 +5,7 @@ import axios from 'axios';
 import { useMobileAuth } from '@/hooks/useMobileAuth';
 import { useOfflineQueue, queueSignalement } from '@/hooks/useOfflineQueue';
 import { useI18n, LANGS } from '@/lib/i18n';
+import { MediaCapture, type CapturedMedia } from '@/lib/MediaCapture';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
 
@@ -465,6 +466,7 @@ function ReportTypeSelect({ onSelect }: { onSelect: (t: AlertType) => void }) {
 function ReportConfirm({ type, onSent, onBack }: { type: AlertType; onSent: () => void; onBack: () => void }) {
   const { icon, label, color } = RISK_ICONS[type];
   const [note, setNote] = useState('');
+  const [captured, setCaptured] = useState<CapturedMedia[]>([]);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
 
@@ -483,11 +485,13 @@ function ReportConfirm({ type, onSent, onBack }: { type: AlertType; onSent: () =
       } catch { /* GPS non dispo */ }
 
       const zoneId = process.env.NEXT_PUBLIC_DEFAULT_ZONE_ID || undefined;
+      const mediaUrls = captured.map((m) => m.url);
       const payload = {
         title: `Signalement : ${label}`,
         description: note.trim() || `Signalement de type ${label} depuis l'application mobile.`,
         type, severity: 2, channel: 'app',
         ...(zoneId ? { zoneId } : {}),
+        ...(mediaUrls.length ? { mediaUrls } : {}),
         latitude: lat, longitude: lng,
       };
 
@@ -523,6 +527,12 @@ function ReportConfirm({ type, onSent, onBack }: { type: AlertType; onSent: () =
       <textarea value={note} onChange={(e) => setNote(e.target.value)}
         placeholder="Décrivez ce que vous observez..." rows={3}
         style={{ width: '100%', padding: '10px 12px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: '0.95rem', resize: 'none', boxSizing: 'border-box', fontFamily: 'inherit', marginBottom: 12 }} />
+
+      <label style={{ display: 'block', marginBottom: 6, fontWeight: 600, fontSize: '0.88rem', color: '#374151' }}>
+        📎 Photo / vocal <span style={{ fontWeight: 400, color: '#94a3b8' }}>(recommandé)</span>
+      </label>
+      <MediaCapture onChange={setCaptured} />
+
       <div style={{ background: '#f0f9ff', borderRadius: 8, padding: '8px 12px', marginBottom: 14, fontSize: '0.78rem', color: '#0369a1' }}>
         📍 Votre position GPS sera envoyée automatiquement.
       </div>
@@ -1206,6 +1216,7 @@ function SignalementFieldVerifyForm({ signalement, onBack, onDone }: { signaleme
   const [manualLat, setManualLat] = useState('');
   const [manualLng, setManualLng] = useState('');
   const [notes, setNotes] = useState('');
+  const [captured, setCaptured] = useState<CapturedMedia[]>([]);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
 
@@ -1232,8 +1243,13 @@ function SignalementFieldVerifyForm({ signalement, onBack, onDone }: { signaleme
     setSending(true); setError('');
     try {
       const token = localStorage.getItem('olel_token');
+      const mediaUrls = captured.map((m) => m.url);
       await axios.patch(`${API}/signalements/${signalement.id}/field-verify`,
-        { latitude: lat, longitude: lng, notes: notes.trim() || undefined },
+        {
+          latitude: lat, longitude: lng,
+          notes: notes.trim() || undefined,
+          ...(mediaUrls.length ? { mediaUrls } : {}),
+        },
         { headers: { Authorization: `Bearer ${token}` } });
       onDone();
     } catch (e: any) {
@@ -1284,6 +1300,11 @@ function SignalementFieldVerifyForm({ signalement, onBack, onDone }: { signaleme
         <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3}
           placeholder="Ampleur, victimes, accessibilité, besoins urgents…"
           style={{ width: '100%', padding: '8px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: '0.85rem', resize: 'none', boxSizing: 'border-box' as const, fontFamily: 'inherit' }} />
+      </div>
+
+      <div style={{ marginBottom: 14 }}>
+        <label style={{ display: 'block', fontWeight: 700, fontSize: '0.82rem', color: '#374151', marginBottom: 6 }}>📷 Photo sur place (preuve)</label>
+        <MediaCapture onChange={setCaptured} />
       </div>
 
       {error && <div style={{ background: '#fee2e2', color: '#dc2626', padding: '8px 12px', borderRadius: 8, marginBottom: 12, fontSize: '0.82rem' }}>{error}</div>}

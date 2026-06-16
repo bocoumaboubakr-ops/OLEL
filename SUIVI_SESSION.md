@@ -3,7 +3,7 @@
 > **Fichier de contexte vivant** — mis à jour à chaque étape pour ne perdre aucune information.
 > **Objectif global** : tester TOUS les workflows et TOUTES les fonctionnalités du système, corriger ce qui doit l'être, et rendre OLEL le plus performant possible avant le pilote Matam.
 
-**Dernière mise à jour** : 2026-06-14 — CHANTIER 1 LANGUES ✅ validé sur VPS (bug 20 boucle choix langue corrigé). CHANTIER 2 AUDIO livré : vocal WhatsApp → signalement (download Meta + stockage), lecteur audio côté opérateur (dashboard + mobile sentinelle). Reste : enregistrement audio in-app (HTTPS requis) + chantier 3 (photo caméra).
+**Dernière mise à jour** : 2026-06-16 — CHANTIER 1 ✅, CHANTIER 2 ✅ (bugs 21 mediaUrls localhost + 22 URL publique fix). CHANTIER 3 livré : composant MediaCapture (photo caméra `capture=environment`, compression client, vocal in-app si HTTPS, fallback WhatsApp si HTTP). Intégré au formulaire signalement citoyen mobile + vérification terrain sentinelle.
 
 ---
 
