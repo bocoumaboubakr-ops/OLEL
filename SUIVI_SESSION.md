@@ -3,7 +3,7 @@
 > **Fichier de contexte vivant** — mis à jour à chaque étape pour ne perdre aucune information.
 > **Objectif global** : tester TOUS les workflows et TOUTES les fonctionnalités du système, corriger ce qui doit l'être, et rendre OLEL le plus performant possible avant le pilote Matam.
 
-**Dernière mise à jour** : 2026-06-16 — CHANTIER 1 ✅, CHANTIER 2 ✅ (bugs 21 mediaUrls localhost + 22 URL publique fix). CHANTIER 3 livré : composant MediaCapture (photo caméra `capture=environment`, compression client, vocal in-app si HTTPS, fallback WhatsApp si HTTP). Intégré au formulaire signalement citoyen mobile + vérification terrain sentinelle.
+**Dernière mise à jour** : 2026-06-16 — HTTPS olel.app livré : nginx reverse-proxy 5 sous-domaines (api, app, m, bot, www) + Certbot auto-renouvelable + script setup-https.sh idempotent (vérif DNS, certs Let's Encrypt, reconfig .env, rebuild dashboard/mobile). DNS BookMyName à configurer puis ./scripts/setup-https.sh.
 
 ---
 
@@ -23,8 +23,8 @@
 | Bot WhatsApp | conteneur `olel-bot`, port 3002, routes /webhook/whatsapp + /health | ✅ healthy |
 | Tunnel public | ngrok `https://defeat-consent-culinary.ngrok-free.dev` → :3002 | ⚠️ URL volatile (free) |
 | Backup auto | conteneur `--profile backup` (cron 2h00, rétention 7 j) | ❓ à confirmer activé |
-| Nginx + TLS | non configuré (accès par IP/ports) | ⬜ à faire avant pilote |
-| Domaine olel.sn | non acheté | ⬜ à faire avant pilote |
+| Nginx + TLS | config livrée (nginx.conf 5 sous-domaines, certbot auto-renew) | 🔄 à activer via setup-https.sh |
+| Domaine olel.app | parqué chez BookMyName, DNS à configurer | 🔄 |
 
 ## 2. Configuration WhatsApp Cloud API (Meta)
 
