@@ -19,12 +19,13 @@ function LanguageSelector({ compact }: { compact?: boolean }) {
         <button key={l.code} onClick={() => setLang(l.code)}
           style={{
             padding: compact ? '6px 12px' : '8px 14px',
-            border: `1.5px solid ${lang === l.code ? '#1a3c5e' : '#e2e8f0'}`,
-            background: lang === l.code ? '#1a3c5e' : 'white',
-            color: lang === l.code ? 'white' : '#475569',
-            borderRadius: 10, fontSize: '0.82rem', fontWeight: 700, cursor: 'pointer',
+            border: `1px solid ${lang === l.code ? 'transparent' : '#E5E7EB'}`,
+            background: lang === l.code ? '#0F172A' : compact ? 'rgba(255,255,255,0.08)' : 'white',
+            color: lang === l.code ? 'white' : compact ? 'white' : '#475569',
+            borderRadius: 8, fontSize: '0.8rem', fontWeight: 500, cursor: 'pointer',
+            letterSpacing: '-0.005em',
           }}>
-          {l.flag} {l.label}
+          {l.label}
         </button>
       ))}
     </div>
@@ -43,17 +44,16 @@ const RISK_ICONS: Record<string, { icon: string; label: string; color: string }>
   LOCUSTES:             { icon: '🦗', label: 'Criquets',     color: '#84cc16' },
   ACCIDENT_INDUSTRIEL:  { icon: '🏭', label: 'Accident',     color: '#78716c' },
   MOUVEMENT_DE_TERRAIN: { icon: '⛰️', label: 'Glissement',  color: '#92400e' },
-  AUTRE:                { icon: '⚠️', label: 'Autre',        color: '#64748b' },
+  AUTRE:                { icon: '⚠️', label: 'Autre',        color: '#64748B' },
 };
-type AlertType = keyof typeof RISK_ICONS;
 
 const SEV_ZONE = [
-  { color: '#16a34a', label: 'Aucune alerte en cours',    bg: '#dcfce7', border: '#16a34a' },
+  { color: '#16A34A', label: 'Aucune alerte en cours',    bg: '#dcfce7', border: '#16A34A' },
   { color: '#ca8a04', label: 'Vigilance dans votre zone', bg: '#fef9c3', border: '#ca8a04' },
   { color: '#ea580c', label: 'ALERTE dans votre zone',    bg: '#ffedd5', border: '#ea580c' },
-  { color: '#dc2626', label: 'URGENCE — Danger immédiat', bg: '#fee2e2', border: '#dc2626' },
+  { color: '#DC2626', label: 'URGENCE — Danger immédiat', bg: '#fee2e2', border: '#DC2626' },
 ];
-const SEV_COLOR: Record<number, string> = { 1: '#16a34a', 2: '#ea580c', 3: '#dc2626' };
+const SEV_COLOR: Record<number, string> = { 1: '#16A34A', 2: '#ea580c', 3: '#DC2626' };
 const SEV_LABEL: Record<number, string> = { 1: 'Vigilance', 2: 'Alerte', 3: 'Urgence' };
 const STATUS_LABEL: Record<string, string> = {
   PENDING: 'Signalé', UNDER_REVIEW: 'En vérification', VALIDATED: 'Validé',
@@ -75,8 +75,8 @@ const LEVEL_CONFIG: Record<AlertLevel, { label: string; color: string; bg: strin
 function LevelBadge({ level }: { level?: string }) {
   const cfg = LEVEL_CONFIG[(level as AlertLevel)] || LEVEL_CONFIG.BLEU;
   return (
-    <span style={{ fontSize: '0.66rem', background: cfg.bg, color: cfg.color, padding: '2px 7px', borderRadius: 8, fontWeight: 700, whiteSpace: 'nowrap' }}>
-      {cfg.icon} {cfg.label}
+    <span style={{ fontSize: '0.68rem', background: cfg.bg, color: cfg.color, padding: '3px 8px', borderRadius: 6, fontWeight: 600, whiteSpace: 'nowrap', letterSpacing: '0.01em' }}>
+      {cfg.label}
     </span>
   );
 }
@@ -163,33 +163,34 @@ export default function MobilePage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', background: '#f8f9fa' }}>
-      {/* ── Header sticky (remplace le bouton SOS flottant) ─────────────── */}
+      {/* ── Header sticky ───────────────────────────────────────────────── */}
       <header style={{
-        background: '#1a3c5e', color: 'white',
+        background: 'white', color: '#0F172A',
+        borderBottom: '1px solid #F1F5F9',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '0 16px', height: 52, flexShrink: 0,
+        padding: '0 16px', height: 56, flexShrink: 0,
         position: 'sticky', top: 0, zIndex: 100,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: '1.1rem', fontWeight: 800 }}>🚨 OLEL</span>
-          <span style={{ fontSize: '0.68rem', opacity: 0.7 }}>Matam</span>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+          <span style={{ fontSize: '1.05rem', fontWeight: 700, letterSpacing: '-0.02em' }}>OLEL</span>
+          <span style={{ fontSize: '0.72rem', color: '#94A3B8', fontWeight: 500 }}>Matam</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {!isOnline && (
-            <span style={{ fontSize: '0.65rem', background: '#fef3c7', color: '#92400e', padding: '2px 8px', borderRadius: 10, fontWeight: 700 }}>
-              HORS LIGNE
+            <span style={{ fontSize: '0.68rem', background: '#FEF3C7', color: '#92400E', padding: '3px 9px', borderRadius: 6, fontWeight: 600 }}>
+              Hors ligne
             </span>
           )}
           <button
             onClick={() => setSosOpen(true)}
             style={{
-              background: '#dc2626', color: 'white', border: 'none',
-              padding: '6px 14px', borderRadius: 20, fontWeight: 800,
+              background: '#DC2626', color: 'white', border: 'none',
+              padding: '7px 14px', borderRadius: 8, fontWeight: 600,
               fontSize: '0.82rem', cursor: 'pointer',
-              boxShadow: '0 2px 8px rgba(220,38,38,0.4)',
+              letterSpacing: '0.02em',
             }}
           >
-            🆘 SOS
+            SOS
           </button>
         </div>
       </header>
@@ -221,24 +222,36 @@ export default function MobilePage() {
       </div>
 
       {/* ── Bottom Nav ───────────────────────────────────────────────────── */}
-      <nav style={{ background: 'white', borderTop: '1px solid #e2e8f0', display: 'flex', flexShrink: 0, overflowX: 'auto' }}>
+      <nav style={{ background: 'white', borderTop: '1px solid #F1F5F9', display: 'flex', flexShrink: 0, overflowX: 'auto', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
         {([
-          { key: 'home',       icon: '🏠', label: 'Accueil' },
-          { key: 'alerts',     icon: '🔔', label: active.length > 0 ? `(${active.length})` : 'Alertes' },
-          { key: 'report',     icon: '📢', label: 'Signaler' },
+          { key: 'home',       icon: '◉', label: 'Accueil' },
+          { key: 'alerts',     icon: '●', label: 'Alertes', badge: active.length > 0 ? active.length : undefined },
+          { key: 'report',     icon: '＋', label: 'Signaler' },
           ...(isSentinel ? [
-            { key: 'validate',   icon: '✔️',  label: 'Valider' },
-            { key: 'missions',   icon: '📋', label: 'Missions' },
-            { key: 'formations', icon: '📚', label: 'Formation' },
+            { key: 'validate',   icon: '✓',  label: 'Valider' },
+            { key: 'missions',   icon: '☰',  label: 'Missions' },
+            { key: 'formations', icon: '⚐',  label: 'Formation' },
           ] : [
-            { key: 'map',        icon: '🗺️', label: 'Carte' },
+            { key: 'map',        icon: '◐',  label: 'Carte' },
           ]),
-          { key: 'profile',    icon: '👤', label: 'Profil' },
-        ] as { key: Tab; icon: string; label: string }[]).map(({ key, icon, label }) => (
+          { key: 'profile',    icon: '○', label: 'Profil' },
+        ] as { key: Tab; icon: string; label: string; badge?: number }[]).map(({ key, icon, label, badge }) => (
           <button key={key} onClick={() => setTab(key)}
-            style={{ flex: 1, padding: '8px 2px 6px', border: 'none', background: 'none', color: tab === key ? '#1a3c5e' : '#94a3b8', cursor: 'pointer', fontSize: '0.62rem', fontWeight: tab === key ? 700 : 400 }}>
-            <div style={{ fontSize: '1.2rem', marginBottom: 1 }}>{icon}</div>
+            style={{
+              flex: 1, padding: '10px 2px 8px', border: 'none', background: 'none',
+              color: tab === key ? '#0F172A' : '#94A3B8', cursor: 'pointer',
+              fontSize: '0.66rem', fontWeight: tab === key ? 600 : 400,
+              position: 'relative',
+            }}>
+            <div style={{ fontSize: '1.05rem', marginBottom: 3, lineHeight: 1 }}>{icon}</div>
             {label}
+            {badge !== undefined && (
+              <span style={{
+                position: 'absolute', top: 5, right: '50%', marginRight: -16,
+                background: '#DC2626', color: 'white', fontSize: '0.6rem',
+                fontWeight: 600, padding: '1px 5px', borderRadius: 8, minWidth: 16, textAlign: 'center',
+              }}>{badge}</span>
+            )}
           </button>
         ))}
       </nav>
@@ -249,11 +262,10 @@ export default function MobilePage() {
 // ── Splash ────────────────────────────────────────────────────────────────────
 function Splash() {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100dvh', background: '#1a3c5e' }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100dvh', background: '#0F172A' }}>
       <div style={{ textAlign: 'center', color: 'white' }}>
-        <div style={{ fontSize: '3rem', marginBottom: 12 }}>🚨</div>
-        <div style={{ fontSize: '1.5rem', fontWeight: 800 }}>OLEL</div>
-        <div style={{ fontSize: '0.8rem', opacity: 0.7, marginTop: 6 }}>Chargement…</div>
+        <div style={{ fontSize: '1.8rem', fontWeight: 700, letterSpacing: '-0.02em' }}>OLEL</div>
+        <div style={{ fontSize: '0.78rem', opacity: 0.5, marginTop: 8, letterSpacing: '0.05em' }}>Chargement…</div>
       </div>
     </div>
   );
@@ -283,35 +295,34 @@ function MobileLoginScreen({
     }
   };
 
-  const inpStyle = { width: '100%', padding: '14px', border: '1.5px solid #e2e8f0', borderRadius: 10, fontSize: '1rem', boxSizing: 'border-box' as const, outline: 'none' };
-  const btnPrimary = (disabled?: boolean): React.CSSProperties => ({ width: '100%', background: '#1a3c5e', color: 'white', border: 'none', padding: '16px', borderRadius: 12, fontSize: '1rem', fontWeight: 800, cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.6 : 1 });
+  const inpStyle = { width: '100%', padding: '12px 14px', border: '1px solid #E5E7EB', borderRadius: 10, fontSize: '0.95rem', boxSizing: 'border-box' as const, outline: 'none', fontFamily: 'inherit' };
+  const btnPrimary = (disabled?: boolean): React.CSSProperties => ({ width: '100%', background: '#0F172A', color: 'white', border: 'none', padding: '14px', borderRadius: 10, fontSize: '0.95rem', fontWeight: 600, cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.5 : 1, letterSpacing: '-0.01em' });
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100dvh', background: '#1a3c5e' }}>
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 24px 24px', color: 'white' }}>
-        <div style={{ fontSize: '4rem', marginBottom: 8 }}>🚨</div>
-        <h1 style={{ margin: '0 0 4px', fontSize: '2rem', fontWeight: 900, letterSpacing: '-1px' }}>OLEL</h1>
-        <p style={{ margin: '0 0 16px', fontSize: '0.85rem', opacity: 0.8, textAlign: 'center' }}>
-          Alerte précoce multi-risques · Matam
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100dvh', background: '#0F172A' }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '32px 24px', color: 'white' }}>
+        <h1 style={{ margin: '0 0 6px', fontSize: '2.2rem', fontWeight: 700, letterSpacing: '-0.04em' }}>OLEL</h1>
+        <p style={{ margin: '0 0 24px', fontSize: '0.85rem', color: '#94A3B8', textAlign: 'center' }}>
+          Alerte précoce · Matam
         </p>
         <div style={{ marginBottom: 24 }}>
           <LanguageSelector compact />
         </div>
 
-        <div style={{ background: 'white', borderRadius: 20, padding: '28px 24px', width: '100%', maxWidth: 360 }}>
+        <div style={{ background: 'white', borderRadius: 16, padding: '24px 22px', width: '100%', maxWidth: 360 }}>
 
           {/* ── Choix du mode ── */}
           {mode === 'choose' && (
             <>
-              <h2 style={{ margin: '0 0 18px', fontSize: '1rem', color: '#1a3c5e', fontWeight: 700 }}>Comment souhaitez-vous accéder ?</h2>
-              <button onClick={() => setMode('otp_phone')} style={{ ...btnPrimary(), marginBottom: 12, background: '#dc2626' }}>
-                📱 Citoyen — Connexion par SMS
+              <h2 style={{ margin: '0 0 16px', fontSize: '1rem', color: '#0F172A', fontWeight: 600, letterSpacing: '-0.01em' }}>Comment souhaitez-vous accéder ?</h2>
+              <button onClick={() => setMode('otp_phone')} style={{ ...btnPrimary(), marginBottom: 10, background: '#DC2626' }}>
+                Citoyen — code SMS
               </button>
-              <button onClick={() => setMode('password')} style={{ ...btnPrimary(), background: '#1a3c5e' }}>
-                🔒 Opérateur — Mot de passe
+              <button onClick={() => setMode('password')} style={{ ...btnPrimary(), background: 'white', color: '#0F172A', border: '1px solid #E5E7EB' }}>
+                Opérateur — mot de passe
               </button>
-              <p style={{ textAlign: 'center', fontSize: '0.72rem', color: '#94a3b8', marginTop: 14, marginBottom: 0 }}>
-                Les citoyens se connectent par code SMS.<br />Les sentinelles et agents utilisent un mot de passe.
+              <p style={{ textAlign: 'center', fontSize: '0.75rem', color: '#94A3B8', marginTop: 14, marginBottom: 0, lineHeight: 1.5 }}>
+                Citoyens : code SMS.<br />Sentinelles et agents : mot de passe.
               </p>
             </>
           )}
@@ -320,13 +331,13 @@ function MobileLoginScreen({
           {mode === 'otp_phone' && (
             <>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-                <button onClick={() => setMode('choose')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: '1.1rem' }}>←</button>
-                <h2 style={{ margin: 0, fontSize: '1rem', color: '#1a3c5e', fontWeight: 700 }}>Connexion citoyen</h2>
+                <button onClick={() => setMode('choose')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', fontSize: '1.1rem' }}>←</button>
+                <h2 style={{ margin: 0, fontSize: '1rem', color: '#0F172A', fontWeight: 700 }}>Connexion citoyen</h2>
               </div>
               <label style={{ display: 'block', marginBottom: 6, fontSize: '0.82rem', fontWeight: 600, color: '#374151' }}>📱 Numéro de téléphone</label>
               <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)}
                 placeholder="+221700000001" style={{ ...inpStyle, marginBottom: 16 }} />
-              {error && <div style={{ background: '#fee2e2', color: '#dc2626', padding: '8px 12px', borderRadius: 8, marginBottom: 12, fontSize: '0.82rem' }}>{error}</div>}
+              {error && <div style={{ background: '#fee2e2', color: '#DC2626', padding: '8px 12px', borderRadius: 8, marginBottom: 12, fontSize: '0.82rem' }}>{error}</div>}
               <button disabled={loading || !phone} onClick={handleRequestOtp} style={btnPrimary(loading || !phone)}>
                 {loading ? '⏳ Envoi…' : 'Recevoir un code SMS →'}
               </button>
@@ -337,8 +348,8 @@ function MobileLoginScreen({
           {mode === 'otp_code' && (
             <>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-                <button onClick={() => setMode('otp_phone')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: '1.1rem' }}>←</button>
-                <h2 style={{ margin: 0, fontSize: '1rem', color: '#1a3c5e', fontWeight: 700 }}>Entrez votre code</h2>
+                <button onClick={() => setMode('otp_phone')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', fontSize: '1.1rem' }}>←</button>
+                <h2 style={{ margin: 0, fontSize: '1rem', color: '#0F172A', fontWeight: 700 }}>Entrez votre code</h2>
               </div>
               <div style={{ background: '#f0f9ff', borderRadius: 8, padding: '8px 12px', marginBottom: 16, fontSize: '0.78rem', color: '#0369a1' }}>
                 Code envoyé au {phone}. Valable 10 minutes.
@@ -353,11 +364,11 @@ function MobileLoginScreen({
                 value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
                 placeholder="123456"
                 style={{ ...inpStyle, letterSpacing: '0.3em', textAlign: 'center', fontSize: '1.6rem', marginBottom: 16 }} />
-              {error && <div style={{ background: '#fee2e2', color: '#dc2626', padding: '8px 12px', borderRadius: 8, marginBottom: 12, fontSize: '0.82rem' }}>{error}</div>}
+              {error && <div style={{ background: '#fee2e2', color: '#DC2626', padding: '8px 12px', borderRadius: 8, marginBottom: 12, fontSize: '0.82rem' }}>{error}</div>}
               <button disabled={loading || otpCode.length < 6} onClick={() => onVerifyOtp(phone, otpCode)} style={btnPrimary(loading || otpCode.length < 6)}>
                 {loading ? '⏳ Vérification…' : 'Valider →'}
               </button>
-              <button onClick={handleRequestOtp} style={{ width: '100%', background: 'none', border: 'none', color: '#64748b', marginTop: 10, cursor: 'pointer', fontSize: '0.82rem', padding: '6px 0' }}>
+              <button onClick={handleRequestOtp} style={{ width: '100%', background: 'none', border: 'none', color: '#64748B', marginTop: 10, cursor: 'pointer', fontSize: '0.82rem', padding: '6px 0' }}>
                 Renvoyer le code
               </button>
             </>
@@ -367,8 +378,8 @@ function MobileLoginScreen({
           {mode === 'password' && (
             <>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-                <button onClick={() => setMode('choose')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: '1.1rem' }}>←</button>
-                <h2 style={{ margin: 0, fontSize: '1rem', color: '#1a3c5e', fontWeight: 700 }}>Connexion opérateur</h2>
+                <button onClick={() => setMode('choose')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', fontSize: '1.1rem' }}>←</button>
+                <h2 style={{ margin: 0, fontSize: '1rem', color: '#0F172A', fontWeight: 700 }}>Connexion opérateur</h2>
               </div>
               <label style={{ display: 'block', marginBottom: 6, fontSize: '0.82rem', fontWeight: 600, color: '#374151' }}>📱 Téléphone</label>
               <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)}
@@ -377,7 +388,7 @@ function MobileLoginScreen({
               <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && onLogin(phone, password)}
                 style={{ ...inpStyle, marginBottom: 16 }} />
-              {error && <div style={{ background: '#fee2e2', color: '#dc2626', padding: '8px 12px', borderRadius: 8, marginBottom: 12, fontSize: '0.82rem' }}>{error}</div>}
+              {error && <div style={{ background: '#fee2e2', color: '#DC2626', padding: '8px 12px', borderRadius: 8, marginBottom: 12, fontSize: '0.82rem' }}>{error}</div>}
               <button disabled={loading || !phone || !password} onClick={() => onLogin(phone, password)} style={btnPrimary(loading || !phone || !password)}>
                 {loading ? '⏳ Connexion…' : 'Se connecter →'}
               </button>
@@ -396,45 +407,61 @@ function HomeScreen({ zoneStatus, activeCount, onReport, onAlerts, onMap, isSent
   onReport: () => void; onAlerts: () => void; onMap: () => void; isSentinel: boolean;
 }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', padding: '0 0 16px' }}>
-      <div style={{ background: zoneStatus.bg, borderBottom: `4px solid ${zoneStatus.border}`, padding: '16px 20px', textAlign: 'center' }}>
-        <div style={{ fontSize: '0.68rem', fontWeight: 700, color: zoneStatus.color, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>
-          Statut — Région Matam
+    <div style={{ display: 'flex', flexDirection: 'column', padding: '0 0 24px' }}>
+      {/* Bandeau statut zone : sobre, sans bordure agressive */}
+      <div style={{ background: zoneStatus.bg, padding: '20px 24px' }}>
+        <div style={{ fontSize: '0.7rem', fontWeight: 600, color: zoneStatus.color, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>
+          Région de Matam
         </div>
-        <div style={{ fontSize: '1.2rem', fontWeight: 800, color: zoneStatus.color }}>
+        <div style={{ fontSize: '1.05rem', fontWeight: 600, color: zoneStatus.color, letterSpacing: '-0.01em' }}>
           {zoneStatus.label}
         </div>
-        {activeCount > 0 && <div style={{ fontSize: '0.78rem', color: zoneStatus.color, opacity: 0.8, marginTop: 3 }}>{activeCount} alerte(s) en cours</div>}
+        {activeCount > 0 && (
+          <div style={{ fontSize: '0.78rem', color: zoneStatus.color, opacity: 0.75, marginTop: 4 }}>
+            {activeCount} alerte{activeCount > 1 ? 's' : ''} en cours
+          </div>
+        )}
       </div>
 
-      <div style={{ padding: '24px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
+      {/* CTA principal : sobre, sans gradient ni ombre flashy */}
+      <div style={{ padding: '24px 20px 12px' }}>
         <button onClick={onReport}
-          style={{ width: '100%', maxWidth: 340, background: 'linear-gradient(135deg,#dc2626,#b91c1c)', color: 'white', border: 'none', padding: '28px 20px', borderRadius: 20, fontSize: '1.4rem', fontWeight: 900, cursor: 'pointer', boxShadow: '0 6px 24px rgba(220,38,38,0.35)', lineHeight: 1.2 }}>
-          🚨 SIGNALER<br /><span style={{ fontSize: '0.88rem', fontWeight: 600, opacity: 0.9 }}>UN RISQUE</span>
+          style={{
+            width: '100%', background: '#DC2626', color: 'white', border: 'none',
+            padding: '20px 24px', borderRadius: 14, cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+            textAlign: 'left',
+          }}>
+          <div>
+            <div style={{ fontSize: '1.05rem', fontWeight: 600, letterSpacing: '-0.01em' }}>Signaler un risque</div>
+            <div style={{ fontSize: '0.78rem', opacity: 0.8, marginTop: 2 }}>En 3 étapes, à n'importe quel moment</div>
+          </div>
+          <span style={{ fontSize: '1.3rem', fontWeight: 300 }}>›</span>
         </button>
+      </div>
 
-        <p style={{ color: '#94a3b8', fontSize: '0.75rem', margin: 0, textAlign: 'center' }}>
-          Inondation · Incendie · Maladie · Sécheresse
-        </p>
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, width: '100%', maxWidth: 340 }}>
-          <InfoCard icon="📊" label="Alertes actives" sub={`${activeCount} en cours`} color="#1a3c5e" onClick={onAlerts} />
-          {!isSentinel && <InfoCard icon="🗺️" label="Carte Matam" sub="Région Matam" color="#0891b2" onClick={onMap} />}
-        </div>
+      {/* Cartes secondaires : flat, sobre */}
+      <div style={{ padding: '8px 20px 0', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        <InfoCard label="Alertes actives" value={String(activeCount)} sub="en cours" onClick={onAlerts} />
+        {!isSentinel && <InfoCard label="Carte" value={'📍'} sub="Région Matam" onClick={onMap} />}
       </div>
     </div>
   );
 }
 
-function InfoCard({ icon, label, sub, color, onClick }: { icon: string; label: string; sub: string; color: string; onClick?: () => void }) {
+function InfoCard({ label, value, sub, onClick }: { label: string; value: string; sub: string; onClick?: () => void }) {
   return (
     <button
       onClick={onClick}
-      style={{ background: 'white', borderRadius: 12, padding: '14px 12px', boxShadow: '0 1px 6px rgba(0,0,0,0.07)', borderLeft: `3px solid ${color}`, border: `1px solid #f1f5f9`, borderLeftWidth: 3, borderLeftColor: color, cursor: onClick ? 'pointer' : 'default', textAlign: 'left', width: '100%' }}
+      style={{
+        background: 'white', borderRadius: 12, padding: '16px',
+        border: '1px solid #F1F5F9', cursor: onClick ? 'pointer' : 'default',
+        textAlign: 'left', width: '100%',
+      }}
     >
-      <div style={{ fontSize: '1.4rem', marginBottom: 4 }}>{icon}</div>
-      <div style={{ fontSize: '0.8rem', fontWeight: 700, color }}>{label}</div>
-      <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: 2 }}>{sub}</div>
+      <div style={{ fontSize: '0.7rem', color: '#94A3B8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>{label}</div>
+      <div style={{ fontSize: '1.4rem', fontWeight: 700, color: '#0F172A', letterSpacing: '-0.02em' }}>{value}</div>
+      <div style={{ fontSize: '0.74rem', color: '#94A3B8', marginTop: 2 }}>{sub}</div>
     </button>
   );
 }
@@ -711,13 +738,18 @@ function ReportConfirm({ theme, option, onSent, onBack }: { theme: Theme; option
 function ReportSuccess({ onDone }: { onDone: () => void }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60dvh', padding: '0 24px', textAlign: 'center' }}>
-      <div style={{ fontSize: '4.5rem', marginBottom: 16 }}>✅</div>
-      <h2 style={{ color: '#16a34a', margin: '0 0 10px' }}>Signalement envoyé !</h2>
-      <p style={{ color: '#555', margin: '0 0 28px', lineHeight: 1.7, maxWidth: 280 }}>
-        Votre signalement a été transmis aux autorités.<br />Un agent va examiner votre rapport.
+      <div style={{
+        width: 56, height: 56, borderRadius: '50%',
+        background: '#DCFCE7', color: '#16A34A',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: '1.6rem', fontWeight: 600, marginBottom: 20,
+      }}>✓</div>
+      <h2 style={{ color: '#0F172A', margin: '0 0 8px', fontSize: '1.3rem', fontWeight: 700, letterSpacing: '-0.02em' }}>Signalement envoyé</h2>
+      <p style={{ color: '#64748B', margin: '0 0 28px', lineHeight: 1.6, maxWidth: 320, fontSize: '0.92rem' }}>
+        Votre signalement a été transmis aux autorités. Un agent va l&apos;examiner.
       </p>
-      <button onClick={onDone} style={{ background: '#1a3c5e', color: 'white', border: 'none', padding: '14px 32px', borderRadius: 12, fontSize: '0.95rem', fontWeight: 700, cursor: 'pointer' }}>
-        Voir les alertes →
+      <button onClick={onDone} style={{ background: '#0F172A', color: 'white', border: 'none', padding: '13px 28px', borderRadius: 10, fontSize: '0.92rem', fontWeight: 600, cursor: 'pointer', letterSpacing: '-0.01em' }}>
+        Voir les alertes
       </button>
     </div>
   );
@@ -725,36 +757,40 @@ function ReportSuccess({ onDone }: { onDone: () => void }) {
 
 // ── AlertsScreen ──────────────────────────────────────────────────────────────
 function AlertsScreen({ alerts, loading, onRefresh }: { alerts: MobileAlert[]; loading: boolean; onRefresh: () => void }) {
-  if (loading) return <div style={{ textAlign: 'center', padding: 56, color: '#94a3b8', fontSize: '2.5rem' }}>⏳</div>;
+  if (loading) return <div style={{ textAlign: 'center', padding: 56, color: '#94A3B8', fontSize: '0.9rem' }}>Chargement…</div>;
   return (
-    <div style={{ padding: '16px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-        <h2 style={{ margin: 0, fontSize: '1.05rem', color: '#1a3c5e' }}>🔔 Alertes ({alerts.length})</h2>
-        <button onClick={onRefresh} style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 8, padding: '4px 10px', color: '#64748b', cursor: 'pointer', fontSize: '0.8rem' }}>↻</button>
+    <div style={{ padding: '20px 16px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 16 }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, color: '#0F172A', letterSpacing: '-0.02em' }}>Alertes</h2>
+          <div style={{ fontSize: '0.78rem', color: '#94A3B8', marginTop: 2 }}>{alerts.length} actives</div>
+        </div>
+        <button onClick={onRefresh} style={{ background: 'white', border: '1px solid #E5E7EB', borderRadius: 8, padding: '6px 12px', color: '#64748B', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 500 }}>Actualiser</button>
       </div>
       {!alerts.length ? (
-        <div style={{ textAlign: 'center', padding: '48px 20px', color: '#94a3b8' }}>
-          <div style={{ fontSize: '3rem', marginBottom: 12 }}>✅</div>
-          <p style={{ margin: 0 }}>Aucune alerte active dans votre zone.</p>
+        <div style={{ textAlign: 'center', padding: '64px 20px', color: '#64748B' }}>
+          <p style={{ margin: 0, fontSize: '0.92rem' }}>Aucune alerte active dans votre zone.</p>
+          <p style={{ margin: '6px 0 0', fontSize: '0.78rem', color: '#94A3B8' }}>Tirez vers le bas pour actualiser</p>
         </div>
       ) : alerts.map((a) => {
         const color = SEV_COLOR[a.severity] || '#888';
         const meta = RISK_ICONS[a.type] || RISK_ICONS.AUTRE;
         return (
-          <div key={a.id} style={{ background: 'white', borderRadius: 12, padding: '14px', marginBottom: 10, boxShadow: '0 1px 6px rgba(0,0,0,0.07)', borderLeft: `4px solid ${color}` }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
-              <span style={{ fontWeight: 700, fontSize: '0.9rem', color: '#1a3c5e', flex: 1 }}>{meta.icon} {a.title}</span>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-end' }}>
+          <div key={a.id} style={{ background: 'white', borderRadius: 12, padding: '16px', marginBottom: 10, border: '1px solid #F1F5F9' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, marginBottom: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, flex: 1, minWidth: 0 }}>
+                <div style={{ width: 36, height: 36, borderRadius: 8, background: color + '14', color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem', flexShrink: 0 }}>{meta.icon}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: '0.92rem', color: '#0F172A', lineHeight: 1.3 }}>{a.title}</div>
+                  <div style={{ fontSize: '0.72rem', color: '#94A3B8', marginTop: 2 }}>{a.zone?.name || 'Matam'} · {STATUS_LABEL[a.status] || a.status}</div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end', flexShrink: 0 }}>
                 <LevelBadge level={a.alertLevel} />
-                <span style={{ fontSize: '0.68rem', background: color + '22', color, padding: '2px 7px', borderRadius: 8, whiteSpace: 'nowrap', fontWeight: 700 }}>{SEV_LABEL[a.severity]}</span>
               </div>
             </div>
-            <p style={{ margin: '0 0 8px', color: '#555', fontSize: '0.82rem', lineHeight: 1.4 }}>{a.description}</p>
-            <div style={{ display: 'flex', gap: 10, fontSize: '0.72rem', color: '#94a3b8' }}>
-              <span>📍 {a.zone?.name || 'Matam'}</span>
-              <span>{STATUS_LABEL[a.status] || a.status}</span>
-              <span style={{ marginLeft: 'auto' }}>{new Date(a.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}</span>
-            </div>
+            <p style={{ margin: '0 0 4px', color: '#475569', fontSize: '0.83rem', lineHeight: 1.5 }}>{a.description}</p>
+            <div style={{ fontSize: '0.72rem', color: '#94A3B8', marginTop: 8 }}>{new Date(a.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</div>
           </div>
         );
       })}
@@ -831,8 +867,8 @@ function MapScreen({ alerts }: { alerts: MobileAlert[] }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100dvh - 52px - 56px)' }}>
       <div style={{ padding: '10px 16px 6px', flexShrink: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2 style={{ margin: 0, fontSize: '1rem', color: '#1a3c5e' }}>🗺️ Carte des risques — Matam</h2>
-        <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>{alerts.length} alerte{alerts.length !== 1 ? 's' : ''}</span>
+        <h2 style={{ margin: 0, fontSize: '1rem', color: '#0F172A' }}>🗺️ Carte des risques — Matam</h2>
+        <span style={{ fontSize: '0.72rem', color: '#94A3B8' }}>{alerts.length} alerte{alerts.length !== 1 ? 's' : ''}</span>
       </div>
       <div ref={mapRef} style={{ flex: 1, minHeight: 0 }} />
     </div>
@@ -841,67 +877,75 @@ function MapScreen({ alerts }: { alerts: MobileAlert[] }) {
 
 // ── ProfileScreen ─────────────────────────────────────────────────────────────
 const ROLE_LABEL: Record<string, { label: string; color: string }> = {
-  CITOYEN:          { label: 'Citoyen',          color: '#16a34a' },
+  CITOYEN:          { label: 'Citoyen',          color: '#16A34A' },
   SENTINELLE:       { label: 'Sentinelle',        color: '#0891b2' },
   MAIRIE:           { label: 'Agent Mairie',      color: '#7c3aed' },
   PREFECTURE:       { label: 'Agent Préfecture',  color: '#ea580c' },
-  GOUVERNORAT:      { label: 'Gouvernorat',       color: '#dc2626' },
-  PROTECTION_CIVILE:{ label: 'Protection Civile', color: '#dc2626' },
-  ADMIN:            { label: 'Administrateur',    color: '#1a3c5e' },
-  SUPER_ADMIN:      { label: 'Super Admin',       color: '#1a3c5e' },
+  GOUVERNORAT:      { label: 'Gouvernorat',       color: '#DC2626' },
+  PROTECTION_CIVILE:{ label: 'Protection Civile', color: '#DC2626' },
+  ADMIN:            { label: 'Administrateur',    color: '#0F172A' },
+  SUPER_ADMIN:      { label: 'Super Admin',       color: '#0F172A' },
 };
 
 function ProfileScreen({ user, onLogout }: { user: { id: string; name: string; phone: string; role: string }; onLogout: () => void }) {
-  const roleInfo = ROLE_LABEL[user.role] || { label: user.role, color: '#64748b' };
+  const roleInfo = ROLE_LABEL[user.role] || { label: user.role, color: '#64748B' };
   return (
-    <div style={{ padding: '20px 16px' }}>
-      <h2 style={{ margin: '0 0 20px', fontSize: '1.05rem', color: '#1a3c5e' }}>👤 Mon profil</h2>
+    <div style={{ padding: '20px 16px 32px' }}>
+      <h2 style={{ margin: '0 0 20px', fontSize: '1.2rem', fontWeight: 700, color: '#0F172A', letterSpacing: '-0.02em' }}>Profil</h2>
 
-      <div style={{ background: 'white', borderRadius: 16, padding: '20px', marginBottom: 16, boxShadow: '0 1px 6px rgba(0,0,0,0.07)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
-          <div style={{ width: 56, height: 56, borderRadius: '50%', background: roleInfo.color + '22', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.6rem', flexShrink: 0 }}>
-            {user.role === 'CITOYEN' ? '👤' : user.role === 'SENTINELLE' ? '🔭' : user.role === 'ADMIN' || user.role === 'SUPER_ADMIN' ? '⚙️' : '🏛️'}
+      {/* Identité */}
+      <div style={{ background: 'white', borderRadius: 12, padding: '20px', marginBottom: 12, border: '1px solid #F1F5F9' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 14 }}>
+          <div style={{
+            width: 48, height: 48, borderRadius: 12,
+            background: roleInfo.color + '14', color: roleInfo.color,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: '1.1rem', fontWeight: 700, flexShrink: 0,
+            letterSpacing: '-0.01em',
+          }}>
+            {user.name.split(' ').map((s) => s[0]).slice(0, 2).join('').toUpperCase() || 'OL'}
           </div>
-          <div>
-            <div style={{ fontWeight: 800, fontSize: '1rem', color: '#1a3c5e' }}>{user.name}</div>
-            <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: 2 }}>{user.phone}</div>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontWeight: 600, fontSize: '0.98rem', color: '#0F172A' }}>{user.name}</div>
+            <div style={{ fontSize: '0.8rem', color: '#64748B', marginTop: 2 }}>{user.phone}</div>
           </div>
         </div>
-
-        <div style={{ display: 'inline-flex', alignItems: 'center', background: roleInfo.color + '11', border: `1.5px solid ${roleInfo.color}33`, borderRadius: 20, padding: '4px 12px', gap: 6 }}>
-          <div style={{ width: 8, height: 8, borderRadius: '50%', background: roleInfo.color }} />
-          <span style={{ fontSize: '0.82rem', fontWeight: 700, color: roleInfo.color }}>{roleInfo.label}</span>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.78rem', fontWeight: 600, color: roleInfo.color, background: roleInfo.color + '0D', padding: '4px 10px', borderRadius: 6 }}>
+          <div style={{ width: 6, height: 6, borderRadius: '50%', background: roleInfo.color }} />
+          {roleInfo.label}
         </div>
       </div>
 
-      <div style={{ background: 'white', borderRadius: 12, padding: '14px 16px', marginBottom: 16, boxShadow: '0 1px 6px rgba(0,0,0,0.07)' }}>
-        <div style={{ fontSize: '0.72rem', color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>🌍 Langue / Ɗemngal / Làkk</div>
+      {/* Langue */}
+      <div style={{ background: 'white', borderRadius: 12, padding: '16px', marginBottom: 12, border: '1px solid #F1F5F9' }}>
+        <div style={{ fontSize: '0.7rem', color: '#94A3B8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>Langue / Ɗemngal / Làkk</div>
         <LanguageSelector />
-        <p style={{ fontSize: '0.68rem', color: '#94a3b8', margin: '8px 0 0' }}>Vos alertes vous seront envoyées dans cette langue.</p>
+        <p style={{ fontSize: '0.74rem', color: '#94A3B8', margin: '10px 0 0' }}>Vos alertes vous seront envoyées dans cette langue.</p>
       </div>
 
-      <div style={{ background: '#f8fafc', borderRadius: 12, padding: '14px 16px', marginBottom: 20 }}>
-        <div style={{ fontSize: '0.72rem', color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>Plateforme</div>
+      {/* Plateforme */}
+      <div style={{ background: 'white', borderRadius: 12, padding: '16px', marginBottom: 20, border: '1px solid #F1F5F9' }}>
+        <div style={{ fontSize: '0.7rem', color: '#94A3B8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>Plateforme</div>
         {[
-          { icon: '🌍', label: 'Zone', value: 'Région de Matam' },
-          { icon: '📡', label: 'Version', value: 'OLEL MVP v1.0' },
-          { icon: '🔒', label: 'Session', value: 'Sécurisée (JWT)' },
-        ].map(({ icon, label, value }) => (
-          <div key={label} style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 8, marginBottom: 8, borderBottom: '1px solid #f1f5f9' }}>
-            <span style={{ fontSize: '0.82rem', color: '#64748b' }}>{icon} {label}</span>
-            <span style={{ fontSize: '0.82rem', fontWeight: 600, color: '#374151' }}>{value}</span>
+          { label: 'Zone',    value: 'Région de Matam' },
+          { label: 'Version', value: 'OLEL v1.0' },
+          { label: 'Session', value: 'Sécurisée' },
+        ].map(({ label, value }, i, arr) => (
+          <div key={label} style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 10, marginBottom: 10, borderBottom: i === arr.length - 1 ? 'none' : '1px solid #F1F5F9' }}>
+            <span style={{ fontSize: '0.85rem', color: '#64748B' }}>{label}</span>
+            <span style={{ fontSize: '0.85rem', fontWeight: 500, color: '#0F172A' }}>{value}</span>
           </div>
         ))}
       </div>
 
       <button
         onClick={onLogout}
-        style={{ width: '100%', background: '#fee2e2', color: '#dc2626', border: '1.5px solid #fecaca', padding: '14px', borderRadius: 12, fontSize: '0.95rem', fontWeight: 700, cursor: 'pointer' }}
+        style={{ width: '100%', background: 'white', color: '#DC2626', border: '1px solid #FEE2E2', padding: '13px', borderRadius: 10, fontSize: '0.92rem', fontWeight: 600, cursor: 'pointer' }}
       >
-        🚪 Se déconnecter
+        Se déconnecter
       </button>
 
-      <p style={{ textAlign: 'center', marginTop: 20, fontSize: '0.68rem', color: '#cbd5e1' }}>OLEL · Alerte Précoce · Matam, Sénégal</p>
+      <p style={{ textAlign: 'center', marginTop: 24, fontSize: '0.72rem', color: '#CBD5E1' }}>OLEL · Matam, Sénégal</p>
     </div>
   );
 }
@@ -914,7 +958,7 @@ interface TrainingModule {
 }
 
 const CATEGORY_LABEL: Record<string, { icon: string; label: string; color: string }> = {
-  SECOURISME:     { icon: '🩺', label: 'Secourisme',    color: '#16a34a' },
+  SECOURISME:     { icon: '🩺', label: 'Secourisme',    color: '#16A34A' },
   RISQUE_LOCAL:   { icon: '🌊', label: 'Risques locaux', color: '#2563eb' },
   PROCEDURE:      { icon: '📋', label: 'Procédures',    color: '#7c3aed' },
   SENSIBILISATION:{ icon: '📣', label: 'Sensibilisation',color: '#ea580c' },
@@ -954,15 +998,15 @@ function FormationsScreen() {
     } catch { /* ignore */ } finally { setCompleting(null); }
   };
 
-  if (loading) return <div style={{ textAlign: 'center', padding: 56, color: '#94a3b8', fontSize: '2.5rem' }}>⏳</div>;
+  if (loading) return <div style={{ textAlign: 'center', padding: 56, color: '#94A3B8', fontSize: '2.5rem' }}>⏳</div>;
 
   return (
     <div style={{ padding: '16px' }}>
-      <h2 style={{ margin: '0 0 12px', fontSize: '1.05rem', color: '#1a3c5e' }}>📚 Formations</h2>
+      <h2 style={{ margin: '0 0 12px', fontSize: '1.05rem', color: '#0F172A' }}>📚 Formations</h2>
 
       {status && (
-        <div style={{ background: status.certified ? '#dcfce7' : '#fef9c3', border: `1.5px solid ${status.certified ? '#16a34a' : '#ca8a04'}`, borderRadius: 12, padding: '12px 16px', marginBottom: 16 }}>
-          <div style={{ fontWeight: 800, color: status.certified ? '#16a34a' : '#ca8a04', fontSize: '0.92rem', marginBottom: 4 }}>
+        <div style={{ background: status.certified ? '#dcfce7' : '#fef9c3', border: `1.5px solid ${status.certified ? '#16A34A' : '#ca8a04'}`, borderRadius: 12, padding: '12px 16px', marginBottom: 16 }}>
+          <div style={{ fontWeight: 800, color: status.certified ? '#16A34A' : '#ca8a04', fontSize: '0.92rem', marginBottom: 4 }}>
             {status.certified ? '✅ Certification obtenue' : '⚠️ Certification en cours'}
           </div>
           <div style={{ fontSize: '0.78rem', color: '#374151' }}>
@@ -972,34 +1016,34 @@ function FormationsScreen() {
       )}
 
       {modules.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '40px 20px', color: '#94a3b8' }}>
+        <div style={{ textAlign: 'center', padding: '40px 20px', color: '#94A3B8' }}>
           <div style={{ fontSize: '2.5rem', marginBottom: 10 }}>📚</div>
           <p style={{ margin: 0 }}>Aucun module de formation disponible.</p>
         </div>
       ) : modules.map((m) => {
-        const cat = CATEGORY_LABEL[m.category] || { icon: '📖', label: m.category, color: '#64748b' };
+        const cat = CATEGORY_LABEL[m.category] || { icon: '📖', label: m.category, color: '#64748B' };
         return (
-          <div key={m.id} style={{ background: 'white', borderRadius: 12, marginBottom: 12, boxShadow: '0 1px 6px rgba(0,0,0,0.07)', overflow: 'hidden', borderLeft: `4px solid ${m.progress.completed ? '#16a34a' : (m.isRequired ? '#dc2626' : cat.color)}` }}>
+          <div key={m.id} style={{ background: 'white', borderRadius: 12, marginBottom: 12, boxShadow: '0 1px 6px rgba(0,0,0,0.07)', overflow: 'hidden', borderLeft: `4px solid ${m.progress.completed ? '#16A34A' : (m.isRequired ? '#DC2626' : cat.color)}` }}>
             <div style={{ padding: '14px 14px 10px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 6 }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 3 }}>
                     <span style={{ fontSize: '1rem' }}>{cat.icon}</span>
                     <span style={{ fontSize: '0.68rem', fontWeight: 700, color: cat.color, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{cat.label}</span>
-                    {m.isRequired && <span style={{ fontSize: '0.62rem', background: '#fee2e2', color: '#dc2626', padding: '1px 6px', borderRadius: 8, fontWeight: 700 }}>REQUIS</span>}
+                    {m.isRequired && <span style={{ fontSize: '0.62rem', background: '#fee2e2', color: '#DC2626', padding: '1px 6px', borderRadius: 8, fontWeight: 700 }}>REQUIS</span>}
                   </div>
-                  <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#1a3c5e' }}>{m.title}</div>
+                  <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#0F172A' }}>{m.title}</div>
                 </div>
                 <div style={{ textAlign: 'right', flexShrink: 0 }}>
                   {m.progress.completed ? (
                     <div style={{ fontSize: '1.4rem' }}>✅</div>
                   ) : (
-                    <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>⏱ {m.durationMin} min</div>
+                    <div style={{ fontSize: '0.72rem', color: '#94A3B8' }}>⏱ {m.durationMin} min</div>
                   )}
                 </div>
               </div>
-              <p style={{ margin: '0 0 10px', color: '#64748b', fontSize: '0.8rem', lineHeight: 1.4 }}>{m.description}</p>
-              <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginBottom: 10 }}>
+              <p style={{ margin: '0 0 10px', color: '#64748B', fontSize: '0.8rem', lineHeight: 1.4 }}>{m.description}</p>
+              <div style={{ fontSize: '0.72rem', color: '#94A3B8', marginBottom: 10 }}>
                 {m.lessons.length} leçon{m.lessons.length > 1 ? 's' : ''}
                 {m.progress.completed && m.progress.completedAt && (
                   <> · Complété le {new Date(m.progress.completedAt).toLocaleDateString('fr-FR')}</>
@@ -1012,7 +1056,7 @@ function FormationsScreen() {
                 <button
                   disabled={completing === m.id}
                   onClick={() => handleComplete(m.id)}
-                  style={{ width: '100%', background: '#1a3c5e', color: 'white', border: 'none', padding: '10px', borderRadius: 8, fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', opacity: completing === m.id ? 0.6 : 1 }}
+                  style={{ width: '100%', background: '#0F172A', color: 'white', border: 'none', padding: '10px', borderRadius: 8, fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', opacity: completing === m.id ? 0.6 : 1 }}
                 >
                   {completing === m.id ? '⏳ Enregistrement…' : '✔️ Marquer comme complété'}
                 </button>
@@ -1036,11 +1080,11 @@ const MISSION_TYPE_ICON: Record<string, string> = {
   VERIFICATION: '🔍', PATROUILLE: '🚶', SENSIBILISATION: '📣', EVACUATION: '🚨',
 };
 const MISSION_STATUS_LABEL: Record<string, { label: string; color: string }> = {
-  OPEN:        { label: 'Ouverte',      color: '#64748b' },
+  OPEN:        { label: 'Ouverte',      color: '#64748B' },
   ASSIGNED:    { label: 'Assignée',     color: '#2563eb' },
   IN_PROGRESS: { label: 'En cours',     color: '#ea580c' },
-  DONE:        { label: 'Terminée',     color: '#16a34a' },
-  CANCELLED:   { label: 'Annulée',      color: '#94a3b8' },
+  DONE:        { label: 'Terminée',     color: '#16A34A' },
+  CANCELLED:   { label: 'Annulée',      color: '#94A3B8' },
 };
 
 function MissionsScreen() {
@@ -1071,23 +1115,23 @@ function MissionsScreen() {
     } catch { /* ignore */ } finally { setActing(null); }
   };
 
-  if (loading) return <div style={{ textAlign: 'center', padding: 56, color: '#94a3b8', fontSize: '2.5rem' }}>⏳</div>;
+  if (loading) return <div style={{ textAlign: 'center', padding: 56, color: '#94A3B8', fontSize: '2.5rem' }}>⏳</div>;
 
   const active = missions.filter((m) => m.status !== 'DONE' && m.status !== 'CANCELLED');
   const done = missions.filter((m) => m.status === 'DONE');
 
   return (
     <div style={{ padding: '16px' }}>
-      <h2 style={{ margin: '0 0 14px', fontSize: '1.05rem', color: '#1a3c5e' }}>📋 Mes missions ({active.length} active{active.length > 1 ? 's' : ''})</h2>
+      <h2 style={{ margin: '0 0 14px', fontSize: '1.05rem', color: '#0F172A' }}>📋 Mes missions ({active.length} active{active.length > 1 ? 's' : ''})</h2>
 
       {missions.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '40px 20px', color: '#94a3b8' }}>
+        <div style={{ textAlign: 'center', padding: '40px 20px', color: '#94A3B8' }}>
           <div style={{ fontSize: '2.5rem', marginBottom: 10 }}>📋</div>
           <p style={{ margin: 0 }}>Aucune mission assignée pour le moment.</p>
         </div>
       ) : <>
         {active.map((m) => {
-          const st = MISSION_STATUS_LABEL[m.status] || { label: m.status, color: '#64748b' };
+          const st = MISSION_STATUS_LABEL[m.status] || { label: m.status, color: '#64748B' };
           const icon = MISSION_TYPE_ICON[m.type] || '📋';
           const isAccepting = acting === m.id + 'accept';
           const isCompleting = acting === m.id + 'complete';
@@ -1095,11 +1139,11 @@ function MissionsScreen() {
             <div key={m.assignmentId} style={{ background: 'white', borderRadius: 12, marginBottom: 12, boxShadow: '0 1px 6px rgba(0,0,0,0.07)', borderLeft: `4px solid ${st.color}` }}>
               <div style={{ padding: '14px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
-                  <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#1a3c5e' }}>{icon} {m.title}</div>
+                  <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#0F172A' }}>{icon} {m.title}</div>
                   <span style={{ fontSize: '0.68rem', background: st.color + '22', color: st.color, padding: '2px 8px', borderRadius: 8, fontWeight: 700, whiteSpace: 'nowrap' }}>{st.label}</span>
                 </div>
-                <p style={{ margin: '0 0 8px', color: '#64748b', fontSize: '0.8rem', lineHeight: 1.4 }}>{m.description}</p>
-                <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginBottom: 10 }}>
+                <p style={{ margin: '0 0 8px', color: '#64748B', fontSize: '0.8rem', lineHeight: 1.4 }}>{m.description}</p>
+                <div style={{ fontSize: '0.72rem', color: '#94A3B8', marginBottom: 10 }}>
                   📍 {m.zone?.name || 'Matam'}
                   {m.dueAt && <> · ⏰ Avant le {new Date(m.dueAt).toLocaleDateString('fr-FR')}</>}
                 </div>
@@ -1118,10 +1162,10 @@ function MissionsScreen() {
                       onChange={(e) => setReport((r) => ({ ...r, [m.id]: e.target.value }))}
                       placeholder="Compte-rendu de mission (facultatif)…"
                       rows={2}
-                      style={{ width: '100%', padding: '8px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: '0.82rem', resize: 'none', boxSizing: 'border-box', fontFamily: 'inherit', marginBottom: 8 }}
+                      style={{ width: '100%', padding: '8px 10px', border: '1px solid #E5E7EB', borderRadius: 8, fontSize: '0.82rem', resize: 'none', boxSizing: 'border-box', fontFamily: 'inherit', marginBottom: 8 }}
                     />
                     <button disabled={isCompleting} onClick={() => doAction(m.id, 'complete')}
-                      style={{ width: '100%', background: '#16a34a', color: 'white', border: 'none', padding: '10px', borderRadius: 8, fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', opacity: isCompleting ? 0.6 : 1 }}>
+                      style={{ width: '100%', background: '#16A34A', color: 'white', border: 'none', padding: '10px', borderRadius: 8, fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', opacity: isCompleting ? 0.6 : 1 }}>
                       {isCompleting ? '⏳…' : '✅ Clôturer la mission'}
                     </button>
                   </div>
@@ -1133,11 +1177,11 @@ function MissionsScreen() {
 
         {done.length > 0 && (
           <>
-            <div style={{ fontSize: '0.68rem', color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', margin: '16px 0 8px' }}>Missions terminées</div>
+            <div style={{ fontSize: '0.68rem', color: '#94A3B8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', margin: '16px 0 8px' }}>Missions terminées</div>
             {done.map((m) => (
-              <div key={m.assignmentId} style={{ background: '#f8fafc', borderRadius: 10, padding: '10px 14px', marginBottom: 8, opacity: 0.8, borderLeft: '4px solid #16a34a' }}>
+              <div key={m.assignmentId} style={{ background: '#FAFAFA', borderRadius: 10, padding: '10px 14px', marginBottom: 8, opacity: 0.8, borderLeft: '4px solid #16A34A' }}>
                 <div style={{ fontWeight: 600, fontSize: '0.85rem', color: '#374151' }}>{MISSION_TYPE_ICON[m.type] || '📋'} {m.title}</div>
-                {m.completedAt && <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: 3 }}>Clôturée le {new Date(m.completedAt).toLocaleDateString('fr-FR')}</div>}
+                {m.completedAt && <div style={{ fontSize: '0.72rem', color: '#94A3B8', marginTop: 3 }}>Clôturée le {new Date(m.completedAt).toLocaleDateString('fr-FR')}</div>}
               </div>
             ))}
           </>
@@ -1163,13 +1207,13 @@ function SentinelValidationScreen({ alerts, signalements, onDone }: { alerts: Mo
       {/* ── Signalements citoyens (WhatsApp/USSD) en attente de vérification terrain ── */}
       {signalements.length > 0 && (
         <>
-          <h2 style={{ margin: '0 0 10px', fontSize: '1.05rem', color: '#1a3c5e' }}>📢 Signalements citoyens ({signalements.length})</h2>
+          <h2 style={{ margin: '0 0 10px', fontSize: '1.05rem', color: '#0F172A' }}>📢 Signalements citoyens ({signalements.length})</h2>
           {signalements.map((sg) => {
             const meta = RISK_ICONS[sg.type] || RISK_ICONS.AUTRE;
             const needsField = !sg.fieldVerifiedAt && !(sg.latitude && sg.longitude);
             return (
-              <div key={sg.id} style={{ background: 'white', borderRadius: 12, padding: 14, marginBottom: 10, boxShadow: '0 1px 6px rgba(0,0,0,0.07)', borderLeft: `4px solid ${needsField ? '#f59e0b' : '#16a34a'}` }}>
-                <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#1a3c5e', marginBottom: 4 }}>{meta.icon} {meta.label}</div>
+              <div key={sg.id} style={{ background: 'white', borderRadius: 12, padding: 14, marginBottom: 10, boxShadow: '0 1px 6px rgba(0,0,0,0.07)', borderLeft: `4px solid ${needsField ? '#f59e0b' : '#16A34A'}` }}>
+                <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#0F172A', marginBottom: 4 }}>{meta.icon} {meta.label}</div>
                 <p style={{ margin: '0 0 8px', color: '#555', fontSize: '0.82rem', lineHeight: 1.4 }}>{sg.text}</p>
                 {(sg as any).mediaUrls?.length > 0 && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}>
@@ -1187,7 +1231,7 @@ function SentinelValidationScreen({ alerts, signalements, onDone }: { alerts: Mo
                     ))}
                   </div>
                 )}
-                <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginBottom: 8 }}>
+                <div style={{ fontSize: '0.7rem', color: '#94A3B8', marginBottom: 8 }}>
                   {sg.user && <>👤 {sg.user.name} · </>}via {sg.channel} · {new Date(sg.createdAt).toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
                 </div>
                 {sg.fieldVerifiedAt ? (
@@ -1211,24 +1255,24 @@ function SentinelValidationScreen({ alerts, signalements, onDone }: { alerts: Mo
         </>
       )}
 
-      <h2 style={{ margin: '0 0 14px', fontSize: '1.05rem', color: '#1a3c5e' }}>✔️ Alertes à valider ({alerts.length})</h2>
+      <h2 style={{ margin: '0 0 14px', fontSize: '1.05rem', color: '#0F172A' }}>✔️ Alertes à valider ({alerts.length})</h2>
       {alerts.length === 0 && signalements.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '40px 20px', color: '#94a3b8' }}>
+        <div style={{ textAlign: 'center', padding: '40px 20px', color: '#94A3B8' }}>
           <div style={{ fontSize: '2.5rem', marginBottom: 10 }}>✅</div>
           <p style={{ margin: 0 }}>Aucun signalement en attente de validation.</p>
         </div>
       ) : alerts.length === 0 ? (
-        <p style={{ color: '#94a3b8', fontSize: '0.82rem' }}>Aucune alerte en attente.</p>
+        <p style={{ color: '#94A3B8', fontSize: '0.82rem' }}>Aucune alerte en attente.</p>
       ) : alerts.map((a) => {
         const meta = RISK_ICONS[a.type] || RISK_ICONS.AUTRE;
         const color = SEV_COLOR[a.severity] || '#888';
         return (
           <div key={a.id} style={{ background: 'white', borderRadius: 12, padding: 14, marginBottom: 10, boxShadow: '0 1px 6px rgba(0,0,0,0.07)', borderLeft: `4px solid ${color}` }}>
-            <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#1a3c5e', marginBottom: 4 }}>{meta.icon} {a.title}</div>
+            <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#0F172A', marginBottom: 4 }}>{meta.icon} {a.title}</div>
             <p style={{ margin: '0 0 10px', color: '#555', fontSize: '0.82rem', lineHeight: 1.4 }}>{a.description}</p>
-            <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginBottom: 10 }}>📍 {a.zone?.name || 'Matam'} · {STATUS_LABEL[a.status] || a.status}</div>
+            <div style={{ fontSize: '0.72rem', color: '#94A3B8', marginBottom: 10 }}>📍 {a.zone?.name || 'Matam'} · {STATUS_LABEL[a.status] || a.status}</div>
             <button onClick={() => setSelected(a)}
-              style={{ width: '100%', background: '#1a3c5e', color: 'white', border: 'none', padding: '10px', borderRadius: 8, fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer' }}>
+              style={{ width: '100%', background: '#0F172A', color: 'white', border: 'none', padding: '10px', borderRadius: 8, fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer' }}>
               Valider / Rejeter ce signalement →
             </button>
           </div>
@@ -1295,20 +1339,20 @@ function SentinelValidationForm({ alert, onBack, onDone }: { alert: MobileAlert;
 
   return (
     <div style={{ padding: '16px 20px 32px' }}>
-      <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '0.85rem', padding: '0 0 12px', display: 'block' }}>← Retour</button>
-      <h2 style={{ margin: '0 0 14px', fontSize: '1rem', color: '#1a3c5e' }}>Validation terrain</h2>
+      <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', fontSize: '0.85rem', padding: '0 0 12px', display: 'block' }}>← Retour</button>
+      <h2 style={{ margin: '0 0 14px', fontSize: '1rem', color: '#0F172A' }}>Validation terrain</h2>
 
-      <div style={{ background: '#f8fafc', borderRadius: 10, padding: '10px 14px', marginBottom: 14, fontSize: '0.88rem' }}>
+      <div style={{ background: '#FAFAFA', borderRadius: 10, padding: '10px 14px', marginBottom: 14, fontSize: '0.88rem' }}>
         <b>{meta.icon} {alert.title}</b><br />
-        <span style={{ color: '#64748b', fontSize: '0.8rem' }}>{alert.description}</span>
+        <span style={{ color: '#64748B', fontSize: '0.8rem' }}>{alert.description}</span>
       </div>
 
       <div style={{ marginBottom: 14 }}>
         <label style={{ display: 'block', fontWeight: 700, fontSize: '0.82rem', color: '#374151', marginBottom: 6 }}>Action</label>
         <div style={{ display: 'flex', gap: 8 }}>
-          {([['VALIDATED', '✅ Valider', '#16a34a'], ['REJECTED', '❌ Rejeter', '#dc2626'], ['ESCALATED', '⬆️ Escalader', '#ea580c']] as const).map(([val, label, color]) => (
+          {([['VALIDATED', '✅ Valider', '#16A34A'], ['REJECTED', '❌ Rejeter', '#DC2626'], ['ESCALATED', '⬆️ Escalader', '#ea580c']] as const).map(([val, label, color]) => (
             <button key={val} onClick={() => setAction(val)}
-              style={{ flex: 1, padding: '8px 4px', border: `2px solid ${action === val ? color : '#e2e8f0'}`, borderRadius: 8, background: action === val ? color + '22' : 'white', color: action === val ? color : '#64748b', fontWeight: 700, fontSize: '0.72rem', cursor: 'pointer' }}>
+              style={{ flex: 1, padding: '8px 4px', border: `2px solid ${action === val ? color : '#E5E7EB'}`, borderRadius: 8, background: action === val ? color + '22' : 'white', color: action === val ? color : '#64748B', fontWeight: 700, fontSize: '0.72rem', cursor: 'pointer' }}>
               {label}
             </button>
           ))}
@@ -1322,7 +1366,7 @@ function SentinelValidationForm({ alert, onBack, onDone }: { alert: MobileAlert;
             <div style={{ display: 'flex', gap: 8 }}>
               {[0, 1, 2, 3].map((g) => (
                 <button key={g} onClick={() => setGravity(g)}
-                  style={{ flex: 1, padding: '10px 4px', border: `2px solid ${gravity === g ? '#1a3c5e' : '#e2e8f0'}`, borderRadius: 8, background: gravity === g ? '#1a3c5e' : 'white', color: gravity === g ? 'white' : '#64748b', fontWeight: 800, cursor: 'pointer' }}>
+                  style={{ flex: 1, padding: '10px 4px', border: `2px solid ${gravity === g ? '#0F172A' : '#E5E7EB'}`, borderRadius: 8, background: gravity === g ? '#0F172A' : 'white', color: gravity === g ? 'white' : '#64748B', fontWeight: 800, cursor: 'pointer' }}>
                   {g}
                 </button>
               ))}
@@ -1337,13 +1381,13 @@ function SentinelValidationForm({ alert, onBack, onDone }: { alert: MobileAlert;
                 const on = alertLevel === lvl;
                 return (
                   <button key={lvl} onClick={() => setAlertLevel(lvl)}
-                    style={{ flex: '1 1 30%', padding: '7px 4px', border: `2px solid ${on ? cfg.color : '#e2e8f0'}`, borderRadius: 8, background: on ? cfg.bg : 'white', color: on ? cfg.color : '#64748b', fontWeight: 700, fontSize: '0.68rem', cursor: 'pointer' }}>
+                    style={{ flex: '1 1 30%', padding: '7px 4px', border: `2px solid ${on ? cfg.color : '#E5E7EB'}`, borderRadius: 8, background: on ? cfg.bg : 'white', color: on ? cfg.color : '#64748B', fontWeight: 700, fontSize: '0.68rem', cursor: 'pointer' }}>
                     {cfg.icon} {cfg.label}
                   </button>
                 );
               })}
             </div>
-            <div style={{ fontSize: '0.68rem', color: '#94a3b8', marginTop: 4 }}>
+            <div style={{ fontSize: '0.68rem', color: '#94A3B8', marginTop: 4 }}>
               Orange et plus exigent une triple validation avant diffusion.
             </div>
           </div>
@@ -1351,10 +1395,10 @@ function SentinelValidationForm({ alert, onBack, onDone }: { alert: MobileAlert;
           <div style={{ marginBottom: 14 }}>
             <label style={{ display: 'block', fontWeight: 700, fontSize: '0.82rem', color: '#374151', marginBottom: 6 }}>📷 URL photo de preuve *</label>
             <input type="url" value={photoUrl} onChange={(e) => setPhotoUrl(e.target.value)}
-              placeholder="https://..." style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #e2e8f0', borderRadius: 8, fontSize: '0.88rem', boxSizing: 'border-box' as const }} />
+              placeholder="https://..." style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #E5E7EB', borderRadius: 8, fontSize: '0.88rem', boxSizing: 'border-box' as const }} />
           </div>
 
-          <div style={{ marginBottom: 14, padding: '8px 12px', background: gps ? '#dcfce7' : '#fef9c3', borderRadius: 8, fontSize: '0.78rem', color: gps ? '#16a34a' : '#92400e' }}>
+          <div style={{ marginBottom: 14, padding: '8px 12px', background: gps ? '#dcfce7' : '#fef9c3', borderRadius: 8, fontSize: '0.78rem', color: gps ? '#16A34A' : '#92400e' }}>
             {gps ? `📍 GPS : ${gps.lat.toFixed(5)}, ${gps.lng.toFixed(5)}` : (gpsError || '📍 Acquisition GPS en cours…')}
           </div>
         </>
@@ -1364,13 +1408,13 @@ function SentinelValidationForm({ alert, onBack, onDone }: { alert: MobileAlert;
         <label style={{ display: 'block', fontWeight: 700, fontSize: '0.82rem', color: '#374151', marginBottom: 6 }}>Commentaire (facultatif)</label>
         <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={2}
           placeholder="Observations de terrain…"
-          style={{ width: '100%', padding: '8px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: '0.85rem', resize: 'none', boxSizing: 'border-box' as const, fontFamily: 'inherit' }} />
+          style={{ width: '100%', padding: '8px 10px', border: '1px solid #E5E7EB', borderRadius: 8, fontSize: '0.85rem', resize: 'none', boxSizing: 'border-box' as const, fontFamily: 'inherit' }} />
       </div>
 
-      {error && <div style={{ background: '#fee2e2', color: '#dc2626', padding: '8px 12px', borderRadius: 8, marginBottom: 12, fontSize: '0.82rem' }}>{error}</div>}
+      {error && <div style={{ background: '#fee2e2', color: '#DC2626', padding: '8px 12px', borderRadius: 8, marginBottom: 12, fontSize: '0.82rem' }}>{error}</div>}
 
       <button disabled={sending} onClick={handleSubmit}
-        style={{ width: '100%', background: action === 'REJECTED' ? '#dc2626' : '#1a3c5e', color: 'white', border: 'none', padding: '14px', borderRadius: 12, fontSize: '0.95rem', fontWeight: 800, cursor: 'pointer', opacity: sending ? 0.6 : 1 }}>
+        style={{ width: '100%', background: action === 'REJECTED' ? '#DC2626' : '#0F172A', color: 'white', border: 'none', padding: '14px', borderRadius: 12, fontSize: '0.95rem', fontWeight: 800, cursor: 'pointer', opacity: sending ? 0.6 : 1 }}>
         {sending ? '⏳ Envoi…' : action === 'VALIDATED' ? '✅ Valider le signalement' : action === 'REJECTED' ? '❌ Rejeter le signalement' : '⬆️ Escalader à la préfecture'}
       </button>
     </div>
@@ -1430,16 +1474,16 @@ function SignalementFieldVerifyForm({ signalement, onBack, onDone }: { signaleme
   };
 
   const meta = RISK_ICONS[signalement.type] || RISK_ICONS.AUTRE;
-  const inp = { width: '100%', padding: '10px 12px', border: '1.5px solid #e2e8f0', borderRadius: 8, fontSize: '0.92rem', boxSizing: 'border-box' as const };
+  const inp = { width: '100%', padding: '10px 12px', border: '1.5px solid #E5E7EB', borderRadius: 8, fontSize: '0.92rem', boxSizing: 'border-box' as const };
 
   return (
     <div style={{ padding: '16px 20px 32px' }}>
-      <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '0.85rem', padding: '0 0 12px', display: 'block' }}>← Retour</button>
-      <h2 style={{ margin: '0 0 14px', fontSize: '1rem', color: '#1a3c5e' }}>🔭 Vérification terrain</h2>
+      <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', fontSize: '0.85rem', padding: '0 0 12px', display: 'block' }}>← Retour</button>
+      <h2 style={{ margin: '0 0 14px', fontSize: '1rem', color: '#0F172A' }}>🔭 Vérification terrain</h2>
 
-      <div style={{ background: '#f8fafc', borderRadius: 10, padding: '10px 14px', marginBottom: 14, fontSize: '0.88rem' }}>
+      <div style={{ background: '#FAFAFA', borderRadius: 10, padding: '10px 14px', marginBottom: 14, fontSize: '0.88rem' }}>
         <b>{meta.icon} {meta.label}</b><br />
-        <span style={{ color: '#64748b', fontSize: '0.8rem' }}>{signalement.text}</span>
+        <span style={{ color: '#64748B', fontSize: '0.8rem' }}>{signalement.text}</span>
       </div>
 
       {gpsStatus === 'pending' && (
@@ -1448,7 +1492,7 @@ function SignalementFieldVerifyForm({ signalement, onBack, onDone }: { signaleme
         </div>
       )}
       {gpsStatus === 'ok' && gps && (
-        <div style={{ background: '#dcfce7', color: '#16a34a', padding: '8px 12px', borderRadius: 8, marginBottom: 14, fontSize: '0.8rem' }}>
+        <div style={{ background: '#dcfce7', color: '#16A34A', padding: '8px 12px', borderRadius: 8, marginBottom: 14, fontSize: '0.8rem' }}>
           📍 Position acquise : {gps.lat.toFixed(5)}, {gps.lng.toFixed(5)}
         </div>
       )}
@@ -1470,7 +1514,7 @@ function SignalementFieldVerifyForm({ signalement, onBack, onDone }: { signaleme
         <label style={{ display: 'block', fontWeight: 700, fontSize: '0.82rem', color: '#374151', marginBottom: 6 }}>Observations terrain</label>
         <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3}
           placeholder="Ampleur, victimes, accessibilité, besoins urgents…"
-          style={{ width: '100%', padding: '8px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: '0.85rem', resize: 'none', boxSizing: 'border-box' as const, fontFamily: 'inherit' }} />
+          style={{ width: '100%', padding: '8px 10px', border: '1px solid #E5E7EB', borderRadius: 8, fontSize: '0.85rem', resize: 'none', boxSizing: 'border-box' as const, fontFamily: 'inherit' }} />
       </div>
 
       <div style={{ marginBottom: 14 }}>
@@ -1478,7 +1522,7 @@ function SignalementFieldVerifyForm({ signalement, onBack, onDone }: { signaleme
         <MediaCapture onChange={setCaptured} />
       </div>
 
-      {error && <div style={{ background: '#fee2e2', color: '#dc2626', padding: '8px 12px', borderRadius: 8, marginBottom: 12, fontSize: '0.82rem' }}>{error}</div>}
+      {error && <div style={{ background: '#fee2e2', color: '#DC2626', padding: '8px 12px', borderRadius: 8, marginBottom: 12, fontSize: '0.82rem' }}>{error}</div>}
 
       <button disabled={sending || gpsStatus === 'pending'} onClick={handleSubmit}
         style={{ width: '100%', background: '#0ea5e9', color: 'white', border: 'none', padding: '14px', borderRadius: 12, fontSize: '0.95rem', fontWeight: 800, cursor: 'pointer', opacity: sending || gpsStatus === 'pending' ? 0.6 : 1 }}>
@@ -1490,23 +1534,30 @@ function SignalementFieldVerifyForm({ signalement, onBack, onDone }: { signaleme
 
 function SosModal({ onClose }: { onClose: () => void }) {
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 9998, display: 'flex', alignItems: 'flex-end' }} onClick={onClose}>
-      <div style={{ background: 'white', width: '100%', borderRadius: '20px 20px 0 0', padding: '20px 20px 32px', maxWidth: 480, margin: '0 auto' }} onClick={(e) => e.stopPropagation()}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
-          <h2 style={{ margin: 0, color: '#dc2626', fontSize: '1.1rem' }}>🆘 Numéros d&apos;urgence</h2>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.3rem', cursor: 'pointer', color: '#94a3b8' }}>✕</button>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 9998, display: 'flex', alignItems: 'flex-end' }} onClick={onClose}>
+      <div style={{ background: 'white', width: '100%', borderRadius: '20px 20px 0 0', padding: '20px 20px 28px', maxWidth: 480, margin: '0 auto' }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ width: 36, height: 4, background: '#E5E7EB', borderRadius: 2, margin: '0 auto 16px' }} />
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+          <h2 style={{ margin: 0, color: '#0F172A', fontSize: '1.15rem', fontWeight: 700, letterSpacing: '-0.02em' }}>Numéros d&apos;urgence</h2>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '0.85rem', cursor: 'pointer', color: '#64748B' }}>Fermer</button>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <p style={{ margin: '0 0 16px', fontSize: '0.82rem', color: '#64748B' }}>Appel direct — tarif standard</p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {[
-            { label: 'Sapeurs-Pompiers',         number: '18',           color: '#dc2626' },
-            { label: 'Police / Gendarmerie',     number: '17',           color: '#1d4ed8' },
-            { label: 'SAMU Sénégal',             number: '15',           color: '#16a34a' },
-            { label: 'Protection Civile',        number: '33 869 19 20', color: '#ea580c' },
-          ].map(({ label, number, color }) => (
-            <a key={number} href={`tel:${number}`}
-              style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', background: color + '11', borderRadius: 12, border: `2px solid ${color}33`, textDecoration: 'none' }}>
-              <span style={{ fontWeight: 700, color: '#1a3c5e', fontSize: '0.92rem' }}>{label}</span>
-              <span style={{ fontWeight: 900, fontSize: '1.4rem', color }}>{number}</span>
+            { label: 'Sapeurs-Pompiers',     number: '18' },
+            { label: 'Police / Gendarmerie', number: '17' },
+            { label: 'SAMU Sénégal',         number: '15' },
+            { label: 'Protection Civile',    number: '33 869 19 20' },
+          ].map(({ label, number }) => (
+            <a key={number} href={`tel:${number.replace(/\s/g, '')}`}
+              style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                padding: '14px 16px', background: 'white',
+                borderRadius: 10, border: '1px solid #E5E7EB',
+                textDecoration: 'none',
+              }}>
+              <span style={{ fontWeight: 500, color: '#0F172A', fontSize: '0.92rem' }}>{label}</span>
+              <span style={{ fontWeight: 600, fontSize: '1rem', color: '#DC2626', letterSpacing: '0.02em' }}>{number}</span>
             </a>
           ))}
         </div>
