@@ -1,5 +1,12 @@
 import type { Metadata, Viewport } from 'next';
+import { Inter } from 'next/font/google';
 import { ServiceWorkerRegistrar } from '@/components/ServiceWorkerRegistrar';
+
+const inter = Inter({
+  subsets: ['latin', 'latin-ext'],
+  display: 'swap',
+  variable: '--font-inter',
+});
 
 export const metadata: Metadata = {
   title: 'OLEL – Alerte Précoce Multi-Risques',
@@ -13,17 +20,28 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: '#1a3c5e',
+  themeColor: '#0F172A',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="fr">
+    <html lang="fr" className={inter.variable}>
       <head>
         <link rel="apple-touch-icon" href="/icon-192.png" />
         <meta name="mobile-web-app-capable" content="yes" />
       </head>
-      <body style={{ margin: 0, fontFamily: 'system-ui, -apple-system, sans-serif', background: '#f8f9fa', maxWidth: 480, marginLeft: 'auto', marginRight: 'auto' }}>
+      <body style={{
+        margin: 0,
+        fontFamily: 'var(--font-inter), -apple-system, "Segoe UI", Roboto, sans-serif',
+        fontFeatureSettings: '"cv11", "ss01", "ss03"',
+        WebkitFontSmoothing: 'antialiased',
+        MozOsxFontSmoothing: 'grayscale',
+        background: '#FAFAFA',
+        color: '#0F172A',
+        maxWidth: 480,
+        marginLeft: 'auto',
+        marginRight: 'auto',
+      }}>
         <ServiceWorkerRegistrar />
         {children}
       </body>

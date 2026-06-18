@@ -31,8 +31,11 @@ export const RISK_LABELS: Record<string, Record<Lang, string>> = {
 type Dict = {
   chooseLang: string;
   menu: string;
-  reportTypePrompt: string;
+  reportThemePrompt: string;        // « Quelle thématique ? » (niveau 1)
+  reportOptionPrompt: (theme: string) => string; // « Quel type précis ? » (niveau 2)
   describePrompt: (label: string) => string;
+  photoPrompt: string;              // « Envoyez une photo, ou tapez passer »
+  photoSkipped: string;             // « OK, sans photo. »
   severityPrompt: string;
   reportSaved: (label: string, sev: string) => string;
   reportError: string;
@@ -50,8 +53,11 @@ type Dict = {
 const fr: Dict = {
   chooseLang: '🌍 Choisissez votre langue / Suɓo ɗemngal / Tànnal sa làkk :\n\n1️⃣ Français\n2️⃣ Pulaar\n3️⃣ Wolof\n4️⃣ Soninké',
   menu: '🚨 *OLEL – Alerte Précoce*\n_Région de Matam_\n\n1️⃣ Signaler une situation\n2️⃣ Consulter les alertes\n3️⃣ Mon profil\n\nRépondez avec le numéro, ou *langue* pour changer de langue.',
-  reportTypePrompt: '📋 *Type de risque :*',
+  reportThemePrompt: '📋 *Quelle thématique concerne votre signalement ?*',
+  reportOptionPrompt: (t) => `📋 *${t}* — Quel type précis ?`,
   describePrompt: (l) => `${l} sélectionné.\n\nDécrivez la situation (lieu, ampleur, personnes touchées).\n\n💡 Vous pouvez aussi *envoyer un message vocal* dans votre langue.`,
+  photoPrompt: '📷 Si vous pouvez, *envoyez une photo* du lieu (facultatif).\n\nSinon tapez *passer* pour continuer.',
+  photoSkipped: '👍 OK, on continue sans photo.',
   severityPrompt: 'Gravité :\n1. 🟢 Vigilance\n2. 🟡 Alerte\n3. 🔴 Urgence (danger immédiat)\n\nRépondez 1, 2 ou 3.',
   reportSaved: (l, s) => `✅ *Signalement enregistré !*\nType : ${l}\nGravité : ${s}\n\nLes autorités ont été notifiées. Merci pour votre vigilance.\n\nTapez *menu* pour recommencer.`,
   reportError: '❌ Erreur lors de l\'enregistrement. Réessayez.\nTapez *menu*.',
@@ -70,8 +76,11 @@ const fr: Dict = {
 const ff: Dict = {
   chooseLang: '🌍 Suɓo ɗemngal / Choisissez votre langue :\n\n1️⃣ Farayse\n2️⃣ Pulaar\n3️⃣ Wolof\n4️⃣ Sooninke',
   menu: '🚨 *OLEL – Reentaare*\n_Diiwaan Matam_\n\n1️⃣ Hollu bone\n2️⃣ Ƴeew reentaareeji\n3️⃣ Konngol am\n\nJaabo e llimol, walla winndu *ɗemngal* ngam waylude ɗemngal.',
-  reportTypePrompt: '📋 *Sifaa bone on :*',
+  reportThemePrompt: '📋 *Mboɗo bone on jeyaa ?*',
+  reportOptionPrompt: (t) => `📋 *${t}* — Sifaa hol ?`,
   describePrompt: (l) => `${l} suɓaama.\n\nSifo ko heɓii (nokku, mawnde, yimɓe nanngaaɓe).\n\n💡 Aɗa waawi *neldude konngol sawtuyaŋkol* e ɗemngal maa.`,
+  photoPrompt: '📷 So aɗa waawi, *nelu nataal* nokku (jiidi).\n\nWalla winndu *passer* ngam jokkude.',
+  photoSkipped: '👍 Eyyo, en jokkii ko aldaa e nataal.',
   severityPrompt: 'Mawnde bone:\n1. 🟢 Reentaare\n2. 🟡 Tonngol\n3. 🔴 Heñorde (bone jooni)\n\nJaabo 1, 2 walla 3.',
   reportSaved: (l, s) => `✅ *Bone on winndaama!*\nSifaa : ${l}\nMawnde : ${s}\n\nLaamu humpitaama. A jaaraama.\n\nWinndu *menu* ngam fuɗɗaade.`,
   reportError: '❌ Juumre waɗii. Eto goɗngol.\nWinndu *menu*.',
@@ -90,8 +99,11 @@ const ff: Dict = {
 const wo: Dict = {
   chooseLang: '🌍 Tànnal sa làkk / Choisissez votre langue :\n\n1️⃣ Faraas\n2️⃣ Pulaar\n3️⃣ Wolof\n4️⃣ Sooninke',
   menu: '🚨 *OLEL – Artu*\n_Diiwaanu Matam_\n\n1️⃣ Yégle benn mbir\n2️⃣ Seet artu yi\n3️⃣ Sama profil\n\nTontu ak limu bi, walla bind *làkk* ngir soppi làkk.',
-  reportTypePrompt: '📋 *Xeetu musiba :*',
+  reportThemePrompt: '📋 *Ban xeetu musiba ngeen yégle ?*',
+  reportOptionPrompt: (t) => `📋 *${t}* — Lu ko mooy nelaw ?`,
   describePrompt: (l) => `${l} tànnees na.\n\nWax la xew (bérab, lu mu tollu, ñi mu jàpp).\n\n💡 Man ngaa *yónnee bataaxal buy baat* ci sa làkk.`,
+  photoPrompt: '📷 Su manee, *yónnee ab nataal* bu bérab bi (du jëfandiku ci bépp wàll).\n\nWalla bind *passer* ngir jokk.',
+  photoSkipped: '👍 Baaxna, nu jokk te du am nataal.',
   severityPrompt: 'Tolluwaayu musiba:\n1. 🟢 Moytabal\n2. 🟡 Artu\n3. 🔴 Jamono bu tàng (musiba léegi)\n\nTontu 1, 2 walla 3.',
   reportSaved: (l, s) => `✅ *Yégle bi nataal na!*\nXeet : ${l}\nTolluwaay : ${s}\n\nAutorités yi xamees nañu. Jërëjëf.\n\nBind *menu* ngir tàmbali.`,
   reportError: '❌ Njuumte am na. Jéemaat.\nBind *menu*.',
@@ -110,8 +122,11 @@ const wo: Dict = {
 const snk: Dict = {
   chooseLang: '🌍 Tànnal sa làkk / Choisissez :\n\n1️⃣ Faransi\n2️⃣ Pulaar\n3️⃣ Wolof\n4️⃣ Sooninke',
   menu: '🚨 *OLEL – Xibaare*\n_Matam jamaane_\n\n1️⃣ Xibaare tana\n2️⃣ Xibaarini ñan ŋa\n3️⃣ N profil\n\nJaabi nimero ŋa, walla safa *làkk* an làkk falle.',
-  reportTypePrompt: '📋 *Tana sifa :*',
+  reportThemePrompt: '📋 *Tana sifa fi ŋa xibaare ?*',
+  reportOptionPrompt: (t) => `📋 *${t}* — Sifa hol ŋa ?`,
   describePrompt: (l) => `${l} tànnu.\n\nXibaare ke (jamaane, a gabe, sere ku nan).\n\n💡 An ŋa *audio nelli* an làkk di.`,
+  photoPrompt: '📷 An ŋa wuto, *nelli nataal* jamaane ŋa (na dëne).\n\nWalla safa *passer* a tuga.',
+  photoSkipped: '👍 Tuga, n bani nataal a yibo.',
   severityPrompt: 'Tana gabe:\n1. 🟢 Korinte\n2. 🟡 Xibaare\n3. 🔴 Tanpinte (tana yiga)\n\nJaabi 1, 2 walla 3.',
   reportSaved: (l, s) => `✅ *Xibaare safani!*\nSifa : ${l}\nGabe : ${s}\n\nSaxuruyen xa toxo. I ni jaara.\n\nSafa *menu* a tuga.`,
   reportError: '❌ Filli wuto. Tagara koota.\nSafa *menu*.',
@@ -131,12 +146,3 @@ export const DICT: Record<Lang, Dict> = { fr, ff, wo, snk };
 export function t(lang: Lang): Dict {
   return DICT[lang] || DICT.fr;
 }
-
-/** Construit le menu numéroté des types de risque dans la langue donnée. */
-export function riskMenu(lang: Lang): string {
-  return Object.entries(RISK_LABELS)
-    .map(([, labels], i) => `${i + 1}. ${labels[lang]}`)
-    .join('\n');
-}
-
-export const RISK_ORDER = Object.keys(RISK_LABELS);

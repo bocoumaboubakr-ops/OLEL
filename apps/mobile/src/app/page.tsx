@@ -6,6 +6,7 @@ import { useMobileAuth } from '@/hooks/useMobileAuth';
 import { useOfflineQueue, queueSignalement } from '@/hooks/useOfflineQueue';
 import { useI18n, LANGS } from '@/lib/i18n';
 import { MediaCapture, type CapturedMedia } from '@/lib/MediaCapture';
+import { THEMES, type Theme, type RiskOption, type AlertTypeValue } from '@/lib/themes';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
 
@@ -102,8 +103,9 @@ export default function MobilePage() {
   const [alerts, setAlerts] = useState<MobileAlert[]>([]);
   const [alertsLoading, setAlertsLoading] = useState(true);
   const [sosOpen, setSosOpen] = useState(false);
-  const [reportType, setReportType] = useState<AlertType | null>(null);
-  const [reportStep, setReportStep] = useState<'type' | 'confirm' | 'done'>('type');
+  const [reportTheme, setReportTheme] = useState<Theme | null>(null);
+  const [reportOption, setReportOption] = useState<RiskOption | null>(null);
+  const [reportStep, setReportStep] = useState<'theme' | 'option' | 'confirm' | 'done'>('theme');
   const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
   useOfflineQueue();
 
@@ -141,7 +143,7 @@ export default function MobilePage() {
   useEffect(() => {
     if (user && SENTINEL_ROLES.includes(user.role)) fetchSignalements();
   }, [fetchSignalements, user]);
-  useEffect(() => { if (tab === 'report') { setReportStep('type'); setReportType(null); } }, [tab]);
+  useEffect(() => { if (tab === 'report') { setReportStep('theme'); setReportTheme(null); setReportOption(null); } }, [tab]);
 
   if (!initialized) return <Splash />;
   if (!user) return (
@@ -200,10 +202,14 @@ export default function MobilePage() {
         {tab === 'alerts' && <AlertsScreen alerts={active} loading={alertsLoading} onRefresh={fetchAlerts} />}
         {tab === 'report' && (
           <ReportScreen
-            step={reportStep} selectedType={reportType}
-            onSelectType={(t) => { setReportType(t); setReportStep('confirm'); }}
+            step={reportStep}
+            selectedTheme={reportTheme}
+            selectedOption={reportOption}
+            onSelectTheme={(theme) => { setReportTheme(theme); setReportStep('option'); }}
+            onSelectOption={(option) => { setReportOption(option); setReportStep('confirm'); }}
             onSent={() => setReportStep('done')}
-            onBack={() => setReportStep('type')}
+            onBackToTheme={() => { setReportTheme(null); setReportOption(null); setReportStep('theme'); }}
+            onBackToOption={() => { setReportOption(null); setReportStep('option'); }}
             onDone={() => { fetchAlerts(); setTab('alerts'); }}
           />
         )}
@@ -433,29 +439,63 @@ function InfoCard({ icon, label, sub, color, onClick }: { icon: string; label: s
   );
 }
 
-// ── ReportScreen ──────────────────────────────────────────────────────────────
-function ReportScreen({ step, selectedType, onSelectType, onSent, onBack, onDone }: {
-  step: 'type' | 'confirm' | 'done'; selectedType: AlertType | null;
-  onSelectType: (t: AlertType) => void; onSent: () => void; onBack: () => void; onDone: () => void;
+// ── ReportScreen : 3 étapes (thématique → option → confirm) ──────────────────
+function ReportScreen({
+  step, selectedTheme, selectedOption,
+  onSelectTheme, onSelectOption, onSent, onBackToTheme, onBackToOption, onDone,
+}: {
+  step: 'theme' | 'option' | 'confirm' | 'done';
+  selectedTheme: Theme | null;
+  selectedOption: RiskOption | null;
+  onSelectTheme: (t: Theme) => void;
+  onSelectOption: (o: RiskOption) => void;
+  onSent: () => void;
+  onBackToTheme: () => void;
+  onBackToOption: () => void;
+  onDone: () => void;
 }) {
   if (step === 'done') return <ReportSuccess onDone={onDone} />;
-  if (step === 'confirm' && selectedType) return <ReportConfirm type={selectedType} onSent={onSent} onBack={onBack} />;
-  return <ReportTypeSelect onSelect={onSelectType} />;
+  if (step === 'confirm' && selectedTheme && selectedOption) {
+    return <ReportConfirm theme={selectedTheme} option={selectedOption} onSent={onSent} onBack={onBackToOption} />;
+  }
+  if (step === 'option' && selectedTheme) {
+    return <ReportOptionSelect theme={selectedTheme} onSelect={onSelectOption} onBack={onBackToTheme} />;
+  }
+  return <ReportThemeSelect onSelect={onSelectTheme} />;
 }
 
-function ReportTypeSelect({ onSelect }: { onSelect: (t: AlertType) => void }) {
+function ReportThemeSelect({ onSelect }: { onSelect: (t: Theme) => void }) {
   return (
-    <div style={{ padding: '16px 16px 20px' }}>
-      <div style={{ textAlign: 'center', marginBottom: 16 }}>
-        <div style={{ fontSize: '0.68rem', color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Étape 1 / 2</div>
-        <h2 style={{ margin: '6px 0 0', fontSize: '1.1rem', color: '#1a3c5e' }}>Quel type de risque ?</h2>
+    <div style={{ padding: '20px 16px 24px' }}>
+      <div style={{ marginBottom: 18 }}>
+        <div style={{ fontSize: '0.7rem', color: '#94A3B8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>Étape 1 / 3</div>
+        <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: '#0F172A', letterSpacing: '-0.01em' }}>Quel domaine concerne votre signalement ?</h2>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-        {(Object.entries(RISK_ICONS) as [AlertType, { icon: string; label: string; color: string }][]).map(([value, { icon, label, color }]) => (
-          <button key={value} onClick={() => onSelect(value)}
-            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '18px 8px', border: `2px solid ${color}33`, borderRadius: 14, background: color + '11', cursor: 'pointer', gap: 6 }}>
-            <span style={{ fontSize: '2rem' }}>{icon}</span>
-            <span style={{ fontSize: '0.8rem', fontWeight: 700, color }}>{label}</span>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {THEMES.map((th) => (
+          <button key={th.key} onClick={() => onSelect(th)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 14,
+              padding: '16px 18px',
+              border: '1px solid #E5E7EB', borderRadius: 12,
+              background: 'white', cursor: 'pointer',
+              textAlign: 'left',
+              transition: 'border-color 0.15s, transform 0.05s',
+            }}>
+            <div style={{
+              width: 44, height: 44, borderRadius: 10,
+              background: th.color + '18', color: th.color,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '1.4rem', flexShrink: 0,
+            }}>{th.icon}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: '0.95rem', fontWeight: 600, color: '#0F172A' }}>{th.label}</div>
+              <div style={{ fontSize: '0.78rem', color: '#64748B', marginTop: 2 }}>
+                {th.options.map((o) => o.label).slice(0, 2).join(' · ')}
+                {th.options.length > 2 && '…'}
+              </div>
+            </div>
+            <span style={{ color: '#CBD5E1', fontSize: '1.1rem' }}>›</span>
           </button>
         ))}
       </div>
@@ -463,12 +503,129 @@ function ReportTypeSelect({ onSelect }: { onSelect: (t: AlertType) => void }) {
   );
 }
 
-function ReportConfirm({ type, onSent, onBack }: { type: AlertType; onSent: () => void; onBack: () => void }) {
-  const { icon, label, color } = RISK_ICONS[type];
+function ReportOptionSelect({ theme, onSelect, onBack }: { theme: Theme; onSelect: (o: RiskOption) => void; onBack: () => void }) {
+  return (
+    <div style={{ padding: '16px 16px 24px' }}>
+      <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', fontSize: '0.85rem', padding: '0 0 12px', display: 'block' }}>← Retour</button>
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ fontSize: '0.7rem', color: '#94A3B8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>Étape 2 / 3 — {theme.label}</div>
+        <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: '#0F172A', letterSpacing: '-0.01em' }}>Précisez la situation</h2>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {theme.options.map((option) => (
+          <button key={option.id} onClick={() => onSelect(option)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 12,
+              padding: '14px 16px',
+              border: '1px solid #E5E7EB', borderRadius: 10,
+              background: 'white', cursor: 'pointer', textAlign: 'left',
+            }}>
+            <span style={{ fontSize: '1.4rem', flexShrink: 0 }}>{option.icon}</span>
+            <span style={{ flex: 1, fontSize: '0.92rem', fontWeight: 500, color: '#0F172A' }}>{option.label}</span>
+            <span style={{ color: '#CBD5E1', fontSize: '1.1rem' }}>›</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+type GpsState = { state: 'idle' | 'acquiring' | 'ok' | 'denied' | 'timeout' | 'unavailable' | 'manual'; lat?: number; lng?: number };
+
+function useGeolocation(opts?: { auto?: boolean }): GpsState & {
+  retry: () => void;
+  setManual: (lat: number, lng: number) => void;
+} {
+  const [state, setState] = useState<GpsState>({ state: 'idle' });
+  const acquire = useCallback(() => {
+    if (typeof window === 'undefined' || !navigator.geolocation) {
+      setState({ state: 'unavailable' });
+      return;
+    }
+    if (!window.isSecureContext) {
+      setState({ state: 'manual' });
+      return;
+    }
+    setState({ state: 'acquiring' });
+    navigator.geolocation.getCurrentPosition(
+      (pos) => setState({ state: 'ok', lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      (err) => {
+        if (err.code === err.PERMISSION_DENIED) setState({ state: 'denied' });
+        else if (err.code === err.TIMEOUT) setState({ state: 'timeout' });
+        else setState({ state: 'unavailable' });
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 },
+    );
+  }, []);
+  useEffect(() => {
+    if (opts?.auto !== false) acquire();
+  }, [acquire, opts?.auto]);
+  return {
+    ...state,
+    retry: acquire,
+    setManual: (lat, lng) => setState({ state: 'ok', lat, lng }),
+  };
+}
+
+function GpsStatus({ gps, onRetry, onManual }: { gps: GpsState; onRetry: () => void; onManual: () => void }) {
+  if (gps.state === 'ok' && gps.lat !== undefined && gps.lng !== undefined) {
+    return (
+      <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', color: '#15803D', padding: '10px 12px', borderRadius: 10, fontSize: '0.82rem' }}>
+        📍 Position acquise : {gps.lat.toFixed(5)}, {gps.lng.toFixed(5)}
+      </div>
+    );
+  }
+  if (gps.state === 'acquiring') {
+    return <div style={{ background: '#FAFAFA', border: '1px solid #E5E7EB', color: '#64748B', padding: '10px 12px', borderRadius: 10, fontSize: '0.82rem' }}>📍 Acquisition de votre position…</div>;
+  }
+  const messages: Record<string, string> = {
+    denied: '📍 GPS refusé. Autorisez la localisation dans les paramètres du navigateur, ou saisissez la position manuellement.',
+    timeout: '📍 GPS trop lent (déplacez-vous à l\'extérieur), réessayez ou saisissez manuellement.',
+    unavailable: '📍 GPS indisponible sur cet appareil. Saisissez la position manuellement.',
+    manual: '📍 Connexion non sécurisée (HTTP) — la position doit être saisie manuellement.',
+    idle: '📍 Position non encore acquise.',
+  };
+  return (
+    <div style={{ background: '#FEF3C7', border: '1px solid #FDE68A', color: '#92400E', padding: '10px 12px', borderRadius: 10, fontSize: '0.8rem' }}>
+      <div style={{ marginBottom: 6 }}>{messages[gps.state]}</div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button onClick={onRetry} style={{ flex: 1, background: 'white', border: '1px solid #FDE68A', color: '#92400E', padding: '6px 10px', borderRadius: 6, fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer' }}>↻ Réessayer GPS</button>
+        <button onClick={onManual} style={{ flex: 1, background: 'white', border: '1px solid #FDE68A', color: '#92400E', padding: '6px 10px', borderRadius: 6, fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer' }}>✍️ Saisir manuellement</button>
+      </div>
+    </div>
+  );
+}
+
+function ManualGpsInput({ onSet }: { onSet: (lat: number, lng: number) => void }) {
+  const [lat, setLat] = useState('');
+  const [lng, setLng] = useState('');
+  const [err, setErr] = useState('');
+  const apply = () => {
+    const la = parseFloat(lat.replace(',', '.'));
+    const lo = parseFloat(lng.replace(',', '.'));
+    if (Number.isNaN(la) || Number.isNaN(lo)) { setErr('Coordonnées invalides (ex. 15.6556 et -13.2553)'); return; }
+    setErr(''); onSet(la, lo);
+  };
+  const inp: React.CSSProperties = { flex: 1, padding: '10px 12px', border: '1px solid #E5E7EB', borderRadius: 8, fontSize: '0.88rem', boxSizing: 'border-box' };
+  return (
+    <div style={{ marginTop: 8 }}>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
+        <input inputMode="decimal" placeholder="Latitude (ex. 15.6556)" value={lat} onChange={(e) => setLat(e.target.value)} style={inp} />
+        <input inputMode="decimal" placeholder="Longitude (ex. -13.2553)" value={lng} onChange={(e) => setLng(e.target.value)} style={inp} />
+      </div>
+      <button onClick={apply} style={{ width: '100%', background: '#0F172A', color: 'white', border: 'none', padding: '10px', borderRadius: 8, fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer' }}>Utiliser ces coordonnées</button>
+      {err && <div style={{ marginTop: 6, color: '#DC2626', fontSize: '0.78rem' }}>{err}</div>}
+    </div>
+  );
+}
+
+function ReportConfirm({ theme, option, onSent, onBack }: { theme: Theme; option: RiskOption; onSent: () => void; onBack: () => void }) {
   const [note, setNote] = useState('');
   const [captured, setCaptured] = useState<CapturedMedia[]>([]);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
+  const [showManualGps, setShowManualGps] = useState(false);
+  const gps = useGeolocation({ auto: true });
 
   const handleSend = async () => {
     setSending(true); setError('');
@@ -476,23 +633,18 @@ function ReportConfirm({ type, onSent, onBack }: { type: AlertType; onSent: () =
       const token = localStorage.getItem('olel_token');
       if (!token) { setError('Vous devez être connecté pour signaler.'); setSending(false); return; }
 
-      let lat: number | undefined, lng: number | undefined;
-      try {
-        const pos = await new Promise<GeolocationPosition>((res, rej) =>
-          navigator.geolocation.getCurrentPosition(res, rej, { timeout: 5000 })
-        );
-        lat = pos.coords.latitude; lng = pos.coords.longitude;
-      } catch { /* GPS non dispo */ }
-
       const zoneId = process.env.NEXT_PUBLIC_DEFAULT_ZONE_ID || undefined;
       const mediaUrls = captured.map((m) => m.url);
+      const description = (option.descPrefix || '') + (note.trim() || `Signalement de type ${option.label} depuis l'application mobile.`);
       const payload = {
-        title: `Signalement : ${label}`,
-        description: note.trim() || `Signalement de type ${label} depuis l'application mobile.`,
-        type, severity: 2, channel: 'app',
+        title: `Signalement : ${option.label}`,
+        description,
+        type: option.type as AlertTypeValue,
+        severity: 2,
+        channel: 'app',
         ...(zoneId ? { zoneId } : {}),
         ...(mediaUrls.length ? { mediaUrls } : {}),
-        latitude: lat, longitude: lng,
+        latitude: gps.lat, longitude: gps.lng,
       };
 
       if (!navigator.onLine) {
@@ -501,8 +653,7 @@ function ReportConfirm({ type, onSent, onBack }: { type: AlertType; onSent: () =
         return;
       }
 
-      const headers = { Authorization: `Bearer ${token}` };
-      await axios.post(`${API}/alerts`, payload, { headers });
+      await axios.post(`${API}/alerts`, payload, { headers: { Authorization: `Bearer ${token}` } });
       onSent();
     } catch (e: any) {
       const msg = e.response?.data?.message;
@@ -511,35 +662,47 @@ function ReportConfirm({ type, onSent, onBack }: { type: AlertType; onSent: () =
   };
 
   return (
-    <div style={{ padding: '16px 20px 24px' }}>
-      <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '0.85rem', padding: '0 0 12px', display: 'block' }}>← Retour</button>
-      <div style={{ textAlign: 'center', marginBottom: 16 }}>
-        <div style={{ fontSize: '0.68rem', color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Étape 2 / 2</div>
-        <h2 style={{ margin: '6px 0 0', fontSize: '1.1rem', color: '#1a3c5e' }}>Confirmer le signalement</h2>
+    <div style={{ padding: '16px 16px 28px' }}>
+      <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', fontSize: '0.85rem', padding: '0 0 12px', display: 'block' }}>← Retour</button>
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ fontSize: '0.7rem', color: '#94A3B8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>Étape 3 / 3</div>
+        <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: '#0F172A', letterSpacing: '-0.01em' }}>Confirmer le signalement</h2>
       </div>
-      <div style={{ background: color + '11', border: `2px solid ${color}33`, borderRadius: 16, padding: '16px 20px', textAlign: 'center', marginBottom: 16 }}>
-        <div style={{ fontSize: '3rem' }}>{icon}</div>
-        <div style={{ fontSize: '1.2rem', fontWeight: 800, color, marginTop: 6 }}>{label}</div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', background: 'white', border: '1px solid #E5E7EB', borderRadius: 12, marginBottom: 16 }}>
+        <div style={{ width: 44, height: 44, borderRadius: 10, background: theme.color + '18', color: theme.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.3rem', flexShrink: 0 }}>{option.icon}</div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: '0.7rem', color: '#94A3B8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{theme.label}</div>
+          <div style={{ fontSize: '0.95rem', fontWeight: 600, color: '#0F172A' }}>{option.label}</div>
+        </div>
       </div>
-      <label style={{ display: 'block', marginBottom: 6, fontWeight: 600, fontSize: '0.88rem', color: '#374151' }}>
-        Précisions <span style={{ fontWeight: 400, color: '#94a3b8' }}>(facultatif)</span>
+
+      <label style={{ display: 'block', marginBottom: 6, fontWeight: 600, fontSize: '0.85rem', color: '#0F172A' }}>
+        Précisions <span style={{ fontWeight: 400, color: '#94A3B8' }}>(facultatif)</span>
       </label>
       <textarea value={note} onChange={(e) => setNote(e.target.value)}
-        placeholder="Décrivez ce que vous observez..." rows={3}
-        style={{ width: '100%', padding: '10px 12px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: '0.95rem', resize: 'none', boxSizing: 'border-box', fontFamily: 'inherit', marginBottom: 12 }} />
+        placeholder="Décrivez ce que vous observez : lieu, ampleur, personnes touchées…" rows={3}
+        style={{ width: '100%', padding: '10px 12px', border: '1px solid #E5E7EB', borderRadius: 10, fontSize: '0.92rem', resize: 'none', boxSizing: 'border-box', fontFamily: 'inherit', marginBottom: 16, outline: 'none' }} />
 
-      <label style={{ display: 'block', marginBottom: 6, fontWeight: 600, fontSize: '0.88rem', color: '#374151' }}>
-        📎 Photo / vocal <span style={{ fontWeight: 400, color: '#94a3b8' }}>(recommandé)</span>
+      <label style={{ display: 'block', marginBottom: 6, fontWeight: 600, fontSize: '0.85rem', color: '#0F172A' }}>
+        Photo / vocal <span style={{ fontWeight: 400, color: '#94A3B8' }}>(recommandé)</span>
       </label>
-      <MediaCapture onChange={setCaptured} />
+      <div style={{ marginBottom: 16 }}><MediaCapture onChange={setCaptured} /></div>
 
-      <div style={{ background: '#f0f9ff', borderRadius: 8, padding: '8px 12px', marginBottom: 14, fontSize: '0.78rem', color: '#0369a1' }}>
-        📍 Votre position GPS sera envoyée automatiquement.
+      <label style={{ display: 'block', marginBottom: 6, fontWeight: 600, fontSize: '0.85rem', color: '#0F172A' }}>Position</label>
+      <div style={{ marginBottom: 8 }}>
+        <GpsStatus gps={gps} onRetry={gps.retry} onManual={() => setShowManualGps(true)} />
       </div>
-      {error && <div style={{ background: '#fee2e2', color: '#dc2626', padding: '8px 12px', borderRadius: 8, marginBottom: 12, fontSize: '0.82rem' }}>{error}</div>}
+      {(showManualGps || ['denied','timeout','unavailable','manual'].includes(gps.state)) && gps.state !== 'ok' && (
+        <ManualGpsInput onSet={(la, lo) => { gps.setManual(la, lo); setShowManualGps(false); }} />
+      )}
+      <div style={{ height: 16 }} />
+
+      {error && <div style={{ background: '#FEE2E2', color: '#DC2626', padding: '10px 12px', borderRadius: 10, marginBottom: 12, fontSize: '0.82rem' }}>{error}</div>}
+
       <button disabled={sending} onClick={handleSend}
-        style={{ width: '100%', background: '#dc2626', color: 'white', border: 'none', padding: '16px', borderRadius: 12, fontSize: '1.05rem', fontWeight: 800, cursor: 'pointer', opacity: sending ? 0.6 : 1, boxShadow: '0 4px 16px rgba(220,38,38,0.3)' }}>
-        {sending ? 'Envoi…' : '🚨 Envoyer le signalement'}
+        style={{ width: '100%', background: '#0F172A', color: 'white', border: 'none', padding: '14px', borderRadius: 12, fontSize: '0.98rem', fontWeight: 600, cursor: 'pointer', opacity: sending ? 0.6 : 1 }}>
+        {sending ? 'Envoi en cours…' : 'Envoyer le signalement'}
       </button>
     </div>
   );
@@ -1087,12 +1250,20 @@ function SentinelValidationForm({ alert, onBack, onDone }: { alert: MobileAlert;
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (navigator.geolocation) {
+    if (navigator.geolocation && typeof window !== 'undefined' && window.isSecureContext) {
       navigator.geolocation.getCurrentPosition(
         (pos) => setGps({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-        () => setGpsError('GPS non disponible — position manuelle requise'),
-        { timeout: 8000 }
+        (err) => setGpsError(
+          err.code === err.PERMISSION_DENIED
+            ? 'GPS refusé par le navigateur — autorisez la localisation'
+            : err.code === err.TIMEOUT
+              ? 'GPS trop lent — déplacez-vous à l\'extérieur et réessayez'
+              : 'GPS indisponible — position manuelle requise',
+        ),
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 },
       );
+    } else {
+      setGpsError('GPS bloqué (connexion HTTP) — position manuelle requise');
     }
   }, []);
 
@@ -1225,7 +1396,7 @@ function SignalementFieldVerifyForm({ signalement, onBack, onDone }: { signaleme
       navigator.geolocation.getCurrentPosition(
         (pos) => { setGps({ lat: pos.coords.latitude, lng: pos.coords.longitude }); setGpsStatus('ok'); },
         () => setGpsStatus('manual'),
-        { enableHighAccuracy: true, timeout: 8000 },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 },
       );
     } else {
       setGpsStatus('manual');
