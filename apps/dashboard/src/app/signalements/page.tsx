@@ -35,9 +35,9 @@ const TYPE_LABEL: Record<string, string> = {
 };
 
 const SEVERITY_LABEL: Record<number, { txt: string; color: string }> = {
-  1: { txt: '🟢 Vigilance', color: '#16a34a' },
+  1: { txt: '🟢 Vigilance', color: '#16A34A' },
   2: { txt: '🟡 Alerte', color: '#eab308' },
-  3: { txt: '🔴 Urgence', color: '#dc2626' },
+  3: { txt: '🔴 Urgence', color: '#DC2626' },
 };
 
 const CHANNEL_LABEL: Record<string, string> = {
@@ -157,38 +157,42 @@ export default function SignalementsPage() {
   const canFieldVerify = ['SENTINELLE', 'COORDINATEUR'].includes(user.role) || canValidate;
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f1f5f9' }}>
-      <header style={{ background: '#1a3c5e', color: 'white', padding: '14px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div style={{ display: 'flex', gap: 18, alignItems: 'center' }}>
-          <a href="/" style={{ color: 'white', textDecoration: 'none', fontWeight: 700 }}>🚨 OLEL</a>
-          <span style={{ opacity: 0.6 }}>›</span>
-          <strong>📋 Signalements citoyens</strong>
+    <div style={{ minHeight: '100vh', background: '#FAFAFA' }}>
+      <header style={{
+        background: 'white', borderBottom: '1px solid #F1F5F9',
+        padding: '0 24px', height: 56,
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
+          <a href="/" style={{ color: '#0F172A', textDecoration: 'none', fontWeight: 700, fontSize: '1.05rem', letterSpacing: '-0.02em' }}>OLEL</a>
+          <span style={{ color: '#CBD5E1' }}>›</span>
+          <span style={{ fontSize: '0.92rem', color: '#0F172A', fontWeight: 600, letterSpacing: '-0.01em' }}>Signalements citoyens</span>
         </div>
-        <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-          <span style={{ fontSize: '0.85rem' }}>{user.name} · {user.role}</span>
-          <button onClick={logout} style={{ background: 'rgba(255,255,255,0.15)', color: 'white', border: 'none', padding: '5px 12px', borderRadius: 6, cursor: 'pointer', fontSize: '0.8rem' }}>Déconnexion</button>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <span style={{ fontSize: '0.82rem', color: '#64748B' }}>{user.name} <span style={{ color: '#CBD5E1' }}>·</span> {user.role}</span>
+          <button onClick={logout} style={{ background: 'white', color: '#64748B', border: '1px solid #E5E7EB', padding: '7px 12px', borderRadius: 8, cursor: 'pointer', fontSize: '0.78rem', fontWeight: 500 }}>Déconnexion</button>
         </div>
       </header>
 
-      <div style={{ maxWidth: 1200, margin: '20px auto', padding: '0 20px' }}>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 16 }}>
-          <label style={{ fontSize: '0.9rem', color: '#475569' }}>Filtre statut :</label>
+      <div style={{ maxWidth: 1200, margin: '24px auto', padding: '0 20px' }}>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 18 }}>
+          <label style={{ fontSize: '0.85rem', color: '#64748B', fontWeight: 500 }}>Statut :</label>
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
-            style={{ padding: '6px 10px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: '0.9rem' }}>
+            style={{ padding: '7px 12px', border: '1px solid #E5E7EB', borderRadius: 8, fontSize: '0.85rem', background: 'white', color: '#0F172A', fontFamily: 'inherit' }}>
             <option value="">Tous</option>
             {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
-          <button onClick={fetchItems} style={{ background: '#1a3c5e', color: 'white', border: 'none', padding: '6px 14px', borderRadius: 6, cursor: 'pointer', fontSize: '0.85rem' }}>
-            🔄 Rafraîchir
+          <button onClick={fetchItems} style={{ background: 'white', color: '#64748B', border: '1px solid #E5E7EB', padding: '7px 14px', borderRadius: 8, cursor: 'pointer', fontSize: '0.82rem', fontWeight: 500 }}>
+            Actualiser
           </button>
-          <span style={{ marginLeft: 'auto', fontSize: '0.85rem', color: '#64748b' }}>{items.length} signalement(s)</span>
+          <span style={{ marginLeft: 'auto', fontSize: '0.82rem', color: '#94A3B8', fontWeight: 500 }}>{items.length} signalement{items.length > 1 ? 's' : ''}</span>
         </div>
 
-        {error && <div style={{ background: '#fee2e2', color: '#dc2626', padding: 12, borderRadius: 8, marginBottom: 12 }}>{error}</div>}
-        {loading && <p style={{ color: '#64748b' }}>Chargement…</p>}
+        {error && <div style={{ background: '#fee2e2', color: '#DC2626', padding: 12, borderRadius: 8, marginBottom: 12 }}>{error}</div>}
+        {loading && <p style={{ color: '#64748B' }}>Chargement…</p>}
 
         {!loading && items.length === 0 && (
-          <div style={{ background: 'white', padding: 40, textAlign: 'center', borderRadius: 12, color: '#64748b' }}>
+          <div style={{ background: 'white', padding: 40, textAlign: 'center', borderRadius: 12, color: '#64748B' }}>
             Aucun signalement dans votre zone pour le moment.
           </div>
         )}
@@ -197,14 +201,15 @@ export default function SignalementsPage() {
           {items.map((s) => {
             const sev = s.severity ? SEVERITY_LABEL[s.severity] : null;
             return (
-              <div key={s.id} style={{ background: 'white', borderRadius: 12, padding: '16px 20px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', borderLeft: `4px solid ${sev?.color || '#94a3b8'}` }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 8, flexWrap: 'wrap' }}>
-                  <div>
-                    <strong style={{ fontSize: '1rem', color: '#1a3c5e' }}>{TYPE_LABEL[s.type] || s.type}</strong>
-                    {sev && <span style={{ marginLeft: 10, color: sev.color, fontSize: '0.85rem', fontWeight: 600 }}>{sev.txt}</span>}
+              <div key={s.id} style={{ background: 'white', borderRadius: 12, padding: '18px 20px', border: '1px solid #F1F5F9', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    {sev && <span style={{ width: 8, height: 8, borderRadius: '50%', background: sev.color, flexShrink: 0 }} />}
+                    <strong style={{ fontSize: '0.95rem', color: '#0F172A', letterSpacing: '-0.01em', fontWeight: 600 }}>{TYPE_LABEL[s.type] || s.type}</strong>
+                    {sev && <span style={{ color: sev.color, fontSize: '0.78rem', fontWeight: 600, background: sev.color + '14', padding: '2px 8px', borderRadius: 5 }}>{sev.txt.replace(/^[🟢🟡🔴]\s*/, '')}</span>}
                   </div>
-                  <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
-                    {CHANNEL_LABEL[s.channel] || s.channel} · {new Date(s.createdAt).toLocaleString('fr-FR')}
+                  <div style={{ fontSize: '0.76rem', color: '#94A3B8', fontWeight: 500 }}>
+                    {CHANNEL_LABEL[s.channel] || s.channel} <span style={{ color: '#CBD5E1' }}>·</span> {new Date(s.createdAt).toLocaleString('fr-FR')}
                   </div>
                 </div>
 
@@ -215,20 +220,20 @@ export default function SignalementsPage() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8, margin: '0 0 10px' }}>
                     {s.mediaUrls.map((url, i) => (
                       isAudioUrl(url) ? (
-                        <div key={i} style={{ background: '#f1f5f9', borderRadius: 8, padding: '8px 10px' }}>
+                        <div key={i} style={{ background: '#F1F5F9', borderRadius: 8, padding: '8px 10px' }}>
                           <div style={{ fontSize: '0.74rem', color: '#475569', marginBottom: 4, fontWeight: 600 }}>🎙️ Message vocal — écoutez et qualifiez</div>
                           <audio controls preload="none" src={url} style={{ width: '100%', height: 36 }} />
                         </div>
                       ) : (
                         <a key={i} href={url} target="_blank" rel="noreferrer">
-                          <img src={url} alt="preuve" style={{ maxWidth: 160, maxHeight: 160, borderRadius: 8, border: '1px solid #e2e8f0', objectFit: 'cover' }} />
+                          <img src={url} alt="preuve" style={{ maxWidth: 160, maxHeight: 160, borderRadius: 8, border: '1px solid #E5E7EB', objectFit: 'cover' }} />
                         </a>
                       )
                     ))}
                   </div>
                 )}
 
-                <div style={{ fontSize: '0.78rem', color: '#64748b', display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+                <div style={{ fontSize: '0.78rem', color: '#64748B', display: 'flex', gap: 14, flexWrap: 'wrap' }}>
                   {s.user && <span>👤 {s.user.name} ({s.user.phone})</span>}
                   {s.user?.zone?.name && <span>📍 Zone : {s.user.zone.name}</span>}
                   {(s.latitude && s.longitude) && <span>🛰️ GPS : {s.latitude.toFixed(4)}, {s.longitude.toFixed(4)}</span>}
@@ -253,25 +258,25 @@ export default function SignalementsPage() {
                         </div>
                       )}
                       {s.status === 'PENDING' && (
-                        <div style={{ marginTop: 10, display: 'flex', gap: 8, borderTop: '1px solid #f1f5f9', paddingTop: 10, flexWrap: 'wrap' }}>
+                        <div style={{ marginTop: 12, display: 'flex', gap: 8, borderTop: '1px solid #F1F5F9', paddingTop: 12, flexWrap: 'wrap' }}>
                           {canFieldVerify && !s.fieldVerifiedAt && (
                             <button onClick={() => fieldVerify(s.id)} disabled={acting === s.id}
-                              style={{ background: '#0ea5e9', color: 'white', border: 'none', padding: '6px 14px', borderRadius: 6, cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600 }}>
-                              🔭 Vérifier sur place (GPS)
+                              style={{ background: 'white', color: '#0F172A', border: '1px solid #E5E7EB', padding: '7px 14px', borderRadius: 8, cursor: 'pointer', fontSize: '0.82rem', fontWeight: 500 }}>
+                              Vérifier sur place
                             </button>
                           )}
                           {canValidate && (
                             <button onClick={() => updateStatus(s.id, 'VALIDATED')}
                               disabled={acting === s.id || (user.role === 'MAIRIE' && needsField)}
                               title={user.role === 'MAIRIE' && needsField ? 'Vérification sentinelle requise' : ''}
-                              style={{ background: user.role === 'MAIRIE' && needsField ? '#94a3b8' : '#16a34a', color: 'white', border: 'none', padding: '6px 14px', borderRadius: 6, cursor: user.role === 'MAIRIE' && needsField ? 'not-allowed' : 'pointer', fontSize: '0.85rem', fontWeight: 600 }}>
-                              ✅ Valider
+                              style={{ background: user.role === 'MAIRIE' && needsField ? '#E5E7EB' : '#0F172A', color: user.role === 'MAIRIE' && needsField ? '#94A3B8' : 'white', border: 'none', padding: '7px 14px', borderRadius: 8, cursor: user.role === 'MAIRIE' && needsField ? 'not-allowed' : 'pointer', fontSize: '0.82rem', fontWeight: 600 }}>
+                              Valider
                             </button>
                           )}
                           {canValidate && (
                             <button onClick={() => updateStatus(s.id, 'REJECTED')} disabled={acting === s.id}
-                              style={{ background: '#dc2626', color: 'white', border: 'none', padding: '6px 14px', borderRadius: 6, cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600 }}>
-                              ❌ Rejeter
+                              style={{ background: 'white', color: '#DC2626', border: '1px solid #FECACA', padding: '7px 14px', borderRadius: 8, cursor: 'pointer', fontSize: '0.82rem', fontWeight: 500 }}>
+                              Rejeter
                             </button>
                           )}
                         </div>

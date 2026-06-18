@@ -54,11 +54,11 @@ export function CreateAlertModal({ onClose, onCreated }: { onClose: () => void; 
   const set = (k: string) => (e: any) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000 }}>
-      <div style={{ background: 'white', borderRadius: 12, padding: 28, width: 520, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20 }}>
-          <h2 style={{ margin: 0, fontSize: '1.1rem', color: '#1a3c5e' }}>🚨 Nouvelle alerte</h2>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem', color: '#94a3b8' }}>✕</button>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000 }}>
+      <div style={{ background: 'white', borderRadius: 14, padding: 28, width: 520, maxHeight: '90vh', overflowY: 'auto' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 22 }}>
+          <h2 style={{ margin: 0, fontSize: '1.2rem', color: '#0F172A', fontWeight: 700, letterSpacing: '-0.02em' }}>Nouvelle alerte</h2>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.85rem', color: '#64748B', fontWeight: 500 }}>Fermer</button>
         </div>
 
         <form onSubmit={submit}>
@@ -95,23 +95,25 @@ export function CreateAlertModal({ onClose, onCreated }: { onClose: () => void; 
                     onClick={() => setForm((f) => ({ ...f, alertLevel: lvl }))}
                     style={{
                       flex: '1 1 auto',
-                      padding: '7px 8px',
-                      borderRadius: 6,
+                      padding: '8px 10px',
+                      borderRadius: 8,
                       cursor: 'pointer',
-                      fontSize: '0.72rem',
-                      fontWeight: 700,
-                      border: active ? `2px solid ${cfg.color}` : '1px solid #e2e8f0',
+                      fontSize: '0.74rem',
+                      fontWeight: active ? 600 : 500,
+                      border: '1px solid ' + (active ? 'transparent' : '#E5E7EB'),
                       background: active ? cfg.bg : 'white',
-                      color: active ? cfg.color : '#64748b',
+                      color: active ? cfg.color : '#64748B',
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                     }}
                   >
-                    {cfg.icon} {cfg.label}
+                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: cfg.color }} />
+                    {cfg.label}
                   </button>
                 );
               })}
             </div>
-            <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: 4 }}>
-              ORANGE et plus exigent une triple validation (sentinelle + autorité locale + autorité admin) avant diffusion.
+            <div style={{ fontSize: '0.72rem', color: '#94A3B8', marginTop: 6 }}>
+              Orange et plus exigent une triple validation (sentinelle + autorité locale + autorité admin) avant diffusion.
             </div>
           </Field>
 
@@ -157,14 +159,14 @@ export function CreateAlertModal({ onClose, onCreated }: { onClose: () => void; 
             </Field>
           </div>
 
-          {error && <div style={{ background: '#fee2e2', color: '#dc2626', padding: '10px 12px', borderRadius: 6, marginBottom: 12, fontSize: '0.88rem' }}>{error}</div>}
+          {error && <div style={{ background: '#fee2e2', color: '#DC2626', padding: '10px 12px', borderRadius: 6, marginBottom: 12, fontSize: '0.88rem' }}>{error}</div>}
 
-          <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
-            <button type="button" onClick={onClose} style={{ flex: 1, background: '#f1f5f9', color: '#374151', border: 'none', padding: 12, borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}>
+          <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
+            <button type="button" onClick={onClose} style={{ flex: 1, background: 'white', color: '#64748B', border: '1px solid #E5E7EB', padding: '12px', borderRadius: 10, cursor: 'pointer', fontWeight: 500, fontSize: '0.9rem' }}>
               Annuler
             </button>
-            <button type="submit" disabled={loading} style={{ flex: 2, background: '#e74c3c', color: 'white', border: 'none', padding: 12, borderRadius: 8, cursor: 'pointer', fontWeight: 700, opacity: loading ? 0.7 : 1 }}>
-              {loading ? 'Création...' : '🚨 Créer l\'alerte'}
+            <button type="submit" disabled={loading} style={{ flex: 2, background: '#0F172A', color: 'white', border: 'none', padding: '12px', borderRadius: 10, cursor: loading ? 'not-allowed' : 'pointer', fontWeight: 600, fontSize: '0.9rem', opacity: loading ? 0.6 : 1, letterSpacing: '-0.005em' }}>
+              {loading ? 'Création…' : 'Créer l\'alerte'}
             </button>
           </div>
         </form>
@@ -185,7 +187,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 const inputStyle: React.CSSProperties = {
   width: '100%',
   padding: '8px 10px',
-  border: '1px solid #e2e8f0',
+  border: '1px solid #E5E7EB',
   borderRadius: 6,
   fontSize: '0.9rem',
   boxSizing: 'border-box',

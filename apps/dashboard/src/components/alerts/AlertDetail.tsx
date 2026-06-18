@@ -171,22 +171,23 @@ export function AlertDetail({ alert, currentUser, onClose, onRefetch }: {
       display: 'flex', flexDirection: 'column', zIndex: 1000,
     }}>
       {/* Header */}
-      <div style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div>
-          <div style={{ fontWeight: 700, fontSize: '1rem', color: '#1a3c5e', marginBottom: 4 }}>
-            {meta.icon} {alert.title}
+      <div style={{ padding: '18px 20px', borderBottom: '1px solid #F1F5F9', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+            <div style={{ width: 30, height: 30, borderRadius: 7, background: sev + '14', color: sev, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.95rem', flexShrink: 0 }}>{meta.icon}</div>
+            <div style={{ fontWeight: 600, fontSize: '0.98rem', color: '#0F172A', letterSpacing: '-0.01em' }}>{alert.title}</div>
           </div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {alert.alertLevel && <AlertLevelBadge level={alert.alertLevel} size="sm" />}
-            <span style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: 10, background: status.bg, color: status.color, fontWeight: 600 }}>
+            <span style={{ fontSize: '0.68rem', padding: '3px 8px', borderRadius: 5, background: status.bg, color: status.color, fontWeight: 600 }}>
               {status.label}
             </span>
-            <span style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: 10, background: sev + '22', color: sev, fontWeight: 600 }}>
+            <span style={{ fontSize: '0.68rem', padding: '3px 8px', borderRadius: 5, background: sev + '14', color: sev, fontWeight: 600 }}>
               {SEVERITY_LABEL[alert.severity]}
             </span>
           </div>
         </div>
-        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem', color: '#94a3b8', padding: 4 }}>✕</button>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.82rem', color: '#64748B', padding: 4, fontWeight: 500 }}>Fermer</button>
       </div>
 
       {/* Content */}
@@ -205,27 +206,26 @@ export function AlertDetail({ alert, currentUser, onClose, onRefetch }: {
                 <div key={s}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '5px 0' }}>
                     <div style={{
-                      width: 24, height: 24, borderRadius: '50%', flexShrink: 0,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.72rem', fontWeight: 700,
-                      background: rejected ? '#dc2626' : done ? '#16a34a' : active ? '#1a3c5e' : '#e2e8f0',
-                      color: (done || active || rejected) ? 'white' : '#94a3b8',
-                      boxShadow: active ? '0 0 0 3px rgba(26,60,94,0.15)' : 'none',
+                      width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', fontWeight: 600,
+                      background: rejected ? '#DC2626' : done ? '#16A34A' : active ? '#0F172A' : '#F1F5F9',
+                      color: (done || active || rejected) ? 'white' : '#94A3B8',
                     }}>
                       {rejected ? '✕' : done ? '✓' : i + 1}
                     </div>
                     <div style={{ flex: 1 }}>
-                      <span style={{ fontSize: '0.82rem', fontWeight: active ? 700 : 400, color: rejected ? '#dc2626' : active ? '#1a3c5e' : waiting ? '#cbd5e1' : '#64748b' }}>
+                      <span style={{ fontSize: '0.85rem', fontWeight: active ? 600 : 500, color: rejected ? '#DC2626' : active ? '#0F172A' : waiting ? '#CBD5E1' : '#64748B', letterSpacing: '-0.005em' }}>
                         {STEP_LABEL[s]}
                       </span>
                     </div>
                     {active && !rejected && (
-                      <span style={{ fontSize: '0.65rem', background: '#1a3c5e', color: 'white', padding: '1px 7px', borderRadius: 8, fontWeight: 700 }}>
-                        EN COURS
+                      <span style={{ fontSize: '0.66rem', background: '#0F172A', color: 'white', padding: '2px 8px', borderRadius: 5, fontWeight: 600, letterSpacing: '0.02em' }}>
+                        En cours
                       </span>
                     )}
                   </div>
                   {active && nextAction && (
-                    <div style={{ marginLeft: 34, marginBottom: 4, fontSize: '0.72rem', color: '#64748b', fontStyle: 'italic' }}>
+                    <div style={{ marginLeft: 34, marginBottom: 4, fontSize: '0.72rem', color: '#64748B', fontStyle: 'italic' }}>
                       → {nextAction}
                     </div>
                   )}
@@ -236,25 +236,25 @@ export function AlertDetail({ alert, currentUser, onClose, onRefetch }: {
         </Section>
 
         <Section title="Description">
-          <p style={{ margin: 0, color: '#374151', lineHeight: 1.6, fontSize: '0.9rem' }}>{alert.description}</p>
+          <p style={{ margin: 0, color: '#374151', lineHeight: 1.6, fontSize: '0.88rem' }}>{alert.description}</p>
         </Section>
 
         <Section title="Localisation">
-          <div style={{ color: '#6b7280', fontSize: '0.88rem' }}>
-            <div>📍 Zone : <strong>{alert.zone?.name || 'Inconnue'}</strong></div>
-            {alert.latitude && <div style={{ marginTop: 4 }}>🌐 {alert.latitude.toFixed(4)}, {alert.longitude.toFixed(4)}</div>}
+          <div style={{ color: '#475569', fontSize: '0.86rem', lineHeight: 1.6 }}>
+            <div>Zone : <strong style={{ color: '#0F172A', fontWeight: 600 }}>{alert.zone?.name || 'Inconnue'}</strong></div>
+            {alert.latitude && <div style={{ marginTop: 3, fontFamily: 'ui-monospace, "SF Mono", Menlo, monospace', fontSize: '0.78rem', color: '#64748B' }}>{alert.latitude.toFixed(4)}, {alert.longitude.toFixed(4)}</div>}
           </div>
         </Section>
 
         <Section title="Informations">
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: '0.82rem', color: '#6b7280' }}>
-            <div>Type : <strong>{meta.label}</strong></div>
-            <div>Sévérité : <strong style={{ color: sev }}>{SEVERITY_LABEL[alert.severity]}</strong></div>
-            <div>Créé le : <strong>{new Date(alert.createdAt).toLocaleDateString('fr-FR')}</strong></div>
-            {alert.broadcastAt && <div>Diffusé le : <strong>{new Date(alert.broadcastAt).toLocaleDateString('fr-FR')}</strong></div>}
-            {alert.closedAt && <div>Clôturé le : <strong>{new Date(alert.closedAt).toLocaleDateString('fr-FR')}</strong></div>}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, fontSize: '0.82rem', color: '#475569' }}>
+            <div>Type : <strong style={{ color: '#0F172A', fontWeight: 600 }}>{meta.label}</strong></div>
+            <div>Sévérité : <strong style={{ color: sev, fontWeight: 600 }}>{SEVERITY_LABEL[alert.severity]}</strong></div>
+            <div>Créé le : <strong style={{ color: '#0F172A', fontWeight: 600 }}>{new Date(alert.createdAt).toLocaleDateString('fr-FR')}</strong></div>
+            {alert.broadcastAt && <div>Diffusé le : <strong style={{ color: '#0F172A', fontWeight: 600 }}>{new Date(alert.broadcastAt).toLocaleDateString('fr-FR')}</strong></div>}
+            {alert.closedAt && <div>Clôturé le : <strong style={{ color: '#0F172A', fontWeight: 600 }}>{new Date(alert.closedAt).toLocaleDateString('fr-FR')}</strong></div>}
           </div>
-          {alert.closureReason && <div style={{ marginTop: 8, fontSize: '0.82rem', color: '#6b7280' }}>Bilan : {alert.closureReason}</div>}
+          {alert.closureReason && <div style={{ marginTop: 10, fontSize: '0.82rem', color: '#475569', fontStyle: 'italic' }}>Bilan : {alert.closureReason}</div>}
         </Section>
 
         {alert.validations?.length > 0 && (
@@ -262,7 +262,7 @@ export function AlertDetail({ alert, currentUser, onClose, onRefetch }: {
             {alert.validations.map((v: any, i: number) => (
               <div key={i} style={{ fontSize: '0.82rem', padding: '6px 10px', background: v.approved ? '#dcfce7' : '#fee2e2', borderRadius: 6, marginBottom: 6 }}>
                 <strong>{v.validator?.name}</strong> ({v.validator?.role}) — {v.action || (v.approved ? 'VALIDATED' : 'REJECTED')}
-                {v.step && <span style={{ color: '#94a3b8' }}> · {STEP_LABEL[v.step] || v.step}</span>}
+                {v.step && <span style={{ color: '#94A3B8' }}> · {STEP_LABEL[v.step] || v.step}</span>}
                 {v.comment && <div style={{ color: '#6b7280', marginTop: 2 }}>{v.comment}</div>}
               </div>
             ))}
@@ -280,14 +280,14 @@ export function AlertDetail({ alert, currentUser, onClose, onRefetch }: {
               <button
                 disabled={loading}
                 onClick={criticalValidate}
-                style={{ ...btn('#9a3412'), width: '100%', marginTop: 10 }}
+                style={{ ...btn('#0F172A'), width: '100%', marginTop: 12 }}
               >
-                ✍️ Enregistrer ma validation ({myCriticalCategory === 'SENTINELLE_CATEGORY' ? 'Sentinelle' : myCriticalCategory === 'AUTORITE_LOCALE' ? 'Autorité locale' : 'Autorité admin'})
+                Enregistrer ma validation ({myCriticalCategory === 'SENTINELLE_CATEGORY' ? 'sentinelle' : myCriticalCategory === 'AUTORITE_LOCALE' ? 'autorité locale' : 'autorité admin'})
               </button>
             )}
             {alreadyValidatedCritical && (
-              <div style={{ marginTop: 8, fontSize: '0.76rem', color: '#15803d', textAlign: 'center' }}>
-                ✓ Vous avez déjà validé cette alerte
+              <div style={{ marginTop: 10, fontSize: '0.78rem', color: '#15803D', textAlign: 'center', fontWeight: 500 }}>
+                Vous avez déjà validé cette alerte
               </div>
             )}
           </Section>
@@ -296,25 +296,24 @@ export function AlertDetail({ alert, currentUser, onClose, onRefetch }: {
         {/* Actions du cursus */}
         {(canAdvance || canBroadcast || canClose) && (
           <Section title="Action requise">
-            {error && <div style={{ background: '#fee2e2', color: '#dc2626', padding: '8px 10px', borderRadius: 6, marginBottom: 10, fontSize: '0.82rem' }}>{error}</div>}
+            {error && <div style={{ background: '#fee2e2', color: '#DC2626', padding: '8px 10px', borderRadius: 6, marginBottom: 10, fontSize: '0.82rem' }}>{error}</div>}
 
             {canAdvance && (
               <>
                 {needsProof && (
-                  <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: 10, marginBottom: 10 }}>
-                    <div style={{ fontSize: '0.75rem', color: '#92400e', marginBottom: 6 }}>
+                  <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 10, padding: 14, marginBottom: 10 }}>
+                    <div style={{ fontSize: '0.78rem', color: '#92400E', marginBottom: 10, fontWeight: 500 }}>
                       Validation sentinelle : preuve obligatoire (photo + GPS + gravité)
                     </div>
-                    <div style={{ marginBottom: 6 }}>
+                    <div style={{ marginBottom: 10 }}>
                       {photoUrl ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <img src={photoUrl} alt="preuve" style={{ height: 60, borderRadius: 6, objectFit: 'cover', border: '1px solid #e2e8f0' }} />
-                          <button onClick={() => setPhotoUrl('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626', fontSize: '0.8rem' }}>✕ Supprimer</button>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <img src={photoUrl} alt="preuve" style={{ height: 60, borderRadius: 8, objectFit: 'cover', border: '1px solid #E5E7EB' }} />
+                          <button onClick={() => setPhotoUrl('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#DC2626', fontSize: '0.78rem', fontWeight: 500 }}>Supprimer</button>
                         </div>
                       ) : (
-                        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', background: 'white', border: '1.5px dashed #d97706', borderRadius: 8, padding: '10px 14px' }}>
-                          <span style={{ fontSize: '1.1rem' }}>📷</span>
-                          <span style={{ fontSize: '0.82rem', fontWeight: 600, color: '#92400e' }}>
+                        <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, cursor: 'pointer', background: 'white', border: '1px dashed #D97706', borderRadius: 8, padding: '11px 14px' }}>
+                          <span style={{ fontSize: '0.85rem', fontWeight: 500, color: '#92400E' }}>
                             {photoUploading ? 'Upload en cours…' : 'Choisir une photo de preuve'}
                           </span>
                           <input type="file" accept="image/*" style={{ display: 'none' }}
@@ -341,7 +340,7 @@ export function AlertDetail({ alert, currentUser, onClose, onRefetch }: {
                       <option value="2">Gravité 2 — Alerte</option>
                       <option value="3">Gravité 3 — Urgence</option>
                     </select>
-                    <div style={{ fontSize: '0.72rem', color: '#a16207', marginTop: 4 }}>📍 La position GPS sera capturée automatiquement.</div>
+                    <div style={{ fontSize: '0.74rem', color: '#A16207', marginTop: 8 }}>La position GPS sera capturée automatiquement.</div>
                   </div>
                 )}
                 <textarea
@@ -351,14 +350,14 @@ export function AlertDetail({ alert, currentUser, onClose, onRefetch }: {
                 />
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button disabled={loading} onClick={() => advance('VALIDATED')}
-                    style={btn('#16a34a')}>✅ Valider</button>
+                    style={btn('#0F172A')}>Valider</button>
                   <button disabled={loading} onClick={() => advance('REJECTED')}
-                    style={btn('#dc2626')}>❌ Rejeter</button>
+                    style={{ ...btn('white'), color: '#DC2626', border: '1px solid #FECACA' }}>Rejeter</button>
                 </div>
                 {needsProof && (
                   <button disabled={loading} onClick={() => advance('ESCALATED')}
-                    style={{ ...btn('#ea580c'), width: '100%', marginTop: 8 }}>
-                    ⚡ Escalader (urgence → préfecture)
+                    style={{ ...btn('white'), color: '#EA580C', border: '1px solid #FED7AA', width: '100%', marginTop: 8 }}>
+                    Escalader vers la préfecture
                   </button>
                 )}
               </>
@@ -372,8 +371,8 @@ export function AlertDetail({ alert, currentUser, onClose, onRefetch }: {
                   style={{ ...inputS, resize: 'vertical', marginTop: 8 }}
                 />
                 <button disabled={loading} onClick={broadcast}
-                  style={{ ...btn('#a21caf'), width: '100%', marginTop: 8 }}>
-                  📢 Diffuser l'alerte (multi-canal)
+                  style={{ ...btn('#0F172A'), width: '100%', marginTop: 8 }}>
+                  Diffuser l&apos;alerte multi-canal
                 </button>
               </>
             )}
@@ -381,18 +380,18 @@ export function AlertDetail({ alert, currentUser, onClose, onRefetch }: {
             {/* Bouton diffusion d'urgence — visible MAIRIE+ tant que l'alerte n'est pas diffusée */}
             {!alert.broadcastAt && ['MAIRIE','PREFECTURE','GOUVERNORAT','PROTECTION_CIVILE','SUPERVISEUR_REGIONAL','ADMIN','SUPER_ADMIN'].includes(currentUser?.role) && (
               <button disabled={loading} onClick={emergencyBypass}
-                style={{ ...btn('#dc2626'), width: '100%', marginTop: 12, padding: '12px', fontWeight: 800, boxShadow: '0 2px 8px rgba(220,38,38,0.4)' }}>
-                🚨 DIFFUSION D'URGENCE — court-circuit cursus
+                style={{ ...btn('#DC2626'), width: '100%', marginTop: 12, padding: '11px', fontWeight: 600, letterSpacing: '-0.005em' }}>
+                Diffusion d&apos;urgence — court-circuit cursus
               </button>
             )}
             {alert.emergencyBypass && (
-              <div style={{ marginTop: 8, padding: '8px 12px', background: '#fee2e2', borderRadius: 8, fontSize: '0.78rem', color: '#991b1b' }}>
-                ⚠️ Diffusée en urgence — justification : « {alert.bypassJustification} »
+              <div style={{ marginTop: 8, padding: '10px 12px', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, fontSize: '0.78rem', color: '#991B1B' }}>
+                Diffusée en urgence — justification : « {alert.bypassJustification} »
               </div>
             )}
             {alert.autoEscalated && (
-              <div style={{ marginTop: 8, padding: '8px 12px', background: '#fef3c7', borderRadius: 8, fontSize: '0.78rem', color: '#92400e' }}>
-                ⏱ Auto-diffusée faute de confirmation autorité dans le délai (15 min)
+              <div style={{ marginTop: 8, padding: '10px 12px', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 8, fontSize: '0.78rem', color: '#92400E' }}>
+                Auto-diffusée faute de confirmation autorité dans le délai (15 min)
               </div>
             )}
 
@@ -401,8 +400,8 @@ export function AlertDetail({ alert, currentUser, onClose, onRefetch }: {
                 <input value={reason} onChange={(e) => setReason(e.target.value)}
                   placeholder="Raison / bilan de clôture (obligatoire)" style={{ ...inputS, marginTop: 8 }} />
                 <button disabled={loading} onClick={close}
-                  style={{ ...btn('#1d4ed8'), width: '100%', marginTop: 8 }}>
-                  🏁 Clôturer l'alerte
+                  style={{ ...btn('#0F172A'), width: '100%', marginTop: 8 }}>
+                  Clôturer l&apos;alerte
                 </button>
               </>
             )}
@@ -414,18 +413,20 @@ export function AlertDetail({ alert, currentUser, onClose, onRefetch }: {
 }
 
 const inputS: React.CSSProperties = {
-  width: '100%', padding: '8px 10px', border: '1px solid #e2e8f0',
-  borderRadius: 6, fontSize: '0.85rem', boxSizing: 'border-box', fontFamily: 'inherit',
+  width: '100%', padding: '10px 12px', border: '1px solid #E5E7EB',
+  borderRadius: 8, fontSize: '0.85rem', boxSizing: 'border-box', fontFamily: 'inherit',
+  background: 'white', color: '#0F172A',
 };
 const btn = (bg: string): React.CSSProperties => ({
-  flex: 1, background: bg, color: 'white', border: 'none', padding: '9px',
-  borderRadius: 6, cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem',
+  flex: 1, background: bg, color: 'white', border: 'none', padding: '10px',
+  borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem',
+  letterSpacing: '-0.005em',
 });
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div style={{ marginBottom: 20 }}>
-      <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>{title}</div>
+      <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>{title}</div>
       {children}
     </div>
   );

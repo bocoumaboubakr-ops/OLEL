@@ -16,32 +16,46 @@ export default function SentinellesPage() {
   if (!initialized) return null;
   if (!user) { if (typeof window !== 'undefined') window.location.href = '/login'; return null; }
   if (!AUTH_ROLES.includes(user.role)) {
-    return <div style={{ padding: 40, textAlign: 'center', color: '#dc2626' }}>Accès non autorisé</div>;
+    return <div style={{ padding: 40, textAlign: 'center', color: '#DC2626' }}>Accès non autorisé</div>;
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f8fafc', fontFamily: 'system-ui, sans-serif' }}>
-      <header style={{ background: '#1a3c5e', color: 'white', padding: '14px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <a href="/" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: '0.85rem' }}>← Tableau de bord</a>
-          <span style={{ fontWeight: 700, fontSize: '1.05rem' }}>🔭 Sentinelles & Missions</span>
+    <div style={{ minHeight: '100vh', background: '#FAFAFA' }}>
+      <header style={{
+        background: 'white', borderBottom: '1px solid #F1F5F9',
+        padding: '0 24px', height: 56,
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
+          <a href="/" style={{ color: '#0F172A', textDecoration: 'none', fontWeight: 700, fontSize: '1.05rem', letterSpacing: '-0.02em' }}>OLEL</a>
+          <span style={{ color: '#CBD5E1' }}>›</span>
+          <span style={{ fontSize: '0.92rem', color: '#0F172A', fontWeight: 600, letterSpacing: '-0.01em' }}>Sentinelles & Missions</span>
         </div>
-        <span style={{ fontSize: '0.8rem', opacity: 0.8 }}>{user.name} · {user.role}</span>
+        <span style={{ fontSize: '0.82rem', color: '#64748B' }}>{user.name} <span style={{ color: '#CBD5E1' }}>·</span> {user.role}</span>
       </header>
 
-      <div style={{ display: 'flex', gap: 8, padding: '16px 24px 0' }}>
+      <div style={{ maxWidth: 1200, margin: '24px auto 0', padding: '0 24px', display: 'flex', gap: 4, borderBottom: '1px solid #F1F5F9' }}>
         {([
-          { key: 'sentinelles', label: '🔭 Sentinelles' },
-          { key: 'missions',    label: '📋 Missions terrain' },
+          { key: 'sentinelles', label: 'Sentinelles' },
+          { key: 'missions',    label: 'Missions terrain' },
         ] as const).map(({ key, label }) => (
           <button key={key} onClick={() => setTab(key)}
-            style={{ padding: '8px 18px', border: 'none', borderRadius: '8px 8px 0 0', cursor: 'pointer', fontWeight: tab === key ? 700 : 400, background: tab === key ? 'white' : '#e2e8f0', color: tab === key ? '#1a3c5e' : '#64748b', borderBottom: tab === key ? '2px solid #1a3c5e' : '2px solid transparent' }}>
+            style={{
+              padding: '10px 16px', border: 'none', background: 'transparent',
+              cursor: 'pointer',
+              fontWeight: tab === key ? 600 : 500,
+              fontSize: '0.88rem',
+              color: tab === key ? '#0F172A' : '#64748B',
+              borderBottom: tab === key ? '2px solid #0F172A' : '2px solid transparent',
+              marginBottom: -1,
+              letterSpacing: '-0.005em',
+            }}>
             {label}
           </button>
         ))}
       </div>
 
-      <div style={{ background: 'white', margin: '0 0 0 0', borderTop: '1px solid #e2e8f0', padding: '24px' }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '24px' }}>
         {tab === 'sentinelles' && <SentinellesTab />}
         {tab === 'missions'    && <MissionsPanel />}
       </div>
@@ -60,7 +74,7 @@ function SentinellesTab() {
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>Chargement…</div>;
+  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#94A3B8' }}>Chargement…</div>;
 
   const active = sentinelles.filter((s) => s.isActive);
   const inactive = sentinelles.filter((s) => !s.isActive);
@@ -68,32 +82,33 @@ function SentinellesTab() {
   return (
     <div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 24, maxWidth: 600 }}>
-        <StatCard value={sentinelles.length} label="Total sentinelles" color="#1a3c5e" />
-        <StatCard value={active.length} label="Actives" color="#16a34a" />
-        <StatCard value={inactive.length} label="Inactives" color="#dc2626" />
+        <StatCard value={sentinelles.length} label="Total sentinelles" color="#0F172A" />
+        <StatCard value={active.length} label="Actives" color="#16A34A" />
+        <StatCard value={inactive.length} label="Inactives" color="#DC2626" />
       </div>
 
-      <h3 style={{ fontSize: '0.9rem', color: '#1a3c5e', marginBottom: 12 }}>Liste des sentinelles</h3>
+      <h3 style={{ fontSize: '0.9rem', color: '#0F172A', marginBottom: 12 }}>Liste des sentinelles</h3>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
         <thead>
-          <tr style={{ background: '#f8fafc', color: '#64748b', fontSize: '0.78rem' }}>
+          <tr style={{ background: '#FAFAFA', color: '#64748B', fontSize: '0.78rem' }}>
             {['Nom', 'Téléphone', 'Zone', 'Statut', 'Dernière activité'].map((h) => (
-              <th key={h} style={{ padding: '9px 12px', textAlign: 'left', fontWeight: 600, borderBottom: '1px solid #e2e8f0' }}>{h}</th>
+              <th key={h} style={{ padding: '9px 12px', textAlign: 'left', fontWeight: 600, borderBottom: '1px solid #E5E7EB' }}>{h}</th>
             ))}
           </tr>
         </thead>
         <tbody>
           {sentinelles.map((s) => (
-            <tr key={s.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-              <td style={{ padding: '10px 12px', fontWeight: 600, color: '#1a3c5e' }}>{s.name}</td>
-              <td style={{ padding: '10px 12px', color: '#64748b' }}>{s.phone}</td>
-              <td style={{ padding: '10px 12px', color: '#64748b' }}>{s.zone?.name || '—'}</td>
+            <tr key={s.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
+              <td style={{ padding: '10px 12px', fontWeight: 600, color: '#0F172A' }}>{s.name}</td>
+              <td style={{ padding: '10px 12px', color: '#64748B' }}>{s.phone}</td>
+              <td style={{ padding: '10px 12px', color: '#64748B' }}>{s.zone?.name || '—'}</td>
               <td style={{ padding: '10px 12px' }}>
-                <span style={{ padding: '2px 8px', borderRadius: 8, background: s.isActive ? '#dcfce7' : '#fee2e2', color: s.isActive ? '#16a34a' : '#dc2626', fontSize: '0.75rem', fontWeight: 600 }}>
-                  {s.isActive ? '✅ Active' : '⏸ Inactive'}
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 9px', borderRadius: 5, background: s.isActive ? '#F0FDF4' : '#FEF2F2', color: s.isActive ? '#16A34A' : '#DC2626', fontSize: '0.74rem', fontWeight: 600 }}>
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: s.isActive ? '#16A34A' : '#DC2626' }} />
+                  {s.isActive ? 'Active' : 'Inactive'}
                 </span>
               </td>
-              <td style={{ padding: '10px 12px', color: '#94a3b8', fontSize: '0.78rem' }}>
+              <td style={{ padding: '10px 12px', color: '#94A3B8', fontSize: '0.78rem' }}>
                 {s.lastActiveAt ? new Date(s.lastActiveAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}
               </td>
             </tr>
@@ -129,7 +144,7 @@ function MissionsPanel() {
     } catch { /* ignore */ } finally { setSaving(false); }
   };
 
-  const STATUS_COLOR: Record<string, string> = { OPEN: '#64748b', ASSIGNED: '#2563eb', IN_PROGRESS: '#ea580c', DONE: '#16a34a', CANCELLED: '#94a3b8' };
+  const STATUS_COLOR: Record<string, string> = { OPEN: '#64748B', ASSIGNED: '#2563eb', IN_PROGRESS: '#ea580c', DONE: '#16A34A', CANCELLED: '#94A3B8' };
   const STATUS_LABEL: Record<string, string> = { OPEN: 'Ouverte', ASSIGNED: 'Assignée', IN_PROGRESS: 'En cours', DONE: 'Terminée', CANCELLED: 'Annulée' };
   const TYPE_ICON: Record<string, string> = { VERIFICATION: '🔍', PATROUILLE: '🚶', SENSIBILISATION: '📣', EVACUATION: '🚨' };
 
@@ -138,26 +153,26 @@ function MissionsPanel() {
   const done = missions.filter((m) => m.status === 'DONE');
 
   const labelStyle: React.CSSProperties = { display: 'block', marginBottom: 5, fontSize: '0.82rem', fontWeight: 600, color: '#374151' };
-  const inputStyle: React.CSSProperties = { width: '100%', padding: '9px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: '0.88rem', boxSizing: 'border-box', fontFamily: 'inherit' };
+  const inputStyle: React.CSSProperties = { width: '100%', padding: '9px 10px', border: '1px solid #E5E7EB', borderRadius: 8, fontSize: '0.88rem', boxSizing: 'border-box', fontFamily: 'inherit' };
 
   return (
     <div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 24, maxWidth: 500 }}>
-        <StatCard value={open.length} label="Ouvertes" color="#64748b" />
+        <StatCard value={open.length} label="Ouvertes" color="#64748B" />
         <StatCard value={inProgress.length} label="En cours" color="#ea580c" />
-        <StatCard value={done.length} label="Terminées" color="#16a34a" />
+        <StatCard value={done.length} label="Terminées" color="#16A34A" />
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-        <h3 style={{ margin: 0, fontSize: '0.9rem', color: '#1a3c5e' }}>Toutes les missions</h3>
+        <h3 style={{ margin: 0, fontSize: '0.9rem', color: '#0F172A' }}>Toutes les missions</h3>
         <button onClick={() => setShowForm(!showForm)}
-          style={{ background: '#1a3c5e', color: 'white', border: 'none', padding: '7px 16px', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem' }}>
-          {showForm ? '✕ Annuler' : '+ Créer une mission'}
+          style={{ background: showForm ? 'white' : '#0F172A', color: showForm ? '#64748B' : 'white', border: showForm ? '1px solid #E5E7EB' : 'none', padding: '8px 16px', borderRadius: 8, cursor: 'pointer', fontWeight: showForm ? 500 : 600, fontSize: '0.82rem', letterSpacing: '-0.005em' }}>
+          {showForm ? 'Annuler' : '+ Nouvelle mission'}
         </button>
       </div>
 
       {showForm && (
-        <div style={{ background: '#f8fafc', borderRadius: 10, padding: 18, marginBottom: 20, border: '1px solid #e2e8f0' }}>
+        <div style={{ background: '#FAFAFA', borderRadius: 10, padding: 18, marginBottom: 20, border: '1px solid #E5E7EB' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
             <div>
               <label style={labelStyle}>Titre</label>
@@ -182,8 +197,8 @@ function MissionsPanel() {
             <input type="datetime-local" value={form.dueAt} onChange={(e) => setForm({ ...form, dueAt: e.target.value })} style={{ ...inputStyle, maxWidth: 300 }} />
           </div>
           <button disabled={saving || !form.title.trim()} onClick={handleCreate}
-            style={{ background: '#ea580c', color: 'white', border: 'none', padding: '9px 22px', borderRadius: 8, cursor: 'pointer', fontWeight: 700, opacity: saving ? 0.6 : 1 }}>
-            {saving ? 'Création…' : '📋 Créer'}
+            style={{ background: '#0F172A', color: 'white', border: 'none', padding: '10px 22px', borderRadius: 8, cursor: saving ? 'not-allowed' : 'pointer', fontWeight: 600, fontSize: '0.85rem', opacity: saving || !form.title.trim() ? 0.5 : 1, letterSpacing: '-0.005em' }}>
+            {saving ? 'Création…' : 'Créer la mission'}
           </button>
         </div>
       )}
@@ -193,17 +208,17 @@ function MissionsPanel() {
           {missions.map((m) => {
             const color = STATUS_COLOR[m.status] || '#888';
             return (
-              <div key={m.id} style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 10, padding: '14px 16px', borderLeft: `4px solid ${color}` }}>
+              <div key={m.id} style={{ background: 'white', border: '1px solid #E5E7EB', borderRadius: 10, padding: '14px 16px', borderLeft: `4px solid ${color}` }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 6 }}>
                   <div>
-                    <div style={{ fontWeight: 700, color: '#1a3c5e', fontSize: '0.92rem' }}>{TYPE_ICON[m.type] || '📋'} {m.title}</div>
-                    {m.description && <div style={{ color: '#64748b', fontSize: '0.8rem', marginTop: 3 }}>{m.description}</div>}
+                    <div style={{ fontWeight: 700, color: '#0F172A', fontSize: '0.92rem' }}>{TYPE_ICON[m.type] || '📋'} {m.title}</div>
+                    {m.description && <div style={{ color: '#64748B', fontSize: '0.8rem', marginTop: 3 }}>{m.description}</div>}
                   </div>
                   <span style={{ padding: '2px 10px', borderRadius: 8, background: color + '22', color, fontSize: '0.75rem', fontWeight: 700, whiteSpace: 'nowrap' }}>
                     {STATUS_LABEL[m.status] || m.status}
                   </span>
                 </div>
-                <div style={{ display: 'flex', gap: 16, fontSize: '0.75rem', color: '#94a3b8' }}>
+                <div style={{ display: 'flex', gap: 16, fontSize: '0.75rem', color: '#94A3B8' }}>
                   <span>📍 {m.zone?.name || 'Matam'}</span>
                   {m.dueAt && <span>⏰ {new Date(m.dueAt).toLocaleDateString('fr-FR')}</span>}
                   <span>{m.assignments?.length || 0} sentinelle(s) assignée(s)</span>
@@ -222,9 +237,9 @@ function MissionsPanel() {
 
 function StatCard({ value, label, color }: { value: number; label: string; color: string }) {
   return (
-    <div style={{ background: 'white', border: `1px solid ${color}33`, borderRadius: 10, padding: '14px 16px', textAlign: 'center' }}>
-      <div style={{ fontSize: '1.8rem', fontWeight: 900, color }}>{value}</div>
-      <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 4 }}>{label}</div>
+    <div style={{ background: 'white', border: '1px solid #F1F5F9', borderRadius: 12, padding: '16px 18px' }}>
+      <div style={{ fontSize: '1.6rem', fontWeight: 700, color, letterSpacing: '-0.02em', lineHeight: 1.1 }}>{value}</div>
+      <div style={{ fontSize: '0.74rem', color: '#64748B', marginTop: 4, fontWeight: 500 }}>{label}</div>
     </div>
   );
 }
