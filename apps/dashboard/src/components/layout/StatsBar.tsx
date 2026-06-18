@@ -22,19 +22,24 @@ export function StatsBar({ alerts }: { alerts: any[] }) {
   const urgent = alerts.filter((a) => a.severity === 3 && !['CLOSED', 'RESOLVED', 'REJECTED', 'CANCELLED'].includes(a.status)).length;
 
   const items = [
-    { label: 'Alertes diffusées', value: stats?.alertsActive ?? diffusees, color: '#16a34a', bg: '#dcfce7' },
-    { label: 'En traitement', value: stats?.signalementsPending ?? enCours, color: '#92400e', bg: '#fef3c7' },
-    { label: 'Niveau urgence', value: urgent, color: '#dc2626', bg: '#fee2e2' },
-    { label: 'Total (30j)', value: stats?.alertsLast30Days ?? '—', color: '#1d4ed8', bg: '#dbeafe' },
-    { label: 'Notif. envoyées', value: stats?.notificationsSent ?? '—', color: '#7c3aed', bg: '#ede9fe' },
+    { label: 'Diffusées',         value: stats?.alertsActive ?? diffusees, accent: '#16A34A' },
+    { label: 'En traitement',     value: stats?.signalementsPending ?? enCours, accent: '#A16207' },
+    { label: 'Urgence',           value: urgent, accent: '#DC2626' },
+    { label: 'Total (30 j)',      value: stats?.alertsLast30Days ?? '—', accent: '#0F172A' },
+    { label: 'Notifications',     value: stats?.notificationsSent ?? '—', accent: '#0F172A' },
   ];
 
   return (
-    <div style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', padding: '8px 24px', display: 'flex', gap: 16, flexShrink: 0 }}>
-      {items.map(({ label, value, color, bg }) => (
-        <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 10px', borderRadius: 8, background: bg }}>
-          <span style={{ fontSize: '1.1rem', fontWeight: 800, color }}>{value}</span>
-          <span style={{ fontSize: '0.72rem', color: '#64748b', maxWidth: 70, lineHeight: 1.2 }}>{label}</span>
+    <div style={{
+      background: 'white',
+      borderBottom: '1px solid #F1F5F9',
+      padding: '12px 24px',
+      display: 'flex', gap: 32, flexShrink: 0,
+    }}>
+      {items.map(({ label, value, accent }) => (
+        <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <span style={{ fontSize: '1.35rem', fontWeight: 700, color: accent, letterSpacing: '-0.02em', lineHeight: 1.1 }}>{value}</span>
+          <span style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 500 }}>{label}</span>
         </div>
       ))}
     </div>

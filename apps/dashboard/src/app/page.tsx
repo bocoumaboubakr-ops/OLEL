@@ -28,34 +28,55 @@ export default function DashboardPage() {
     : alerts;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', fontFamily: 'system-ui, sans-serif' }}>
-      {/* Header */}
-      <header style={{ background: '#1a3c5e', color: 'white', padding: '0 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: 56, flexShrink: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: '1.3rem', fontWeight: 800, letterSpacing: '-0.5px' }}>OLEL</span>
-          <span style={{ fontSize: '0.75rem', opacity: 0.7, borderLeft: '1px solid rgba(255,255,255,0.3)', paddingLeft: 12 }}>
-            Alerte Précoce Multi-Risques · Matam
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+      {/* ── Header sobre, fond blanc, sans gradient ───────────────────────── */}
+      <header style={{
+        background: 'white',
+        borderBottom: '1px solid #F1F5F9',
+        padding: '0 24px',
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        height: 56, flexShrink: 0,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
+          <span style={{ fontSize: '1.15rem', fontWeight: 700, color: '#0F172A', letterSpacing: '-0.02em' }}>OLEL</span>
+          <span style={{ fontSize: '0.78rem', color: '#94A3B8', fontWeight: 500 }}>
+            Alerte précoce · Matam
           </span>
         </div>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+        <nav style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <NavLink href="/" active>Tableau de bord</NavLink>
+          <NavLink href="/signalements">Signalements</NavLink>
+          {roleLvl >= ROLE_LEVEL.COORDINATEUR && <NavLink href="/sentinelles">Sentinelles</NavLink>}
+          {roleLvl >= ROLE_LEVEL.ADMIN && <NavLink href="/admin">Admin</NavLink>}
+        </nav>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           {canCreate && (
             <button
               onClick={() => setShowCreate(true)}
-              style={{ background: '#e74c3c', color: 'white', border: 'none', padding: '6px 14px', borderRadius: 6, cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600 }}
+              style={{
+                background: '#0F172A', color: 'white', border: 'none',
+                padding: '8px 14px', borderRadius: 8, cursor: 'pointer',
+                fontSize: '0.82rem', fontWeight: 600, letterSpacing: '-0.005em',
+              }}
             >
               + Nouvelle alerte
             </button>
           )}
-          <a href="/signalements" style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.85rem', textDecoration: 'none' }}>📋 Signalements</a>
-          {roleLvl >= ROLE_LEVEL.COORDINATEUR && (
-            <a href="/sentinelles" style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.85rem', textDecoration: 'none' }}>🔭 Sentinelles</a>
-          )}
-          {roleLvl >= ROLE_LEVEL.ADMIN && (
-            <a href="/admin" style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.85rem', textDecoration: 'none' }}>⚙️ Admin</a>
-          )}
-          <span style={{ fontSize: '0.85rem', opacity: 0.85 }}>{user.name}</span>
-          <span style={{ fontSize: '0.7rem', background: 'rgba(255,255,255,0.15)', padding: '2px 8px', borderRadius: 10 }}>{ROLE_LABELS[user.role] || user.role}</span>
-          <button onClick={logout} style={{ background: 'rgba(255,255,255,0.15)', color: 'white', border: 'none', padding: '5px 12px', borderRadius: 6, cursor: 'pointer', fontSize: '0.8rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 8px 4px 4px', borderRadius: 8, background: '#FAFAFA', border: '1px solid #F1F5F9' }}>
+            <div style={{
+              width: 26, height: 26, borderRadius: 6,
+              background: '#0F172A', color: 'white',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '0.72rem', fontWeight: 600,
+            }}>
+              {user.name.split(' ').map((s: string) => s[0]).slice(0, 2).join('').toUpperCase() || 'OL'}
+            </div>
+            <div style={{ lineHeight: 1.2 }}>
+              <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#0F172A' }}>{user.name}</div>
+              <div style={{ fontSize: '0.68rem', color: '#64748B' }}>{ROLE_LABELS[user.role] || user.role}</div>
+            </div>
+          </div>
+          <button onClick={logout} style={{ background: 'white', color: '#64748B', border: '1px solid #E5E7EB', padding: '7px 12px', borderRadius: 8, cursor: 'pointer', fontSize: '0.78rem', fontWeight: 500 }}>
             Déconnexion
           </button>
         </div>
@@ -65,37 +86,38 @@ export default function DashboardPage() {
       <StatsBar alerts={alerts} />
 
       {/* Main content */}
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden', background: '#FAFAFA' }}>
         {/* Sidebar */}
-        <aside style={{ width: 380, display: 'flex', flexDirection: 'column', borderRight: '1px solid #e2e8f0', background: 'white', flexShrink: 0 }}>
-          <div style={{ padding: '12px 16px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <aside style={{ width: 400, display: 'flex', flexDirection: 'column', borderRight: '1px solid #F1F5F9', background: 'white', flexShrink: 0 }}>
+          <div style={{ padding: '14px 18px', borderBottom: '1px solid #F1F5F9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ display: 'flex', gap: 4 }}>
               {(['active', 'all'] as const).map((t) => (
                 <button
                   key={t}
                   onClick={() => setActiveTab(t)}
                   style={{
-                    padding: '5px 12px',
+                    padding: '6px 12px',
                     borderRadius: 6,
                     border: 'none',
                     cursor: 'pointer',
                     fontSize: '0.8rem',
-                    fontWeight: activeTab === t ? 700 : 400,
-                    background: activeTab === t ? '#1a3c5e' : '#f1f5f9',
-                    color: activeTab === t ? 'white' : '#64748b',
+                    fontWeight: activeTab === t ? 600 : 500,
+                    background: activeTab === t ? '#0F172A' : 'transparent',
+                    color: activeTab === t ? 'white' : '#64748B',
+                    letterSpacing: '-0.005em',
                   }}
                 >
                   {t === 'active' ? 'En cours' : 'Toutes'}
                 </button>
               ))}
             </div>
-            <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
-              {loading ? '…' : `${filteredAlerts.length} alerte(s)`}
+            <span style={{ fontSize: '0.78rem', color: '#94A3B8', fontWeight: 500 }}>
+              {loading ? '…' : `${filteredAlerts.length} ${filteredAlerts.length > 1 ? 'alertes' : 'alerte'}`}
             </span>
           </div>
           <div style={{ overflowY: 'auto', flex: 1 }}>
             {loading ? (
-              <div style={{ padding: 32, textAlign: 'center', color: '#94a3b8' }}>Chargement…</div>
+              <div style={{ padding: 32, textAlign: 'center', color: '#94A3B8', fontSize: '0.88rem' }}>Chargement…</div>
             ) : (
               <AlertsFeed alerts={filteredAlerts} onSelect={setSelected} />
             )}
@@ -126,6 +148,21 @@ export default function DashboardPage() {
         />
       )}
     </div>
+  );
+}
+
+function NavLink({ href, children, active }: { href: string; children: React.ReactNode; active?: boolean }) {
+  return (
+    <a href={href} style={{
+      color: active ? '#0F172A' : '#64748B',
+      background: active ? '#F1F5F9' : 'transparent',
+      fontSize: '0.82rem',
+      fontWeight: active ? 600 : 500,
+      textDecoration: 'none',
+      padding: '6px 12px',
+      borderRadius: 6,
+      letterSpacing: '-0.005em',
+    }}>{children}</a>
   );
 }
 

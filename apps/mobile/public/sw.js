@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'olel-v2';
+const CACHE_VERSION = 'olel-v3-minimal-pro';
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const MAP_CACHE = `${CACHE_VERSION}-tiles`;
 const API_CACHE = `${CACHE_VERSION}-api`;

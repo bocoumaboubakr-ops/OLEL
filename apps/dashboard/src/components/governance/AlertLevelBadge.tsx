@@ -11,18 +11,19 @@ export function AlertLevelBadge({ level, size = 'md' }: { level?: string; size?:
       style={{
         display: 'inline-flex',
         alignItems: 'center',
-        gap: 4,
-        padding: small ? '1px 6px' : '2px 9px',
-        borderRadius: 10,
+        gap: 5,
+        padding: small ? '2px 7px' : '3px 9px',
+        borderRadius: 5,
         background: cfg.bg,
         color: cfg.color,
-        fontWeight: 700,
+        fontWeight: 600,
         fontSize: small ? '0.68rem' : '0.72rem',
-        border: `1px solid ${cfg.color}33`,
         whiteSpace: 'nowrap',
+        letterSpacing: '0.005em',
       }}
     >
-      {cfg.icon} {cfg.label}
+      <span style={{ width: 6, height: 6, borderRadius: '50%', background: cfg.color, flexShrink: 0 }} />
+      {cfg.label}
     </span>
   );
 }
