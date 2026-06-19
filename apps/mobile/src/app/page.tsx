@@ -957,11 +957,11 @@ interface TrainingModule {
   lessons: { id: string; title: string; order: number }[];
 }
 
-const CATEGORY_LABEL: Record<string, { icon: string; label: string; color: string }> = {
-  SECOURISME:     { icon: '🩺', label: 'Secourisme',    color: '#16A34A' },
-  RISQUE_LOCAL:   { icon: '🌊', label: 'Risques locaux', color: '#2563eb' },
-  PROCEDURE:      { icon: '📋', label: 'Procédures',    color: '#7c3aed' },
-  SENSIBILISATION:{ icon: '📣', label: 'Sensibilisation',color: '#ea580c' },
+const CATEGORY_LABEL: Record<string, { label: string; color: string }> = {
+  SECOURISME:      { label: 'Secourisme',      color: '#16A34A' },
+  RISQUE_LOCAL:    { label: 'Risques locaux',  color: '#2563EB' },
+  PROCEDURE:       { label: 'Procédures',      color: '#7C3AED' },
+  SENSIBILISATION: { label: 'Sensibilisation', color: '#EA580C' },
 };
 
 function FormationsScreen() {
@@ -998,70 +998,82 @@ function FormationsScreen() {
     } catch { /* ignore */ } finally { setCompleting(null); }
   };
 
-  if (loading) return <div style={{ textAlign: 'center', padding: 56, color: '#94A3B8', fontSize: '2.5rem' }}>⏳</div>;
+  if (loading) return <div style={{ textAlign: 'center', padding: 56, color: '#94A3B8', fontSize: '0.9rem' }}>Chargement…</div>;
 
   return (
-    <div style={{ padding: '16px' }}>
-      <h2 style={{ margin: '0 0 12px', fontSize: '1.05rem', color: '#0F172A' }}>📚 Formations</h2>
+    <div style={{ padding: '20px 16px 24px' }}>
+      <h2 style={{ margin: '0 0 16px', fontSize: '1.2rem', fontWeight: 700, color: '#0F172A', letterSpacing: '-0.02em' }}>Formations</h2>
 
       {status && (
-        <div style={{ background: status.certified ? '#dcfce7' : '#fef9c3', border: `1.5px solid ${status.certified ? '#16A34A' : '#ca8a04'}`, borderRadius: 12, padding: '12px 16px', marginBottom: 16 }}>
-          <div style={{ fontWeight: 800, color: status.certified ? '#16A34A' : '#ca8a04', fontSize: '0.92rem', marginBottom: 4 }}>
-            {status.certified ? '✅ Certification obtenue' : '⚠️ Certification en cours'}
-          </div>
-          <div style={{ fontSize: '0.78rem', color: '#374151' }}>
-            Modules requis : {status.requiredDone}/{status.requiredTotal} · Total complétés : {status.completedCount}/{status.totalModules}
+        <div style={{
+          background: 'white',
+          border: '1px solid #F1F5F9',
+          borderRadius: 12, padding: '16px',
+          marginBottom: 16,
+          display: 'flex', alignItems: 'center', gap: 12,
+        }}>
+          <div style={{
+            width: 36, height: 36, borderRadius: '50%',
+            background: status.certified ? '#DCFCE7' : '#FEF3C7',
+            color: status.certified ? '#16A34A' : '#A16207',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: '0.85rem', fontWeight: 600, flexShrink: 0,
+          }}>{status.certified ? '✓' : '!'}</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 600, color: '#0F172A', fontSize: '0.9rem', letterSpacing: '-0.005em' }}>
+              {status.certified ? 'Certification obtenue' : 'Certification en cours'}
+            </div>
+            <div style={{ fontSize: '0.76rem', color: '#64748B', marginTop: 2 }}>
+              Modules requis : {status.requiredDone}/{status.requiredTotal} <span style={{ color: '#CBD5E1' }}>·</span> Total : {status.completedCount}/{status.totalModules}
+            </div>
           </div>
         </div>
       )}
 
       {modules.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '40px 20px', color: '#94A3B8' }}>
-          <div style={{ fontSize: '2.5rem', marginBottom: 10 }}>📚</div>
-          <p style={{ margin: 0 }}>Aucun module de formation disponible.</p>
+        <div style={{ textAlign: 'center', padding: '64px 20px', color: '#64748B' }}>
+          <p style={{ margin: 0, fontSize: '0.92rem' }}>Aucun module de formation disponible.</p>
         </div>
       ) : modules.map((m) => {
-        const cat = CATEGORY_LABEL[m.category] || { icon: '📖', label: m.category, color: '#64748B' };
+        const cat = CATEGORY_LABEL[m.category] || { label: m.category, color: '#64748B' };
         return (
-          <div key={m.id} style={{ background: 'white', borderRadius: 12, marginBottom: 12, boxShadow: '0 1px 6px rgba(0,0,0,0.07)', overflow: 'hidden', borderLeft: `4px solid ${m.progress.completed ? '#16A34A' : (m.isRequired ? '#DC2626' : cat.color)}` }}>
-            <div style={{ padding: '14px 14px 10px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 6 }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 3 }}>
-                    <span style={{ fontSize: '1rem' }}>{cat.icon}</span>
-                    <span style={{ fontSize: '0.68rem', fontWeight: 700, color: cat.color, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{cat.label}</span>
-                    {m.isRequired && <span style={{ fontSize: '0.62rem', background: '#fee2e2', color: '#DC2626', padding: '1px 6px', borderRadius: 8, fontWeight: 700 }}>REQUIS</span>}
-                  </div>
-                  <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#0F172A' }}>{m.title}</div>
-                </div>
-                <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                  {m.progress.completed ? (
-                    <div style={{ fontSize: '1.4rem' }}>✅</div>
-                  ) : (
-                    <div style={{ fontSize: '0.72rem', color: '#94A3B8' }}>⏱ {m.durationMin} min</div>
+          <div key={m.id} style={{ background: 'white', borderRadius: 12, marginBottom: 10, border: '1px solid #F1F5F9', padding: '16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 8 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 6, flexWrap: 'wrap' }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: '0.7rem', fontWeight: 600, color: cat.color, background: cat.color + '14', padding: '2px 8px', borderRadius: 5 }}>
+                    <span style={{ width: 5, height: 5, borderRadius: '50%', background: cat.color }} />
+                    {cat.label}
+                  </span>
+                  {m.isRequired && (
+                    <span style={{ fontSize: '0.66rem', background: '#FEF2F2', color: '#DC2626', padding: '2px 8px', borderRadius: 5, fontWeight: 600, letterSpacing: '0.02em' }}>Requis</span>
                   )}
                 </div>
+                <div style={{ fontWeight: 600, fontSize: '0.94rem', color: '#0F172A', letterSpacing: '-0.005em' }}>{m.title}</div>
               </div>
-              <p style={{ margin: '0 0 10px', color: '#64748B', fontSize: '0.8rem', lineHeight: 1.4 }}>{m.description}</p>
-              <div style={{ fontSize: '0.72rem', color: '#94A3B8', marginBottom: 10 }}>
-                {m.lessons.length} leçon{m.lessons.length > 1 ? 's' : ''}
-                {m.progress.completed && m.progress.completedAt && (
-                  <> · Complété le {new Date(m.progress.completedAt).toLocaleDateString('fr-FR')}</>
-                )}
-                {m.progress.completed && m.progress.score != null && (
-                  <> · Score : {m.progress.score}%</>
-                )}
-              </div>
-              {!m.progress.completed && (
-                <button
-                  disabled={completing === m.id}
-                  onClick={() => handleComplete(m.id)}
-                  style={{ width: '100%', background: '#0F172A', color: 'white', border: 'none', padding: '10px', borderRadius: 8, fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', opacity: completing === m.id ? 0.6 : 1 }}
-                >
-                  {completing === m.id ? '⏳ Enregistrement…' : '✔️ Marquer comme complété'}
-                </button>
+              {m.progress.completed && (
+                <span style={{ flexShrink: 0, width: 22, height: 22, borderRadius: '50%', background: '#DCFCE7', color: '#16A34A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.74rem', fontWeight: 600 }}>✓</span>
               )}
             </div>
+            <p style={{ margin: '0 0 10px', color: '#475569', fontSize: '0.83rem', lineHeight: 1.5 }}>{m.description}</p>
+            <div style={{ fontSize: '0.74rem', color: '#94A3B8', marginBottom: 12, fontWeight: 500 }}>
+              {m.lessons.length} leçon{m.lessons.length > 1 ? 's' : ''} <span style={{ color: '#CBD5E1' }}>·</span> {m.durationMin} min
+              {m.progress.completed && m.progress.completedAt && (
+                <> <span style={{ color: '#CBD5E1' }}>·</span> Complété le {new Date(m.progress.completedAt).toLocaleDateString('fr-FR')}</>
+              )}
+              {m.progress.completed && m.progress.score != null && (
+                <> <span style={{ color: '#CBD5E1' }}>·</span> Score {m.progress.score}%</>
+              )}
+            </div>
+            {!m.progress.completed && (
+              <button
+                disabled={completing === m.id}
+                onClick={() => handleComplete(m.id)}
+                style={{ width: '100%', background: '#0F172A', color: 'white', border: 'none', padding: '11px', borderRadius: 10, fontSize: '0.88rem', fontWeight: 600, cursor: 'pointer', opacity: completing === m.id ? 0.6 : 1, letterSpacing: '-0.005em' }}
+              >
+                {completing === m.id ? 'Enregistrement…' : 'Marquer comme complété'}
+              </button>
+            )}
           </div>
         );
       })}
@@ -1076,15 +1088,15 @@ interface Mission {
   dueAt: string | null; assignedAt: string; completedAt: string | null;
 }
 
-const MISSION_TYPE_ICON: Record<string, string> = {
-  VERIFICATION: '🔍', PATROUILLE: '🚶', SENSIBILISATION: '📣', EVACUATION: '🚨',
+const MISSION_TYPE_LABEL: Record<string, string> = {
+  VERIFICATION: 'Vérification', PATROUILLE: 'Patrouille', SENSIBILISATION: 'Sensibilisation', EVACUATION: 'Évacuation',
 };
-const MISSION_STATUS_LABEL: Record<string, { label: string; color: string }> = {
-  OPEN:        { label: 'Ouverte',      color: '#64748B' },
-  ASSIGNED:    { label: 'Assignée',     color: '#2563eb' },
-  IN_PROGRESS: { label: 'En cours',     color: '#ea580c' },
-  DONE:        { label: 'Terminée',     color: '#16A34A' },
-  CANCELLED:   { label: 'Annulée',      color: '#94A3B8' },
+const MISSION_STATUS_LABEL: Record<string, { label: string; color: string; bg: string }> = {
+  OPEN:        { label: 'Ouverte',  color: '#64748B', bg: '#F1F5F9' },
+  ASSIGNED:    { label: 'Assignée', color: '#2563EB', bg: '#EFF6FF' },
+  IN_PROGRESS: { label: 'En cours', color: '#EA580C', bg: '#FFF7ED' },
+  DONE:        { label: 'Terminée', color: '#16A34A', bg: '#F0FDF4' },
+  CANCELLED:   { label: 'Annulée',  color: '#94A3B8', bg: '#F8FAFC' },
 };
 
 function MissionsScreen() {
@@ -1115,72 +1127,79 @@ function MissionsScreen() {
     } catch { /* ignore */ } finally { setActing(null); }
   };
 
-  if (loading) return <div style={{ textAlign: 'center', padding: 56, color: '#94A3B8', fontSize: '2.5rem' }}>⏳</div>;
+  if (loading) return <div style={{ textAlign: 'center', padding: 56, color: '#94A3B8', fontSize: '0.9rem' }}>Chargement…</div>;
 
   const active = missions.filter((m) => m.status !== 'DONE' && m.status !== 'CANCELLED');
   const done = missions.filter((m) => m.status === 'DONE');
 
   return (
-    <div style={{ padding: '16px' }}>
-      <h2 style={{ margin: '0 0 14px', fontSize: '1.05rem', color: '#0F172A' }}>📋 Mes missions ({active.length} active{active.length > 1 ? 's' : ''})</h2>
+    <div style={{ padding: '20px 16px 24px' }}>
+      <div style={{ marginBottom: 18 }}>
+        <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, color: '#0F172A', letterSpacing: '-0.02em' }}>Mes missions</h2>
+        <div style={{ fontSize: '0.78rem', color: '#94A3B8', marginTop: 2 }}>{active.length} active{active.length > 1 ? 's' : ''}</div>
+      </div>
 
       {missions.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '40px 20px', color: '#94A3B8' }}>
-          <div style={{ fontSize: '2.5rem', marginBottom: 10 }}>📋</div>
-          <p style={{ margin: 0 }}>Aucune mission assignée pour le moment.</p>
+        <div style={{ textAlign: 'center', padding: '64px 20px', color: '#64748B' }}>
+          <p style={{ margin: 0, fontSize: '0.92rem' }}>Aucune mission assignée pour le moment.</p>
         </div>
       ) : <>
         {active.map((m) => {
-          const st = MISSION_STATUS_LABEL[m.status] || { label: m.status, color: '#64748B' };
-          const icon = MISSION_TYPE_ICON[m.type] || '📋';
+          const st = MISSION_STATUS_LABEL[m.status] || { label: m.status, color: '#64748B', bg: '#F1F5F9' };
+          const type = MISSION_TYPE_LABEL[m.type] || m.type;
           const isAccepting = acting === m.id + 'accept';
           const isCompleting = acting === m.id + 'complete';
           return (
-            <div key={m.assignmentId} style={{ background: 'white', borderRadius: 12, marginBottom: 12, boxShadow: '0 1px 6px rgba(0,0,0,0.07)', borderLeft: `4px solid ${st.color}` }}>
-              <div style={{ padding: '14px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
-                  <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#0F172A' }}>{icon} {m.title}</div>
-                  <span style={{ fontSize: '0.68rem', background: st.color + '22', color: st.color, padding: '2px 8px', borderRadius: 8, fontWeight: 700, whiteSpace: 'nowrap' }}>{st.label}</span>
+            <div key={m.assignmentId} style={{ background: 'white', borderRadius: 12, marginBottom: 10, border: '1px solid #F1F5F9', padding: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, marginBottom: 8 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: '0.7rem', color: '#94A3B8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>{type}</div>
+                  <div style={{ fontWeight: 600, fontSize: '0.94rem', color: '#0F172A', letterSpacing: '-0.005em' }}>{m.title}</div>
                 </div>
-                <p style={{ margin: '0 0 8px', color: '#64748B', fontSize: '0.8rem', lineHeight: 1.4 }}>{m.description}</p>
-                <div style={{ fontSize: '0.72rem', color: '#94A3B8', marginBottom: 10 }}>
-                  📍 {m.zone?.name || 'Matam'}
-                  {m.dueAt && <> · ⏰ Avant le {new Date(m.dueAt).toLocaleDateString('fr-FR')}</>}
-                </div>
-
-                {m.status === 'ASSIGNED' && (
-                  <button disabled={isAccepting} onClick={() => doAction(m.id, 'accept')}
-                    style={{ width: '100%', background: '#2563eb', color: 'white', border: 'none', padding: '10px', borderRadius: 8, fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', marginBottom: 0, opacity: isAccepting ? 0.6 : 1 }}>
-                    {isAccepting ? '⏳…' : '▶️ Accepter et démarrer'}
-                  </button>
-                )}
-
-                {m.status === 'IN_PROGRESS' && (
-                  <div>
-                    <textarea
-                      value={report[m.id] || ''}
-                      onChange={(e) => setReport((r) => ({ ...r, [m.id]: e.target.value }))}
-                      placeholder="Compte-rendu de mission (facultatif)…"
-                      rows={2}
-                      style={{ width: '100%', padding: '8px 10px', border: '1px solid #E5E7EB', borderRadius: 8, fontSize: '0.82rem', resize: 'none', boxSizing: 'border-box', fontFamily: 'inherit', marginBottom: 8 }}
-                    />
-                    <button disabled={isCompleting} onClick={() => doAction(m.id, 'complete')}
-                      style={{ width: '100%', background: '#16A34A', color: 'white', border: 'none', padding: '10px', borderRadius: 8, fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', opacity: isCompleting ? 0.6 : 1 }}>
-                      {isCompleting ? '⏳…' : '✅ Clôturer la mission'}
-                    </button>
-                  </div>
-                )}
+                <span style={{ fontSize: '0.7rem', background: st.bg, color: st.color, padding: '3px 9px', borderRadius: 5, fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0, height: 22, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                  <span style={{ width: 5, height: 5, borderRadius: '50%', background: st.color }} />
+                  {st.label}
+                </span>
               </div>
+              {m.description && <p style={{ margin: '0 0 10px', color: '#475569', fontSize: '0.83rem', lineHeight: 1.5 }}>{m.description}</p>}
+              <div style={{ fontSize: '0.74rem', color: '#94A3B8', marginBottom: 12, fontWeight: 500 }}>
+                {m.zone?.name || 'Matam'}
+                {m.dueAt && <> <span style={{ color: '#CBD5E1' }}>·</span> Avant le {new Date(m.dueAt).toLocaleDateString('fr-FR')}</>}
+              </div>
+
+              {m.status === 'ASSIGNED' && (
+                <button disabled={isAccepting} onClick={() => doAction(m.id, 'accept')}
+                  style={{ width: '100%', background: '#0F172A', color: 'white', border: 'none', padding: '11px', borderRadius: 10, fontSize: '0.88rem', fontWeight: 600, cursor: 'pointer', opacity: isAccepting ? 0.6 : 1, letterSpacing: '-0.005em' }}>
+                  {isAccepting ? 'Démarrage…' : 'Accepter et démarrer'}
+                </button>
+              )}
+
+              {m.status === 'IN_PROGRESS' && (
+                <div>
+                  <textarea
+                    value={report[m.id] || ''}
+                    onChange={(e) => setReport((r) => ({ ...r, [m.id]: e.target.value }))}
+                    placeholder="Compte-rendu de mission (facultatif)…"
+                    rows={2}
+                    style={{ width: '100%', padding: '10px 12px', border: '1px solid #E5E7EB', borderRadius: 8, fontSize: '0.85rem', resize: 'none', boxSizing: 'border-box', fontFamily: 'inherit', marginBottom: 8, outline: 'none', color: '#0F172A' }}
+                  />
+                  <button disabled={isCompleting} onClick={() => doAction(m.id, 'complete')}
+                    style={{ width: '100%', background: '#0F172A', color: 'white', border: 'none', padding: '11px', borderRadius: 10, fontSize: '0.88rem', fontWeight: 600, cursor: 'pointer', opacity: isCompleting ? 0.6 : 1, letterSpacing: '-0.005em' }}>
+                    {isCompleting ? 'Clôture…' : 'Clôturer la mission'}
+                  </button>
+                </div>
+              )}
             </div>
           );
         })}
 
         {done.length > 0 && (
           <>
-            <div style={{ fontSize: '0.68rem', color: '#94A3B8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', margin: '16px 0 8px' }}>Missions terminées</div>
+            <div style={{ fontSize: '0.7rem', color: '#94A3B8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', margin: '24px 0 10px' }}>Terminées</div>
             {done.map((m) => (
-              <div key={m.assignmentId} style={{ background: '#FAFAFA', borderRadius: 10, padding: '10px 14px', marginBottom: 8, opacity: 0.8, borderLeft: '4px solid #16A34A' }}>
-                <div style={{ fontWeight: 600, fontSize: '0.85rem', color: '#374151' }}>{MISSION_TYPE_ICON[m.type] || '📋'} {m.title}</div>
+              <div key={m.assignmentId} style={{ background: 'white', border: '1px solid #F1F5F9', borderRadius: 10, padding: '12px 14px', marginBottom: 8, opacity: 0.7 }}>
+                <div style={{ fontSize: '0.7rem', color: '#94A3B8', fontWeight: 500, marginBottom: 2 }}>{MISSION_TYPE_LABEL[m.type] || m.type}</div>
+                <div style={{ fontWeight: 500, fontSize: '0.86rem', color: '#0F172A' }}>{m.title}</div>
                 {m.completedAt && <div style={{ fontSize: '0.72rem', color: '#94A3B8', marginTop: 3 }}>Clôturée le {new Date(m.completedAt).toLocaleDateString('fr-FR')}</div>}
               </div>
             ))}
@@ -1203,77 +1222,93 @@ function SentinelValidationScreen({ alerts, signalements, onDone }: { alerts: Mo
   }
 
   return (
-    <div style={{ padding: 16 }}>
+    <div style={{ padding: '20px 16px 24px' }}>
       {/* ── Signalements citoyens (WhatsApp/USSD) en attente de vérification terrain ── */}
       {signalements.length > 0 && (
         <>
-          <h2 style={{ margin: '0 0 10px', fontSize: '1.05rem', color: '#0F172A' }}>📢 Signalements citoyens ({signalements.length})</h2>
+          <div style={{ marginBottom: 12 }}>
+            <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, color: '#0F172A', letterSpacing: '-0.02em' }}>Signalements citoyens</h2>
+            <div style={{ fontSize: '0.78rem', color: '#94A3B8', marginTop: 2 }}>{signalements.length} en attente</div>
+          </div>
           {signalements.map((sg) => {
             const meta = RISK_ICONS[sg.type] || RISK_ICONS.AUTRE;
             const needsField = !sg.fieldVerifiedAt && !(sg.latitude && sg.longitude);
             return (
-              <div key={sg.id} style={{ background: 'white', borderRadius: 12, padding: 14, marginBottom: 10, boxShadow: '0 1px 6px rgba(0,0,0,0.07)', borderLeft: `4px solid ${needsField ? '#f59e0b' : '#16A34A'}` }}>
-                <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#0F172A', marginBottom: 4 }}>{meta.icon} {meta.label}</div>
-                <p style={{ margin: '0 0 8px', color: '#555', fontSize: '0.82rem', lineHeight: 1.4 }}>{sg.text}</p>
+              <div key={sg.id} style={{ background: 'white', borderRadius: 12, padding: 16, marginBottom: 10, border: '1px solid #F1F5F9' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 8 }}>
+                  <div style={{ width: 32, height: 32, borderRadius: 7, background: '#F1F5F9', color: '#0F172A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', flexShrink: 0 }}>{meta.icon}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: '0.92rem', color: '#0F172A', letterSpacing: '-0.005em' }}>{meta.label}</div>
+                    <div style={{ fontSize: '0.72rem', color: '#94A3B8', marginTop: 2 }}>
+                      {sg.user && <>{sg.user.name} <span style={{ color: '#CBD5E1' }}>·</span> </>}
+                      via {sg.channel} <span style={{ color: '#CBD5E1' }}>·</span> {new Date(sg.createdAt).toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                  </div>
+                </div>
+                <p style={{ margin: '0 0 10px', color: '#475569', fontSize: '0.84rem', lineHeight: 1.5 }}>{sg.text}</p>
                 {(sg as any).mediaUrls?.length > 0 && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
                     {(sg as any).mediaUrls.map((url: string, i: number) => (
                       isAudioUrl(url) ? (
-                        <div key={i} style={{ background: '#f1f5f9', borderRadius: 8, padding: '6px 8px' }}>
-                          <div style={{ fontSize: '0.7rem', color: '#475569', marginBottom: 3, fontWeight: 600 }}>🎙️ Vocal — écoutez</div>
+                        <div key={i} style={{ background: '#FAFAFA', border: '1px solid #F1F5F9', borderRadius: 8, padding: '8px 10px' }}>
+                          <div style={{ fontSize: '0.7rem', color: '#64748B', marginBottom: 4, fontWeight: 500 }}>Vocal — écoutez</div>
                           <audio controls preload="none" src={url} style={{ width: '100%', height: 32 }} />
                         </div>
                       ) : (
                         <a key={i} href={url} target="_blank" rel="noreferrer">
-                          <img src={url} alt="preuve" style={{ maxWidth: 120, maxHeight: 120, borderRadius: 8, objectFit: 'cover' }} />
+                          <img src={url} alt="preuve" style={{ maxWidth: 120, maxHeight: 120, borderRadius: 8, objectFit: 'cover', border: '1px solid #F1F5F9' }} />
                         </a>
                       )
                     ))}
                   </div>
                 )}
-                <div style={{ fontSize: '0.7rem', color: '#94A3B8', marginBottom: 8 }}>
-                  {sg.user && <>👤 {sg.user.name} · </>}via {sg.channel} · {new Date(sg.createdAt).toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                </div>
                 {sg.fieldVerifiedAt ? (
-                  <div style={{ background: '#dcfce7', color: '#166534', padding: '6px 10px', borderRadius: 8, fontSize: '0.76rem' }}>
-                    ✔️ Vérifié sur place — en attente de validation mairie
+                  <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', color: '#15803D', padding: '8px 12px', borderRadius: 8, fontSize: '0.78rem', fontWeight: 500 }}>
+                    Vérifié sur place — en attente de validation mairie
                   </div>
                 ) : needsField ? (
                   <button onClick={() => setVerifying(sg)}
-                    style={{ width: '100%', background: '#0ea5e9', color: 'white', border: 'none', padding: '10px', borderRadius: 8, fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer' }}>
-                    🔭 Vérifier sur place →
+                    style={{ width: '100%', background: '#0F172A', color: 'white', border: 'none', padding: '11px', borderRadius: 10, fontSize: '0.88rem', fontWeight: 600, cursor: 'pointer', letterSpacing: '-0.005em' }}>
+                    Vérifier sur place
                   </button>
                 ) : (
-                  <div style={{ background: '#e0f2fe', color: '#0369a1', padding: '6px 10px', borderRadius: 8, fontSize: '0.76rem' }}>
-                    📍 GPS/photo fournis — en attente de validation mairie
+                  <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', color: '#1D4ED8', padding: '8px 12px', borderRadius: 8, fontSize: '0.78rem', fontWeight: 500 }}>
+                    GPS/photo fournis — en attente de validation mairie
                   </div>
                 )}
               </div>
             );
           })}
-          <div style={{ height: 8 }} />
+          <div style={{ height: 16 }} />
         </>
       )}
 
-      <h2 style={{ margin: '0 0 14px', fontSize: '1.05rem', color: '#0F172A' }}>✔️ Alertes à valider ({alerts.length})</h2>
+      <div style={{ marginBottom: 12 }}>
+        <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, color: '#0F172A', letterSpacing: '-0.02em' }}>Alertes à valider</h2>
+        <div style={{ fontSize: '0.78rem', color: '#94A3B8', marginTop: 2 }}>{alerts.length} en attente</div>
+      </div>
       {alerts.length === 0 && signalements.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '40px 20px', color: '#94A3B8' }}>
-          <div style={{ fontSize: '2.5rem', marginBottom: 10 }}>✅</div>
-          <p style={{ margin: 0 }}>Aucun signalement en attente de validation.</p>
+        <div style={{ textAlign: 'center', padding: '64px 20px', color: '#64748B' }}>
+          <p style={{ margin: 0, fontSize: '0.92rem' }}>Aucun signalement en attente de validation.</p>
         </div>
       ) : alerts.length === 0 ? (
         <p style={{ color: '#94A3B8', fontSize: '0.82rem' }}>Aucune alerte en attente.</p>
       ) : alerts.map((a) => {
         const meta = RISK_ICONS[a.type] || RISK_ICONS.AUTRE;
-        const color = SEV_COLOR[a.severity] || '#888';
+        const color = SEV_COLOR[a.severity] || '#94A3B8';
         return (
-          <div key={a.id} style={{ background: 'white', borderRadius: 12, padding: 14, marginBottom: 10, boxShadow: '0 1px 6px rgba(0,0,0,0.07)', borderLeft: `4px solid ${color}` }}>
-            <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#0F172A', marginBottom: 4 }}>{meta.icon} {a.title}</div>
-            <p style={{ margin: '0 0 10px', color: '#555', fontSize: '0.82rem', lineHeight: 1.4 }}>{a.description}</p>
-            <div style={{ fontSize: '0.72rem', color: '#94A3B8', marginBottom: 10 }}>📍 {a.zone?.name || 'Matam'} · {STATUS_LABEL[a.status] || a.status}</div>
+          <div key={a.id} style={{ background: 'white', borderRadius: 12, padding: 16, marginBottom: 10, border: '1px solid #F1F5F9' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 8 }}>
+              <div style={{ width: 32, height: 32, borderRadius: 7, background: color + '14', color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', flexShrink: 0 }}>{meta.icon}</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 600, fontSize: '0.92rem', color: '#0F172A', letterSpacing: '-0.005em' }}>{a.title}</div>
+                <div style={{ fontSize: '0.72rem', color: '#94A3B8', marginTop: 2 }}>{a.zone?.name || 'Matam'} <span style={{ color: '#CBD5E1' }}>·</span> {STATUS_LABEL[a.status] || a.status}</div>
+              </div>
+            </div>
+            <p style={{ margin: '0 0 12px', color: '#475569', fontSize: '0.84rem', lineHeight: 1.5 }}>{a.description}</p>
             <button onClick={() => setSelected(a)}
-              style={{ width: '100%', background: '#0F172A', color: 'white', border: 'none', padding: '10px', borderRadius: 8, fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer' }}>
-              Valider / Rejeter ce signalement →
+              style={{ width: '100%', background: '#0F172A', color: 'white', border: 'none', padding: '11px', borderRadius: 10, fontSize: '0.88rem', fontWeight: 600, cursor: 'pointer', letterSpacing: '-0.005em' }}>
+              Valider ou rejeter
             </button>
           </div>
         );
@@ -1336,23 +1371,39 @@ function SentinelValidationForm({ alert, onBack, onDone }: { alert: MobileAlert;
   };
 
   const meta = RISK_ICONS[alert.type] || RISK_ICONS.AUTRE;
+  const labelS: React.CSSProperties = { display: 'block', fontWeight: 600, fontSize: '0.82rem', color: '#0F172A', marginBottom: 8 };
 
   return (
-    <div style={{ padding: '16px 20px 32px' }}>
-      <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', fontSize: '0.85rem', padding: '0 0 12px', display: 'block' }}>← Retour</button>
-      <h2 style={{ margin: '0 0 14px', fontSize: '1rem', color: '#0F172A' }}>Validation terrain</h2>
+    <div style={{ padding: '16px 16px 32px' }}>
+      <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', fontSize: '0.85rem', padding: '0 0 12px', display: 'block', fontWeight: 500 }}>← Retour</button>
+      <h2 style={{ margin: '0 0 16px', fontSize: '1.2rem', fontWeight: 700, color: '#0F172A', letterSpacing: '-0.02em' }}>Validation terrain</h2>
 
-      <div style={{ background: '#FAFAFA', borderRadius: 10, padding: '10px 14px', marginBottom: 14, fontSize: '0.88rem' }}>
-        <b>{meta.icon} {alert.title}</b><br />
-        <span style={{ color: '#64748B', fontSize: '0.8rem' }}>{alert.description}</span>
+      <div style={{ background: 'white', border: '1px solid #F1F5F9', borderRadius: 12, padding: '14px 16px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ width: 36, height: 36, borderRadius: 8, background: '#F1F5F9', color: '#0F172A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem', flexShrink: 0 }}>{meta.icon}</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 600, fontSize: '0.92rem', color: '#0F172A', letterSpacing: '-0.005em' }}>{alert.title}</div>
+          <div style={{ fontSize: '0.78rem', color: '#64748B', marginTop: 2, lineHeight: 1.4 }}>{alert.description}</div>
+        </div>
       </div>
 
-      <div style={{ marginBottom: 14 }}>
-        <label style={{ display: 'block', fontWeight: 700, fontSize: '0.82rem', color: '#374151', marginBottom: 6 }}>Action</label>
+      <div style={{ marginBottom: 16 }}>
+        <label style={labelS}>Action</label>
         <div style={{ display: 'flex', gap: 8 }}>
-          {([['VALIDATED', '✅ Valider', '#16A34A'], ['REJECTED', '❌ Rejeter', '#DC2626'], ['ESCALATED', '⬆️ Escalader', '#ea580c']] as const).map(([val, label, color]) => (
+          {([
+            ['VALIDATED', 'Valider', '#0F172A'],
+            ['REJECTED',  'Rejeter', '#DC2626'],
+            ['ESCALATED', 'Escalader', '#EA580C'],
+          ] as const).map(([val, label, color]) => (
             <button key={val} onClick={() => setAction(val)}
-              style={{ flex: 1, padding: '8px 4px', border: `2px solid ${action === val ? color : '#E5E7EB'}`, borderRadius: 8, background: action === val ? color + '22' : 'white', color: action === val ? color : '#64748B', fontWeight: 700, fontSize: '0.72rem', cursor: 'pointer' }}>
+              style={{
+                flex: 1, padding: '10px 4px',
+                border: '1px solid ' + (action === val ? 'transparent' : '#E5E7EB'),
+                borderRadius: 8,
+                background: action === val ? color + '14' : 'white',
+                color: action === val ? color : '#64748B',
+                fontWeight: action === val ? 600 : 500, fontSize: '0.82rem', cursor: 'pointer',
+                letterSpacing: '-0.005em',
+              }}>
               {label}
             </button>
           ))}
@@ -1361,61 +1412,83 @@ function SentinelValidationForm({ alert, onBack, onDone }: { alert: MobileAlert;
 
       {action !== 'REJECTED' && (
         <>
-          <div style={{ marginBottom: 14 }}>
-            <label style={{ display: 'block', fontWeight: 700, fontSize: '0.82rem', color: '#374151', marginBottom: 6 }}>Niveau de gravité (0 = faible, 3 = critique)</label>
+          <div style={{ marginBottom: 16 }}>
+            <label style={labelS}>Gravité <span style={{ color: '#94A3B8', fontWeight: 400 }}>(0 faible · 3 critique)</span></label>
             <div style={{ display: 'flex', gap: 8 }}>
               {[0, 1, 2, 3].map((g) => (
                 <button key={g} onClick={() => setGravity(g)}
-                  style={{ flex: 1, padding: '10px 4px', border: `2px solid ${gravity === g ? '#0F172A' : '#E5E7EB'}`, borderRadius: 8, background: gravity === g ? '#0F172A' : 'white', color: gravity === g ? 'white' : '#64748B', fontWeight: 800, cursor: 'pointer' }}>
+                  style={{
+                    flex: 1, padding: '11px 4px',
+                    border: '1px solid ' + (gravity === g ? 'transparent' : '#E5E7EB'),
+                    borderRadius: 8,
+                    background: gravity === g ? '#0F172A' : 'white',
+                    color: gravity === g ? 'white' : '#64748B',
+                    fontWeight: 600, fontSize: '0.95rem', cursor: 'pointer',
+                  }}>
                   {g}
                 </button>
               ))}
             </div>
           </div>
 
-          <div style={{ marginBottom: 14 }}>
-            <label style={{ display: 'block', fontWeight: 700, fontSize: '0.82rem', color: '#374151', marginBottom: 6 }}>Niveau d'alerte</label>
+          <div style={{ marginBottom: 16 }}>
+            <label style={labelS}>Niveau d&apos;alerte</label>
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               {(Object.keys(LEVEL_CONFIG) as AlertLevel[]).map((lvl) => {
                 const cfg = LEVEL_CONFIG[lvl];
                 const on = alertLevel === lvl;
                 return (
                   <button key={lvl} onClick={() => setAlertLevel(lvl)}
-                    style={{ flex: '1 1 30%', padding: '7px 4px', border: `2px solid ${on ? cfg.color : '#E5E7EB'}`, borderRadius: 8, background: on ? cfg.bg : 'white', color: on ? cfg.color : '#64748B', fontWeight: 700, fontSize: '0.68rem', cursor: 'pointer' }}>
-                    {cfg.icon} {cfg.label}
+                    style={{
+                      flex: '1 1 30%', padding: '9px 6px',
+                      border: '1px solid ' + (on ? 'transparent' : '#E5E7EB'),
+                      borderRadius: 8,
+                      background: on ? cfg.bg : 'white',
+                      color: on ? cfg.color : '#64748B',
+                      fontWeight: on ? 600 : 500, fontSize: '0.74rem', cursor: 'pointer',
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                    }}>
+                    <span style={{ width: 5, height: 5, borderRadius: '50%', background: cfg.color }} />
+                    {cfg.label}
                   </button>
                 );
               })}
             </div>
-            <div style={{ fontSize: '0.68rem', color: '#94A3B8', marginTop: 4 }}>
+            <div style={{ fontSize: '0.72rem', color: '#94A3B8', marginTop: 6 }}>
               Orange et plus exigent une triple validation avant diffusion.
             </div>
           </div>
 
-          <div style={{ marginBottom: 14 }}>
-            <label style={{ display: 'block', fontWeight: 700, fontSize: '0.82rem', color: '#374151', marginBottom: 6 }}>📷 URL photo de preuve *</label>
+          <div style={{ marginBottom: 16 }}>
+            <label style={labelS}>URL photo de preuve <span style={{ color: '#DC2626', fontWeight: 400 }}>*</span></label>
             <input type="url" value={photoUrl} onChange={(e) => setPhotoUrl(e.target.value)}
-              placeholder="https://..." style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #E5E7EB', borderRadius: 8, fontSize: '0.88rem', boxSizing: 'border-box' as const }} />
+              placeholder="https://…" style={{ width: '100%', padding: '11px 14px', border: '1px solid #E5E7EB', borderRadius: 10, fontSize: '0.88rem', boxSizing: 'border-box' as const, outline: 'none', fontFamily: 'inherit', color: '#0F172A' }} />
           </div>
 
-          <div style={{ marginBottom: 14, padding: '8px 12px', background: gps ? '#dcfce7' : '#fef9c3', borderRadius: 8, fontSize: '0.78rem', color: gps ? '#16A34A' : '#92400e' }}>
-            {gps ? `📍 GPS : ${gps.lat.toFixed(5)}, ${gps.lng.toFixed(5)}` : (gpsError || '📍 Acquisition GPS en cours…')}
+          <div style={{
+            marginBottom: 16, padding: '10px 12px',
+            background: gps ? '#F0FDF4' : '#FEF3C7',
+            border: '1px solid ' + (gps ? '#BBF7D0' : '#FDE68A'),
+            borderRadius: 10, fontSize: '0.8rem',
+            color: gps ? '#15803D' : '#92400E', fontWeight: 500,
+          }}>
+            {gps ? `Position acquise : ${gps.lat.toFixed(5)}, ${gps.lng.toFixed(5)}` : (gpsError || 'Acquisition de votre position…')}
           </div>
         </>
       )}
 
-      <div style={{ marginBottom: 14 }}>
-        <label style={{ display: 'block', fontWeight: 700, fontSize: '0.82rem', color: '#374151', marginBottom: 6 }}>Commentaire (facultatif)</label>
+      <div style={{ marginBottom: 16 }}>
+        <label style={labelS}>Commentaire <span style={{ color: '#94A3B8', fontWeight: 400 }}>(facultatif)</span></label>
         <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={2}
           placeholder="Observations de terrain…"
-          style={{ width: '100%', padding: '8px 10px', border: '1px solid #E5E7EB', borderRadius: 8, fontSize: '0.85rem', resize: 'none', boxSizing: 'border-box' as const, fontFamily: 'inherit' }} />
+          style={{ width: '100%', padding: '10px 12px', border: '1px solid #E5E7EB', borderRadius: 10, fontSize: '0.88rem', resize: 'none', boxSizing: 'border-box' as const, fontFamily: 'inherit', outline: 'none', color: '#0F172A' }} />
       </div>
 
-      {error && <div style={{ background: '#fee2e2', color: '#DC2626', padding: '8px 12px', borderRadius: 8, marginBottom: 12, fontSize: '0.82rem' }}>{error}</div>}
+      {error && <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', color: '#DC2626', padding: '10px 12px', borderRadius: 10, marginBottom: 12, fontSize: '0.82rem' }}>{error}</div>}
 
       <button disabled={sending} onClick={handleSubmit}
-        style={{ width: '100%', background: action === 'REJECTED' ? '#DC2626' : '#0F172A', color: 'white', border: 'none', padding: '14px', borderRadius: 12, fontSize: '0.95rem', fontWeight: 800, cursor: 'pointer', opacity: sending ? 0.6 : 1 }}>
-        {sending ? '⏳ Envoi…' : action === 'VALIDATED' ? '✅ Valider le signalement' : action === 'REJECTED' ? '❌ Rejeter le signalement' : '⬆️ Escalader à la préfecture'}
+        style={{ width: '100%', background: action === 'REJECTED' ? '#DC2626' : '#0F172A', color: 'white', border: 'none', padding: '13px', borderRadius: 12, fontSize: '0.95rem', fontWeight: 600, cursor: 'pointer', opacity: sending ? 0.6 : 1, letterSpacing: '-0.005em' }}>
+        {sending ? 'Envoi…' : action === 'VALIDATED' ? 'Valider le signalement' : action === 'REJECTED' ? 'Rejeter le signalement' : 'Escalader à la préfecture'}
       </button>
     </div>
   );
@@ -1474,32 +1547,36 @@ function SignalementFieldVerifyForm({ signalement, onBack, onDone }: { signaleme
   };
 
   const meta = RISK_ICONS[signalement.type] || RISK_ICONS.AUTRE;
-  const inp = { width: '100%', padding: '10px 12px', border: '1.5px solid #E5E7EB', borderRadius: 8, fontSize: '0.92rem', boxSizing: 'border-box' as const };
+  const inp: React.CSSProperties = { flex: 1, padding: '11px 14px', border: '1px solid #E5E7EB', borderRadius: 10, fontSize: '0.88rem', boxSizing: 'border-box' as const, outline: 'none', fontFamily: 'inherit', color: '#0F172A' };
+  const labelS: React.CSSProperties = { display: 'block', fontWeight: 600, fontSize: '0.82rem', color: '#0F172A', marginBottom: 8 };
 
   return (
-    <div style={{ padding: '16px 20px 32px' }}>
-      <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', fontSize: '0.85rem', padding: '0 0 12px', display: 'block' }}>← Retour</button>
-      <h2 style={{ margin: '0 0 14px', fontSize: '1rem', color: '#0F172A' }}>🔭 Vérification terrain</h2>
+    <div style={{ padding: '16px 16px 32px' }}>
+      <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', fontSize: '0.85rem', padding: '0 0 12px', display: 'block', fontWeight: 500 }}>← Retour</button>
+      <h2 style={{ margin: '0 0 16px', fontSize: '1.2rem', fontWeight: 700, color: '#0F172A', letterSpacing: '-0.02em' }}>Vérification terrain</h2>
 
-      <div style={{ background: '#FAFAFA', borderRadius: 10, padding: '10px 14px', marginBottom: 14, fontSize: '0.88rem' }}>
-        <b>{meta.icon} {meta.label}</b><br />
-        <span style={{ color: '#64748B', fontSize: '0.8rem' }}>{signalement.text}</span>
+      <div style={{ background: 'white', border: '1px solid #F1F5F9', borderRadius: 12, padding: '14px 16px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ width: 36, height: 36, borderRadius: 8, background: '#F1F5F9', color: '#0F172A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem', flexShrink: 0 }}>{meta.icon}</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 600, fontSize: '0.92rem', color: '#0F172A', letterSpacing: '-0.005em' }}>{meta.label}</div>
+          <div style={{ fontSize: '0.78rem', color: '#64748B', marginTop: 2, lineHeight: 1.4 }}>{signalement.text}</div>
+        </div>
       </div>
 
       {gpsStatus === 'pending' && (
-        <div style={{ background: '#fef9c3', color: '#92400e', padding: '8px 12px', borderRadius: 8, marginBottom: 14, fontSize: '0.8rem' }}>
-          📍 Acquisition GPS en cours…
+        <div style={{ background: '#FAFAFA', border: '1px solid #E5E7EB', color: '#64748B', padding: '10px 12px', borderRadius: 10, marginBottom: 16, fontSize: '0.82rem' }}>
+          Acquisition de votre position…
         </div>
       )}
       {gpsStatus === 'ok' && gps && (
-        <div style={{ background: '#dcfce7', color: '#16A34A', padding: '8px 12px', borderRadius: 8, marginBottom: 14, fontSize: '0.8rem' }}>
-          📍 Position acquise : {gps.lat.toFixed(5)}, {gps.lng.toFixed(5)}
+        <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', color: '#15803D', padding: '10px 12px', borderRadius: 10, marginBottom: 16, fontSize: '0.82rem', fontWeight: 500 }}>
+          Position acquise : {gps.lat.toFixed(5)}, {gps.lng.toFixed(5)}
         </div>
       )}
       {gpsStatus === 'manual' && (
-        <div style={{ marginBottom: 14 }}>
-          <div style={{ background: '#fef3c7', color: '#92400e', padding: '8px 12px', borderRadius: 8, marginBottom: 10, fontSize: '0.78rem' }}>
-            ⚠️ GPS bloqué par le navigateur (connexion HTTP). Saisissez la position du lieu :
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ background: '#FEF3C7', border: '1px solid #FDE68A', color: '#92400E', padding: '10px 12px', borderRadius: 10, marginBottom: 10, fontSize: '0.8rem' }}>
+            GPS bloqué (connexion HTTP). Saisissez la position du lieu manuellement :
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <input inputMode="decimal" placeholder="Latitude (ex. 15.6556)" value={manualLat}
@@ -1510,23 +1587,23 @@ function SignalementFieldVerifyForm({ signalement, onBack, onDone }: { signaleme
         </div>
       )}
 
-      <div style={{ marginBottom: 14 }}>
-        <label style={{ display: 'block', fontWeight: 700, fontSize: '0.82rem', color: '#374151', marginBottom: 6 }}>Observations terrain</label>
+      <div style={{ marginBottom: 16 }}>
+        <label style={labelS}>Observations terrain</label>
         <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3}
           placeholder="Ampleur, victimes, accessibilité, besoins urgents…"
-          style={{ width: '100%', padding: '8px 10px', border: '1px solid #E5E7EB', borderRadius: 8, fontSize: '0.85rem', resize: 'none', boxSizing: 'border-box' as const, fontFamily: 'inherit' }} />
+          style={{ width: '100%', padding: '10px 12px', border: '1px solid #E5E7EB', borderRadius: 10, fontSize: '0.88rem', resize: 'none', boxSizing: 'border-box' as const, fontFamily: 'inherit', outline: 'none', color: '#0F172A' }} />
       </div>
 
-      <div style={{ marginBottom: 14 }}>
-        <label style={{ display: 'block', fontWeight: 700, fontSize: '0.82rem', color: '#374151', marginBottom: 6 }}>📷 Photo sur place (preuve)</label>
+      <div style={{ marginBottom: 16 }}>
+        <label style={labelS}>Photo sur place <span style={{ color: '#94A3B8', fontWeight: 400 }}>(preuve)</span></label>
         <MediaCapture onChange={setCaptured} />
       </div>
 
-      {error && <div style={{ background: '#fee2e2', color: '#DC2626', padding: '8px 12px', borderRadius: 8, marginBottom: 12, fontSize: '0.82rem' }}>{error}</div>}
+      {error && <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', color: '#DC2626', padding: '10px 12px', borderRadius: 10, marginBottom: 12, fontSize: '0.82rem' }}>{error}</div>}
 
       <button disabled={sending || gpsStatus === 'pending'} onClick={handleSubmit}
-        style={{ width: '100%', background: '#0ea5e9', color: 'white', border: 'none', padding: '14px', borderRadius: 12, fontSize: '0.95rem', fontWeight: 800, cursor: 'pointer', opacity: sending || gpsStatus === 'pending' ? 0.6 : 1 }}>
-        {sending ? '⏳ Envoi…' : '✔️ Confirmer la vérification sur place'}
+        style={{ width: '100%', background: '#0F172A', color: 'white', border: 'none', padding: '13px', borderRadius: 12, fontSize: '0.95rem', fontWeight: 600, cursor: 'pointer', opacity: sending || gpsStatus === 'pending' ? 0.6 : 1, letterSpacing: '-0.005em' }}>
+        {sending ? 'Envoi…' : 'Confirmer la vérification'}
       </button>
     </div>
   );
