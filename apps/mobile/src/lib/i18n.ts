@@ -6,6 +6,11 @@ import { useState, useEffect, useCallback } from 'react';
  *
  * ⚠️ À FAIRE RELIRE PAR DES LOCUTEURS NATIFS DE MATAM AVANT LE PILOTE.
  * Pulaar (ff), Wolof (wo), Soninké (snk) : base de travail non validée.
+ *
+ * Règle d'or toponymes :
+ *   Les noms de lieux (Soringho, Kanel, Thilogne, Matam…) sont conservés
+ *   à l'orthographe locale dans toutes les langues. Ne pas traduire,
+ *   ne pas franciser, ne pas translittérer.
  */
 
 export type Lang = 'fr' | 'ff' | 'wo' | 'snk';
@@ -15,6 +20,17 @@ export const LANGS: { code: Lang; label: string; flag: string }[] = [
   { code: 'wo', label: 'Wolof', flag: '🌍' },
   { code: 'snk', label: 'Soninké', flag: '🌍' },
 ];
+
+/**
+ * Salutations natives à afficher à la place d'un « Bonjour » générique :
+ * authenticité culturelle, signal fort de respect des langues locales.
+ */
+export const GREETINGS: Record<Lang, string> = {
+  fr: 'Bonjour',
+  ff: 'Mballeen',           // Pulaar — salutation collective courante à Matam
+  wo: 'Asalaa maalekum',    // Wolof — la plus universelle (salutation islamique)
+  snk: 'An salaama',        // Soninké — équivalent
+};
 
 type Key =
   | 'appTagline' | 'chooseLang' | 'loginCitizen' | 'loginOperator' | 'phone' | 'password'
