@@ -145,6 +145,70 @@ export class AlertsService {
     return { alerts, total, page, limit };
   }
 
+  /**
+   * Recoupement à la sélection d'une alerte par la mairie.
+   *
+   * Renvoie deux signaux d'aide à la décision :
+   *   1. Signalements citoyens géographiquement proches dans une fenêtre
+   *      temporelle récente (cluster potentiel)
+   *   2. Données OMVS (niveau du fleuve à Matam) si pertinent pour le type
+   *      d'alerte — actuellement mockées, à brancher sur portail-omvs.org
+   *      ou l'API ANACIM en V2.
+   *
+   * Défauts : rayon 15 km · fenêtre 48 h (équilibre département/jour).
+   */
+  async getContext(id: string, opts?: { radiusKm?: number; windowHours?: number }) {
+    const alert = await this.prisma.alert.findUnique({
+      where: { id },
+      select: { id: true, type: true, latitude: true, longitude: true, zoneId: true, createdAt: true },
+    });
+    if (!alert) throw new NotFoundException('Alerte introuvable');
+
+    const radiusKm = opts?.radiusKm ?? 15;
+    const windowHours = opts?.windowHours ?? 48;
+
+    let nearbySignalements: any[] = [];
+    if (alert.latitude !== null && alert.longitude !== null) {
+      const since = new Date(Date.now() - windowHours * 3_600_000);
+      const candidates = await this.prisma.signalement.findMany({
+        where: {
+          createdAt: { gte: since },
+          latitude: { not: null },
+          longitude: { not: null },
+          // Exclure les signalements déjà liés à cette alerte
+          NOT: { alertId: id },
+        },
+        take: 200,
+        orderBy: { createdAt: 'desc' },
+        include: { user: { select: { name: true, phone: true } } },
+      });
+      nearbySignalements = candidates
+        .map((s) => ({
+          id: s.id,
+          type: s.type,
+          text: s.text,
+          severity: s.severity,
+          status: s.status,
+          createdAt: s.createdAt,
+          channel: s.channel,
+          user: s.user ? { name: s.user.name } : null,
+          distanceKm: +haversineKm(alert.latitude!, alert.longitude!, s.latitude!, s.longitude!).toFixed(2),
+        }))
+        .filter((s) => s.distanceKm <= radiusKm)
+        .sort((a, b) => a.distanceKm - b.distanceKm)
+        .slice(0, 10);
+    }
+
+    return {
+      radiusKm,
+      windowHours,
+      generatedAt: new Date().toISOString(),
+      nearbySignalements,
+      cluster: nearbySignalements.length >= 2,
+      omvs: buildMockOmvsData(alert.type),
+    };
+  }
+
   async findOne(id: string) {
     const alert = await this.prisma.alert.findUnique({
       where: { id },
@@ -606,4 +670,56 @@ function hasLevelMin(role: Role, min: Role): boolean {
     ADMIN: 99, SUPER_ADMIN: 99,
   };
   return levels[role] >= levels[min];
+}
+
+/** Distance grand cercle (Haversine) entre deux points GPS, en km. */
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371; // rayon terrestre moyen, km
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+/**
+ * Mock OMVS — à brancher en V2 sur l'API portail-omvs.org ou ANACIM.
+ * Renvoie des valeurs plausibles selon la saison (hivernage juin-octobre).
+ * Seuils Matam : alerte 5,20 m · danger 5,80 m (chiffres ordres de grandeur).
+ */
+function buildMockOmvsData(alertType: AlertType) {
+  const month = new Date().getMonth();
+  const isHivernage = month >= 5 && month <= 9;
+  const baseLevel = isHivernage ? 4.5 : 2.4;
+  // Variation pseudo-aléatoire reproductible (basée sur le jour)
+  const day = new Date().getDate();
+  const variance = ((day % 7) - 3) * 0.15;
+  const level = +(baseLevel + variance).toFixed(2);
+
+  const ALERT_THRESHOLD = 5.2;
+  const DANGER_THRESHOLD = 5.8;
+
+  let status: 'normal' | 'vigilance' | 'alerte' | 'danger' = 'normal';
+  if (level >= DANGER_THRESHOLD) status = 'danger';
+  else if (level >= ALERT_THRESHOLD) status = 'alerte';
+  else if (level >= ALERT_THRESHOLD - 0.3) status = 'vigilance';
+
+  // OMVS pertinent uniquement pour les risques hydrométéo
+  const relevant = ['INONDATION', 'SECHERESSE'].includes(alertType);
+
+  return {
+    relevant,
+    mock: true, // à retirer quand l'API réelle sera branchée
+    source: 'OMVS — Organisation pour la Mise en Valeur du fleuve Sénégal',
+    fetchedAt: new Date().toISOString(),
+    station: 'Matam',
+    riverLevelMeters: level,
+    alertThresholdMeters: ALERT_THRESHOLD,
+    dangerThresholdMeters: DANGER_THRESHOLD,
+    status,
+    flowRateM3s: +(280 + variance * 100).toFixed(0),
+    notice: 'Données simulées — branchement portail-omvs.org prévu en V2',
+  };
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import axios from 'axios';
 
 async function compressImage(file: File): Promise<Blob> {
@@ -257,6 +257,8 @@ export function AlertDetail({ alert, currentUser, onClose, onRefetch }: {
           {alert.closureReason && <div style={{ marginTop: 10, fontSize: '0.82rem', color: '#475569', fontStyle: 'italic' }}>Bilan : {alert.closureReason}</div>}
         </Section>
 
+        <RecoupementSection alertId={alert.id} alertType={alert.type} />
+
         {alert.validations?.length > 0 && (
           <Section title="Historique des validations">
             {alert.validations.map((v: any, i: number) => (
@@ -429,5 +431,150 @@ function Section({ title, children }: { title: string; children: React.ReactNode
       <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>{title}</div>
       {children}
     </div>
+  );
+}
+
+// ── RecoupementSection ──────────────────────────────────────────────────────
+// Affiche les signalements proches (cluster) + données OMVS (niveau fleuve)
+// pour aider la mairie à décider du niveau de gravité et de l'urgence.
+interface ContextData {
+  radiusKm: number;
+  windowHours: number;
+  nearbySignalements: Array<{
+    id: string; type: string; text: string; severity?: number | null;
+    status: string; createdAt: string; channel: string;
+    user: { name: string } | null;
+    distanceKm: number;
+  }>;
+  cluster: boolean;
+  omvs: {
+    relevant: boolean; mock: boolean; source: string; station: string;
+    riverLevelMeters: number; alertThresholdMeters: number; dangerThresholdMeters: number;
+    status: 'normal' | 'vigilance' | 'alerte' | 'danger';
+    flowRateM3s: number; notice: string;
+  };
+}
+
+function RecoupementSection({ alertId, alertType }: { alertId: string; alertType: string }) {
+  const [ctx, setCtx] = useState<ContextData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true); setError('');
+    axios
+      .get(`${API}/alerts/${alertId}/context`, { headers: { Authorization: `Bearer ${localStorage.getItem('olel_token')}` } })
+      .then(({ data }) => { if (!cancelled) setCtx(data); })
+      .catch((e) => { if (!cancelled) setError(e?.response?.data?.message || 'Recoupement indisponible'); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [alertId]);
+
+  if (loading) {
+    return (
+      <Section title="Recoupement">
+        <div style={{ fontSize: '0.82rem', color: '#94A3B8' }}>Analyse en cours…</div>
+      </Section>
+    );
+  }
+  if (error || !ctx) {
+    return (
+      <Section title="Recoupement">
+        <div style={{ fontSize: '0.82rem', color: '#94A3B8' }}>{error || 'Données indisponibles'}</div>
+      </Section>
+    );
+  }
+
+  const { nearbySignalements, cluster, omvs, radiusKm, windowHours } = ctx;
+  const showOmvs = omvs.relevant;
+  const statusColor: Record<string, string> = {
+    normal:    '#16A34A',
+    vigilance: '#D89A1D',
+    alerte:    '#EA580C',
+    danger:    '#DC2626',
+  };
+  const statusLabel: Record<string, string> = {
+    normal: 'Normal', vigilance: 'Vigilance', alerte: 'Alerte', danger: 'Danger',
+  };
+
+  return (
+    <Section title="Recoupement">
+      {/* Bandeau cluster */}
+      <div style={{
+        padding: '12px 14px',
+        background: cluster ? '#FFFBEB' : '#F0FDF4',
+        border: '1px solid ' + (cluster ? '#FDE68A' : '#BBF7D0'),
+        borderRadius: 10, marginBottom: 12,
+      }}>
+        <div style={{ fontSize: '0.84rem', fontWeight: 600, color: cluster ? '#92400E' : '#15803D', letterSpacing: '-0.005em' }}>
+          {cluster
+            ? `${nearbySignalements.length} signalements similaires dans la zone`
+            : 'Pas d\'autre signalement récent dans la zone'}
+        </div>
+        <div style={{ fontSize: '0.74rem', color: cluster ? '#A16207' : '#16A34A', marginTop: 3 }}>
+          Rayon {radiusKm} km · {windowHours} dernières heures
+        </div>
+      </div>
+
+      {/* Liste signalements proches (top 5) */}
+      {nearbySignalements.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
+          {nearbySignalements.slice(0, 5).map((s) => (
+            <div key={s.id} style={{ background: '#FAFAFA', border: '1px solid #F1F5F9', borderRadius: 8, padding: '8px 12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, marginBottom: 2 }}>
+                <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#0F172A' }}>{s.type}</span>
+                <span style={{ fontSize: '0.72rem', color: '#64748B', fontFamily: 'ui-monospace, "SF Mono", Menlo, monospace' }}>{s.distanceKm.toFixed(1)} km</span>
+              </div>
+              <div style={{ fontSize: '0.78rem', color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.text}</div>
+              <div style={{ fontSize: '0.7rem', color: '#94A3B8', marginTop: 2 }}>
+                {s.user?.name || 'Anonyme'} · {s.channel} · {new Date(s.createdAt).toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+              </div>
+            </div>
+          ))}
+          {nearbySignalements.length > 5 && (
+            <div style={{ fontSize: '0.74rem', color: '#94A3B8', textAlign: 'center', padding: '4px 0' }}>
+              + {nearbySignalements.length - 5} autres
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Carte OMVS si pertinent */}
+      {showOmvs && (
+        <div style={{
+          background: 'white', border: '1px solid #F1F5F9', borderRadius: 10, padding: '12px 14px',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+            <span style={{ fontSize: '0.74rem', fontWeight: 600, color: '#64748B', letterSpacing: '0.02em' }}>OMVS · {omvs.station}</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: '0.7rem', fontWeight: 600, color: statusColor[omvs.status], background: statusColor[omvs.status] + '14', padding: '2px 8px', borderRadius: 5 }}>
+              <span style={{ width: 5, height: 5, borderRadius: '50%', background: statusColor[omvs.status] }} />
+              {statusLabel[omvs.status]}
+            </span>
+          </div>
+          <div style={{ display: 'flex', gap: 24, marginTop: 6 }}>
+            <div>
+              <div style={{ fontSize: '1.3rem', fontWeight: 700, color: '#0F172A', letterSpacing: '-0.02em', lineHeight: 1 }}>{omvs.riverLevelMeters.toFixed(2)} m</div>
+              <div style={{ fontSize: '0.7rem', color: '#94A3B8', marginTop: 2 }}>Niveau fleuve</div>
+            </div>
+            <div>
+              <div style={{ fontSize: '1.3rem', fontWeight: 700, color: '#0F172A', letterSpacing: '-0.02em', lineHeight: 1 }}>{omvs.flowRateM3s} <span style={{ fontSize: '0.78rem', color: '#64748B', fontWeight: 500 }}>m³/s</span></div>
+              <div style={{ fontSize: '0.7rem', color: '#94A3B8', marginTop: 2 }}>Débit</div>
+            </div>
+          </div>
+          <div style={{ fontSize: '0.7rem', color: '#94A3B8', marginTop: 10, lineHeight: 1.4 }}>
+            Seuils : alerte {omvs.alertThresholdMeters.toFixed(2)} m · danger {omvs.dangerThresholdMeters.toFixed(2)} m
+            {omvs.mock && <div style={{ color: '#A16207', marginTop: 2 }}>⚠ {omvs.notice}</div>}
+          </div>
+        </div>
+      )}
+
+      {/* Note explicite quand OMVS n'est pas affiché */}
+      {!showOmvs && (
+        <div style={{ fontSize: '0.72rem', color: '#94A3B8', fontStyle: 'italic' }}>
+          Données OMVS non pertinentes pour ce type d&apos;alerte ({alertType}).
+        </div>
+      )}
+    </Section>
   );
 }

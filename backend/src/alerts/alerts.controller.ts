@@ -56,6 +56,19 @@ export class AlertsController {
     return this.alerts.getHistory(id);
   }
 
+  @Get(':id/context')
+  @ApiOperation({ summary: 'Recoupement : signalements proches + données OMVS' })
+  context(
+    @Param('id') id: string,
+    @Query('radiusKm') radiusKm?: string,
+    @Query('windowHours') windowHours?: string,
+  ) {
+    return this.alerts.getContext(id, {
+      radiusKm: radiusKm ? Number(radiusKm) : undefined,
+      windowHours: windowHours ? Number(windowHours) : undefined,
+    });
+  }
+
   @Get(':id/critical-validations')
   @Roles(Role.PREFECTURE, Role.GOUVERNORAT, Role.PROTECTION_CIVILE, Role.SUPERVISEUR_REGIONAL, Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({ summary: 'Statut des 3 validations critiques requises (ORANGE+)' })
