@@ -106,6 +106,18 @@ services:
     ports:
       - "3000:3000"
 
+  # ── Landing publique (Next.js institutionnel) ───────────────────────────────
+  landing:
+    build:
+      context:    ./apps/landing
+      dockerfile: Dockerfile
+    container_name: olel-landing
+    restart: unless-stopped
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+    ports:
+      - "3004:3004"
+
   # ── App Mobile (Next.js PWA) ────────────────────────────────────────────────
   mobile:
     build:
