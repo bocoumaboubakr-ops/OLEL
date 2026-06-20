@@ -23,6 +23,7 @@ export default function LandingPage() {
       <HowItWorks />
       <LiveDemo />
       <Channels />
+      <Showcase />
       <Testimonial />
       <Partners />
       <FinalCTA />
@@ -49,8 +50,9 @@ function Nav() {
       borderBottom: `1px solid ${SLATE_100}`,
     }}>
       <div style={container({ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: 64 })}>
-        <a href="#top" style={{ display: 'flex', alignItems: 'baseline', gap: 10, textDecoration: 'none', color: SLATE_900 }}>
-          <span style={{ ...SERIF, fontSize: '1.4rem', fontWeight: 600, letterSpacing: '-0.02em' }}>OLEL</span>
+        <a href="#top" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', color: SLATE_900 }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.png" alt="OLEL" style={{ width: 36, height: 36, objectFit: 'contain' }} />
           <span style={{ fontSize: '0.78rem', color: SLATE_500, fontWeight: 500 }}>Matam</span>
         </a>
         <div style={{ display: 'flex', gap: 4 }}>
@@ -77,36 +79,47 @@ function Nav() {
 // ── 2. Hero ──────────────────────────────────────────────────────────────────
 function Hero() {
   return (
-    <section id="top" style={{ background: 'white', paddingTop: 80, paddingBottom: 96, position: 'relative', overflow: 'hidden' }}>
-      <div style={container({ position: 'relative', zIndex: 2 })}>
-        <div style={{
-          display: 'inline-block', fontSize: '0.72rem', fontWeight: 600,
-          color: RED_600, letterSpacing: '0.14em', textTransform: 'uppercase',
-          background: '#FEF2F2', padding: '5px 12px', borderRadius: 6, marginBottom: 28,
-        }}>
-          Région de Matam · Sénégal · Pilote 2026
+    <section id="top" style={{ background: 'white', paddingTop: 64, paddingBottom: 80, position: 'relative', overflow: 'hidden' }}>
+      <div style={container({ position: 'relative', zIndex: 2, display: 'grid', gridTemplateColumns: 'minmax(0, 1.4fr) minmax(0, 1fr)', gap: 56, alignItems: 'center' })}>
+        <div>
+          <div style={{
+            display: 'inline-block', fontSize: '0.72rem', fontWeight: 600,
+            color: RED_600, letterSpacing: '0.14em', textTransform: 'uppercase',
+            background: '#FEF2F2', padding: '5px 12px', borderRadius: 6, marginBottom: 28,
+          }}>
+            Région de Matam · Sénégal · Pilote 2026
+          </div>
+          <h1 style={{
+            ...SERIF, fontSize: 'clamp(2.5rem, 5vw, 4.6rem)', fontWeight: 600,
+            letterSpacing: '-0.04em', lineHeight: 1.02, margin: '0 0 24px',
+            color: SLATE_900,
+          }}>
+            Alerter{' '}
+            <em style={{ fontStyle: 'italic', fontWeight: 400, color: RED_600 }}>autrement.</em>
+          </h1>
+          <p style={{
+            fontSize: '1.1rem', lineHeight: 1.6, color: SLATE_700,
+            margin: '0 0 32px',
+          }}>
+            OLEL est une plateforme communautaire d&apos;alerte précoce multi-risques pour la
+            <strong style={{ color: SLATE_900 }}> région de Matam</strong>, conçue pour fonctionner
+            en <strong style={{ color: SLATE_900 }}>4 langues</strong> (français, pulaar, wolof, soninké)
+            et sur <strong style={{ color: SLATE_900 }}>tout terminal</strong> — du smartphone à l&apos;USSD,
+            en passant par WhatsApp, SMS et la radio.
+          </p>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            <a href="#how" style={btn('primary')}>Comment ça marche</a>
+            <a href="#contact" style={btn('ghost')}>Télécharger le dossier</a>
+          </div>
         </div>
-        <h1 style={{
-          ...SERIF, fontSize: 'clamp(2.5rem, 6vw, 5rem)', fontWeight: 600,
-          letterSpacing: '-0.04em', lineHeight: 1.02, margin: '0 0 28px',
-          color: SLATE_900, maxWidth: 880,
-        }}>
-          Alerter{' '}
-          <em style={{ fontStyle: 'italic', fontWeight: 400, color: RED_600 }}>autrement.</em>
-        </h1>
-        <p style={{
-          fontSize: '1.18rem', lineHeight: 1.6, color: SLATE_700,
-          maxWidth: 680, margin: '0 0 40px',
-        }}>
-          OLEL est une plateforme communautaire d&apos;alerte précoce multi-risques pour la
-          <strong style={{ color: SLATE_900 }}> région de Matam</strong>, conçue pour fonctionner
-          en <strong style={{ color: SLATE_900 }}>4 langues</strong> (français, pulaar, wolof, soninké)
-          et sur <strong style={{ color: SLATE_900 }}>tout terminal</strong> — du smartphone à l&apos;USSD,
-          en passant par WhatsApp, SMS et la radio communautaire.
-        </p>
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          <a href="#how" style={btn('primary')}>Comment ça marche</a>
-          <a href="#contact" style={btn('ghost')}>Télécharger le dossier de cadrage</a>
+        {/* Logo OLEL en grand format à droite */}
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/logo.png"
+            alt="OLEL — Système Communautaire Intelligent d'alerte précoce"
+            style={{ width: '100%', maxWidth: 360, height: 'auto', objectFit: 'contain' }}
+          />
         </div>
       </div>
       {/* halo discret */}
@@ -385,6 +398,61 @@ function Channels() {
   );
 }
 
+// ── 7b. Showcase (visuels de communication) ─────────────────────────────────
+function Showcase() {
+  const items = [
+    {
+      src: '/hero-banner.jpg',
+      alt: 'OLEL — L\'alerte précoce au service des communautés',
+      caption: 'Vue d\'ensemble OLEL : application citoyen, dashboard autorités, bot WhatsApp, diffusion multi-canal SMS/IVR/WhatsApp.',
+    },
+    {
+      src: '/overview.jpg',
+      alt: 'OLEL — L\'alerte précoce, la sécurité de tous',
+      caption: 'Du signalement à l\'action : application mobile, tableau de bord temps réel, canaux de notification et bénéfices pour la communauté.',
+    },
+  ];
+  return (
+    <section style={{ padding: '96px 0', background: 'white' }}>
+      <div style={container()}>
+        <div style={{ marginBottom: 40, maxWidth: 720 }}>
+          <div style={eyebrow()}>Le système en image</div>
+          <h2 style={{ ...SERIF, fontSize: 'clamp(2rem, 4vw, 3rem)', fontWeight: 600, letterSpacing: '-0.03em', margin: '12px 0 16px', color: SLATE_900, lineHeight: 1.1 }}>
+            Découvrir <em style={{ fontWeight: 400 }}>OLEL en un clin d&apos;œil.</em>
+          </h2>
+          <p style={{ fontSize: '1.05rem', color: SLATE_700, lineHeight: 1.6, margin: 0 }}>
+            Trois interfaces, cinq canaux, une seule mission : prévenir, alerter, protéger.
+          </p>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
+          {items.map((it) => (
+            <figure key={it.src} style={{ margin: 0 }}>
+              <div style={{
+                borderRadius: 18, overflow: 'hidden',
+                border: `1px solid ${SLATE_100}`,
+                background: SLATE_50,
+              }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={it.src}
+                  alt={it.alt}
+                  style={{ width: '100%', height: 'auto', display: 'block' }}
+                />
+              </div>
+              <figcaption style={{
+                fontSize: '0.86rem', color: SLATE_500, marginTop: 12,
+                fontStyle: 'italic', textAlign: 'center', lineHeight: 1.5,
+              }}>
+                {it.caption}
+              </figcaption>
+            </figure>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 // ── 8. Témoignage ────────────────────────────────────────────────────────────
 function Testimonial() {
   return (
@@ -489,7 +557,11 @@ function Footer() {
       <div style={container()}>
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 48, marginBottom: 48 }}>
           <div>
-            <div style={{ ...SERIF, fontSize: '1.4rem', fontWeight: 600, color: 'white', letterSpacing: '-0.02em', marginBottom: 12 }}>OLEL</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/logo.png" alt="OLEL" style={{ width: 32, height: 32, objectFit: 'contain', filter: 'brightness(1.4)' }} />
+              <span style={{ ...SERIF, fontSize: '1.4rem', fontWeight: 600, color: 'white', letterSpacing: '-0.02em' }}>OLEL</span>
+            </div>
             <p style={{ fontSize: '0.86rem', lineHeight: 1.6, margin: 0, color: SLATE_400, maxWidth: 320 }}>
               Plateforme communautaire d&apos;alerte précoce multi-risques pour la région de Matam, Sénégal.
               Multilingue, multi-canal, ancrée local.

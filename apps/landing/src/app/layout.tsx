@@ -21,11 +21,24 @@ const serif = Source_Serif_4({
 export const metadata: Metadata = {
   title: 'OLEL — Alerte précoce multi-risques · Matam',
   description: 'Plateforme communautaire d\'alerte précoce pour la région de Matam (Sénégal). Système multilingue par WhatsApp, SMS, application mobile et radio.',
+  icons: {
+    icon: '/logo.png',
+    apple: '/logo.png',
+  },
   openGraph: {
     title: 'OLEL — Alerte précoce · Matam',
     description: 'Système d\'alerte communautaire multi-risques · Matam, Sénégal',
     locale: 'fr_SN',
     type: 'website',
+    images: [
+      { url: '/hero-banner.jpg', width: 1536, height: 1024, alt: 'OLEL — L\'alerte précoce au service des communautés' },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'OLEL — Alerte précoce · Matam',
+    description: 'Système d\'alerte communautaire multi-risques · Matam, Sénégal',
+    images: ['/hero-banner.jpg'],
   },
   metadataBase: new URL('https://olel.app'),
 };
