@@ -63,9 +63,15 @@ export default function LoginPage() {
         <div style={{ width: '100%', maxWidth: 380 }}>
           {/* Logo */}
           <div style={{ textAlign: 'center', marginBottom: 32 }}>
-            <h1 style={{ margin: '0 0 4px', fontSize: '1.8rem', fontWeight: 700, color: '#0F172A', letterSpacing: '-0.03em' }}>OLEL</h1>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="https://olel.app/logo.png"
+              alt="OLEL"
+              style={{ width: 88, height: 88, objectFit: 'contain', marginBottom: 12 }}
+            />
+            <h1 style={{ margin: '0 0 4px', fontSize: '1.5rem', fontWeight: 700, color: '#0F172A', letterSpacing: '-0.03em' }}>Dashboard OLEL</h1>
             <p style={{ margin: 0, color: '#64748B', fontSize: '0.85rem' }}>
-              Alerte précoce · Matam, Sénégal
+              Réservé aux agents · Région de Matam, Sénégal
             </p>
           </div>
 

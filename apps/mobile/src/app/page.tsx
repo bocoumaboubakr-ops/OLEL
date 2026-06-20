@@ -301,7 +301,13 @@ function MobileLoginScreen({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100dvh', background: '#0F172A' }}>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '32px 24px', color: 'white' }}>
-        <h1 style={{ margin: '0 0 6px', fontSize: '2.2rem', fontWeight: 700, letterSpacing: '-0.04em' }}>OLEL</h1>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="https://olel.app/logo.png"
+          alt="OLEL"
+          style={{ width: 92, height: 92, objectFit: 'contain', marginBottom: 12, filter: 'brightness(1.15)' }}
+        />
+        <h1 style={{ margin: '0 0 6px', fontSize: '1.7rem', fontWeight: 700, letterSpacing: '-0.03em' }}>OLEL</h1>
         <p style={{ margin: '0 0 24px', fontSize: '0.85rem', color: '#94A3B8', textAlign: 'center' }}>
           Alerte précoce · Matam
         </p>
