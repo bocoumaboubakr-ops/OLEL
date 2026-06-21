@@ -48,13 +48,13 @@ function Nav() {
       backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
       borderBottom: `1px solid ${LINE_2}`,
     }}>
-      <div style={{ ...container(), display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: 64 }}>
+      <div className="olel-container" style={{ ...container(), display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: 64 }}>
         <a href="#top" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', color: INK }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo.png" alt="OLEL" style={{ width: 28, height: 28, objectFit: 'contain' }} />
           <span style={{ ...SERIF, fontSize: '1.05rem', fontWeight: 600, letterSpacing: '-0.015em' }}>OLEL</span>
         </a>
-        <div style={{ display: 'flex', gap: 4 }}>
+        <div className="olel-nav-links" style={{ display: 'flex', gap: 4 }}>
           {links.map((l) => (
             <a key={l.href} href={l.href} style={{
               color: MUTED, fontSize: '0.86rem', fontWeight: 500, textDecoration: 'none',
@@ -62,7 +62,7 @@ function Nav() {
             }}>{l.label}</a>
           ))}
         </div>
-        <a href="#contact" style={{
+        <a href="#contact" className="olel-nav-cta" style={{
           background: INK, color: 'white',
           padding: '8px 16px', borderRadius: 6, fontSize: '0.84rem', fontWeight: 500,
           textDecoration: 'none', letterSpacing: '-0.005em',
@@ -75,28 +75,28 @@ function Nav() {
 // ── Hero ────────────────────────────────────────────────────────────────────
 function Hero() {
   return (
-    <section id="top" style={{ background: BG, padding: '120px 0 96px', borderBottom: `1px solid ${LINE_2}` }}>
-      <div style={container({ textAlign: 'center' })}>
+    <section id="top" className="olel-hero" style={{ background: BG, padding: '120px 0 96px', borderBottom: `1px solid ${LINE_2}` }}>
+      <div className="olel-container" style={container({ textAlign: 'center' })}>
         <div style={eyebrow({ marginBottom: 36, justifyContent: 'center' })}>
           Région de Matam · Sénégal · Pilote 2026
         </div>
         <h1 style={{
-          ...SERIF, fontSize: 'clamp(2.8rem, 6vw, 5.2rem)', fontWeight: 500,
-          letterSpacing: '-0.035em', lineHeight: 1.04, margin: '0 auto 32px',
+          ...SERIF, fontSize: 'clamp(2rem, 6vw, 5.2rem)', fontWeight: 500,
+          letterSpacing: '-0.035em', lineHeight: 1.06, margin: '0 auto 32px',
           color: INK, maxWidth: 920,
         }}>
-          Une alerte précoce qui parle votre langue,<br />
+          Une alerte précoce qui parle votre langue,{' '}
           <span style={{ color: MUTED_2 }}>par le canal que vous utilisez déjà.</span>
         </h1>
         <p style={{
-          fontSize: '1.15rem', lineHeight: 1.7, color: MUTED,
+          fontSize: 'clamp(1rem, 2vw, 1.15rem)', lineHeight: 1.7, color: MUTED,
           maxWidth: 640, margin: '0 auto 44px',
         }}>
           OLEL est la plateforme communautaire d&apos;alerte multi-risques pour la
           région de Matam. Quatre langues — français, pulaar, wolof, soninké — et
           cinq canaux complémentaires, du smartphone à l&apos;USSD.
         </p>
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
+        <div className="olel-cta-row" style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
           <a href="#how" style={btn('primary')}>Découvrir le fonctionnement</a>
           <a href="#contact" style={btn('ghost')}>Télécharger le dossier</a>
         </div>
@@ -116,13 +116,13 @@ function Stats() {
   ];
   return (
     <section style={{ background: BG, borderBottom: `1px solid ${LINE_2}` }}>
-      <div style={{ ...container(), display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', padding: '56px 32px' }}>
+      <div className="olel-container olel-stats-grid" style={{ ...container(), display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', padding: '56px 32px' }}>
         {stats.map((s, i) => (
           <div key={s.label} style={{
-            padding: '0 32px',
+            padding: '0 24px',
             borderRight: i < stats.length - 1 ? `1px solid ${LINE_2}` : 'none',
           }}>
-            <div style={{ ...SERIF, fontSize: 'clamp(2rem, 4vw, 2.8rem)', fontWeight: 500, letterSpacing: '-0.025em', color: INK, lineHeight: 1 }}>
+            <div style={{ ...SERIF, fontSize: 'clamp(1.8rem, 4vw, 2.6rem)', fontWeight: 500, letterSpacing: '-0.025em', color: INK, lineHeight: 1 }}>
               {s.value}
             </div>
             <div style={{ fontSize: '0.82rem', color: FADED, marginTop: 12, fontWeight: 500 }}>{s.label}</div>
@@ -150,13 +150,13 @@ function Vision() {
     },
   ];
   return (
-    <section id="vision" style={{ padding: '120px 0', background: BG, borderBottom: `1px solid ${LINE_2}` }}>
-      <div style={container()}>
+    <section id="vision" className="olel-section" style={{ padding: '120px 0', background: BG, borderBottom: `1px solid ${LINE_2}` }}>
+      <div className="olel-container" style={container()}>
         <SectionHeader eyebrow="Vision" title="Trois principes qui guident le projet." />
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 0, marginTop: 64, borderTop: `1px solid ${LINE_2}` }}>
+        <div className="olel-stack-md" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 0, marginTop: 64, borderTop: `1px solid ${LINE_2}` }}>
           {values.map((v, i) => (
             <div key={v.title} style={{
-              padding: '40px 32px 0',
+              padding: '40px 28px 0',
               borderRight: i < values.length - 1 ? `1px solid ${LINE_2}` : 'none',
             }}>
               <div style={{ fontSize: '0.74rem', fontWeight: 600, color: FADED, letterSpacing: '0.08em', marginBottom: 16 }}>
@@ -194,8 +194,8 @@ function HowItWorks() {
     },
   ];
   return (
-    <section id="how" style={{ padding: '120px 0', background: BG, borderBottom: `1px solid ${LINE_2}` }}>
-      <div style={container()}>
+    <section id="how" className="olel-section" style={{ padding: '120px 0', background: BG, borderBottom: `1px solid ${LINE_2}` }}>
+      <div className="olel-container" style={container()}>
         <SectionHeader
           eyebrow="Fonctionnement"
           title="Une chaîne courte, traçable, humaine."
@@ -203,7 +203,7 @@ function HowItWorks() {
         />
         <div style={{ marginTop: 72 }}>
           {steps.map((s, i) => (
-            <div key={s.role} style={{
+            <div key={s.role} className="olel-step" style={{
               display: 'grid', gridTemplateColumns: '80px 1fr 2fr', gap: 48,
               padding: '40px 0', borderTop: `1px solid ${LINE_2}`,
               ...(i === steps.length - 1 ? { borderBottom: `1px solid ${LINE_2}` } : {}),
@@ -255,8 +255,8 @@ function Showcase() {
     },
   ];
   return (
-    <section style={{ padding: '120px 0', background: BG, borderBottom: `1px solid ${LINE_2}` }}>
-      <div style={container()}>
+    <section className="olel-section" style={{ padding: '120px 0', background: BG, borderBottom: `1px solid ${LINE_2}` }}>
+      <div className="olel-container" style={container()}>
         <SectionHeader eyebrow="Aperçu" title="Le système en image." />
         <div style={{ marginTop: 64, display: 'flex', flexDirection: 'column', gap: 48 }}>
           {items.map((it) => (
@@ -293,8 +293,8 @@ function Channels() {
     { code: 'Voice',     num: 'Broadcast',     desc: 'Diffusion automatique d\'appels vocaux à toute une zone en moins de trente minutes.' },
   ];
   return (
-    <section id="channels" style={{ padding: '120px 0', background: BG, borderBottom: `1px solid ${LINE_2}` }}>
-      <div style={container()}>
+    <section id="channels" className="olel-section" style={{ padding: '120px 0', background: BG, borderBottom: `1px solid ${LINE_2}` }}>
+      <div className="olel-container" style={container()}>
         <SectionHeader
           eyebrow="Canaux"
           title="Cinq canaux, aucun citoyen oublié."
@@ -302,7 +302,7 @@ function Channels() {
         />
         <div style={{ marginTop: 64 }}>
           {items.map((it, i) => (
-            <div key={it.code} style={{
+            <div key={it.code} className="olel-channel" style={{
               display: 'grid', gridTemplateColumns: '120px 200px 1fr', gap: 32,
               padding: '24px 0', borderTop: `1px solid ${LINE_2}`,
               ...(i === items.length - 1 ? { borderBottom: `1px solid ${LINE_2}` } : {}),
@@ -326,8 +326,8 @@ function Channels() {
 // ── Testimonial ─────────────────────────────────────────────────────────────
 function Testimonial() {
   return (
-    <section style={{ padding: '120px 0', background: BG, borderBottom: `1px solid ${LINE_2}` }}>
-      <div style={container({ maxWidth: 800 })}>
+    <section className="olel-section" style={{ padding: '120px 0', background: BG, borderBottom: `1px solid ${LINE_2}` }}>
+      <div className="olel-container" style={container({ maxWidth: 800 })}>
         <div style={eyebrow({ marginBottom: 32 })}>Voix du terrain</div>
         <blockquote style={{
           ...SERIF, fontSize: 'clamp(1.5rem, 2.6vw, 2.1rem)',
@@ -350,21 +350,22 @@ function Testimonial() {
 function Partners() {
   const partners = ['ANACIM', 'OMVS', 'OIM', 'DPC', 'Orange', 'Free', 'Expresso', 'Radio Matam FM'];
   return (
-    <section id="partners" style={{ padding: '120px 0', background: BG, borderBottom: `1px solid ${LINE_2}` }}>
-      <div style={container()}>
+    <section id="partners" className="olel-section" style={{ padding: '120px 0', background: BG, borderBottom: `1px solid ${LINE_2}` }}>
+      <div className="olel-container" style={container()}>
         <SectionHeader eyebrow="Partenaires et soutiens" title="Un écosystème en mouvement." />
-        <div style={{
+        <div className="olel-partners-grid" style={{
           marginTop: 56,
-          display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+          display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)',
           gap: 0,
           borderTop: `1px solid ${LINE_2}`,
+          borderLeft: `1px solid ${LINE_2}`,
         }}>
-          {partners.map((p, i) => (
+          {partners.map((p) => (
             <div key={p} style={{
               padding: '28px 16px', textAlign: 'center',
               fontSize: '0.9rem', fontWeight: 500, color: MUTED,
               borderBottom: `1px solid ${LINE_2}`,
-              borderRight: (i % 4 !== 3) ? `1px solid ${LINE_2}` : 'none',
+              borderRight: `1px solid ${LINE_2}`,
             }}>{p}</div>
           ))}
         </div>
@@ -376,21 +377,21 @@ function Partners() {
 // ── Final CTA ───────────────────────────────────────────────────────────────
 function FinalCTA() {
   return (
-    <section id="contact" style={{ padding: '120px 0', background: BG }}>
-      <div style={container({ maxWidth: 720, textAlign: 'center' })}>
+    <section id="contact" className="olel-section" style={{ padding: '120px 0', background: BG }}>
+      <div className="olel-container" style={container({ maxWidth: 720, textAlign: 'center' })}>
         <div style={eyebrow({ marginBottom: 32, justifyContent: 'center' })}>Rejoindre le pilote</div>
         <h2 style={{
-          ...SERIF, fontSize: 'clamp(2.2rem, 4.5vw, 3.4rem)', fontWeight: 500,
+          ...SERIF, fontSize: 'clamp(1.8rem, 4.5vw, 3.4rem)', fontWeight: 500,
           letterSpacing: '-0.03em', margin: '0 0 24px', color: INK, lineHeight: 1.1,
         }}>
           Travaillons ensemble.
         </h2>
-        <p style={{ fontSize: '1.05rem', color: MUTED, lineHeight: 1.65, margin: '0 0 40px' }}>
+        <p style={{ fontSize: 'clamp(0.95rem, 2vw, 1.05rem)', color: MUTED, lineHeight: 1.65, margin: '0 0 40px' }}>
           Bailleurs internationaux, journalistes, autorités sénégalaises, sentinelles
           candidates : contactez l&apos;équipe pour découvrir OLEL en détail ou rejoindre
           le réseau communautaire.
         </p>
-        <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
+        <div className="olel-cta-row" style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
           <a href="mailto:contact@olel.app" style={btn('primary')}>Contacter l&apos;équipe</a>
           <a href="mailto:sentinelle@olel.app" style={btn('ghost')}>Devenir sentinelle</a>
         </div>
@@ -408,8 +409,8 @@ function Footer() {
   ];
   return (
     <footer style={{ background: BG, borderTop: `1px solid ${LINE}`, padding: '64px 0 32px' }}>
-      <div style={container()}>
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 48, marginBottom: 56 }}>
+      <div className="olel-container" style={container()}>
+        <div className="olel-footer-grid" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 48, marginBottom: 56 }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
