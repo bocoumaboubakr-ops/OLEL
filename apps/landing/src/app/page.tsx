@@ -109,8 +109,9 @@ function Hero() {
 function Stats() {
   const stats = [
     { value: '562 000', label: 'Habitants couverts' },
-    { value: '4', label: 'Langues supportées' },
-    { value: '5', label: 'Canaux de diffusion' },
+    { value: '6',       label: 'Familles de risques' },
+    { value: '4',       label: 'Langues supportées' },
+    { value: '5',       label: 'Canaux de diffusion' },
     { value: '12 mois', label: 'Phase pilote' },
   ];
   return (
@@ -136,16 +137,16 @@ function Stats() {
 function Vision() {
   const values = [
     {
-      title: 'Le fleuve d\'abord',
-      body: 'OLEL est ancré dans la réalité hydrologique du bassin du fleuve Sénégal — crues, sécheresses, qualité de l\'eau. Les données OMVS alimentent en continu le système.',
+      title: 'Six familles de risques',
+      body: 'Climat (crues, sécheresses, tempêtes), sécurité civile (incendies, accidents, mouvements de terrain), santé communautaire (épidémies), agriculture (criquets), élevage (mortalité du bétail) et infrastructures locales (eau, électricité, routes). Une seule plateforme pour les six.',
     },
     {
-      title: 'La voix compte',
-      body: 'Une grand-mère de Soringho doit pouvoir alerter en pulaar à la voix. Le signalement vocal est le canal premier — texte et lecture viennent ensuite.',
+      title: 'La voix d\'abord',
+      body: 'L\'accessibilité est vitale sur une plateforme d\'alerte. Le signalement vocal est traité comme un canal premier, en français, pulaar, wolof et soninké, pour atteindre toutes les populations — y compris peu alphabétisées.',
     },
     {
-      title: 'Sentinelle et mairie',
-      body: 'Pas d\'alerte sans validation humaine. Les sentinelles formées vérifient sur le terrain, la mairie valide, le préfet diffuse à l\'échelle régionale.',
+      title: 'Une chaîne humaine traçable',
+      body: 'Pas d\'alerte sans validation humaine. Les sentinelles formées vérifient sur le terrain, la mairie valide, le préfet escalade, le gouverneur diffuse. Chaque action est horodatée, attribuée et auditée.',
     },
   ];
   return (
