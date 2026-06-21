@@ -1,8 +1,7 @@
-version: '3.9'
-
 # ── OLEL – Stack complète ────────────────────────────────────────────────────
 # Démarrage : docker compose up -d
 # Reset DB   : docker compose down -v && docker compose up -d
+# Zone cible : Région de Matam (Sénégal)
 
 services:
 
@@ -53,56 +52,90 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL:         postgresql://olel:${POSTGRES_PASSWORD:-olel_dev_pwd}@postgres:5432/olel
-      REDIS_URL:            redis://redis:6379
-      JWT_SECRET:           ${JWT_SECRET:-change_me_in_production_32chars}
-      JWT_REFRESH_SECRET:   ${JWT_REFRESH_SECRET:-change_refresh_secret_32chars}
+      REDIS_HOST:           redis
+      REDIS_PORT:           6379
+      JWT_SECRET:           ${JWT_SECRET}
+      JWT_REFRESH_SECRET:   ${JWT_REFRESH_SECRET}
+      TOTP_ENCRYPTION_KEY:  ${TOTP_ENCRYPTION_KEY}
       WHATSAPP_TOKEN:       ${WHATSAPP_TOKEN:-}
       WHATSAPP_PHONE_ID:    ${WHATSAPP_PHONE_ID:-}
+      WHATSAPP_APP_SECRET:  ${WHATSAPP_APP_SECRET:-}
       AFRICAS_TALKING_KEY:  ${AFRICAS_TALKING_KEY:-sandbox}
       AFRICAS_TALKING_USER: ${AFRICAS_TALKING_USER:-sandbox}
-      BOT_API_KEY:          ${BOT_API_KEY:-bot_internal_api_key}
-      DASHBOARD_URL:        http://localhost:3000
-      MOBILE_URL:           http://localhost:3001
-      NODE_ENV:             ${NODE_ENV:-development}
-      PORT:                 3000
+      IVR_CALLER_ID:        ${IVR_CALLER_ID:-}
+      WS_PUBLIC_ORIGIN:     ${WS_PUBLIC_ORIGIN:-ws://localhost:4000}
+      BOT_API_KEY:          ${BOT_API_KEY}
+      # Base d'URL publique pour servir les médias uploadés (photos/vocaux).
+      # DOIT être joignable depuis le navigateur des opérateurs (IP ou domaine).
+      PUBLIC_API_URL:       ${NEXT_PUBLIC_API_URL:-http://localhost:4000/api/v1}
+      ALLOWED_ORIGINS:      ${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:3001}
+      NODE_ENV:               ${NODE_ENV:-production}
+      RETURN_OTP_DEV_CODE:    ${RETURN_OTP_DEV_CODE:-false}
+      PORT:                   4000
+      SENTRY_DSN:             ${SENTRY_DSN:-}
     ports:
-      - "3000:3000"
-    volumes:
-      - ./backend:/app
-      - /app/node_modules
+      - "4000:4000"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://127.0.0.1:4000/api/v1/health/live || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     command: >
-      sh -c "npx prisma migrate deploy && npx prisma db seed && node dist/main.js"
+      sh -c "npx prisma migrate deploy && node dist/main.js"
 
   # ── Dashboard Next.js ───────────────────────────────────────────────────────
   dashboard:
     build:
       context:    ./apps/dashboard
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000/api/v1}
+        NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-ws://localhost:4000}
     container_name: olel-dashboard
     restart: unless-stopped
     depends_on:
-      - backend
+      backend:
+        condition: service_started
     environment:
-      NEXT_PUBLIC_API_URL:       http://localhost:3000/api/v1
-      NEXT_PUBLIC_WS_URL:        ws://localhost:3000
+      NEXT_PUBLIC_API_URL:       ${NEXT_PUBLIC_API_URL:-http://localhost:4000/api/v1}
+      NEXT_PUBLIC_WS_URL:        ${NEXT_PUBLIC_WS_URL:-ws://localhost:4000}
       NEXT_PUBLIC_MAPBOX_TOKEN:  ${MAPBOX_TOKEN:-}
-      NODE_ENV:                  ${NODE_ENV:-development}
+      NEXT_PUBLIC_SENTRY_DSN:    ${NEXT_PUBLIC_SENTRY_DSN:-}
+      NODE_ENV:                  ${NODE_ENV:-production}
     ports:
       - "3000:3000"
+
+  # ── Landing publique (Next.js institutionnel) ───────────────────────────────
+  landing:
+    build:
+      context:    ./apps/landing
+      dockerfile: Dockerfile
+    container_name: olel-landing
+    restart: unless-stopped
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+    ports:
+      - "3004:3004"
 
   # ── App Mobile (Next.js PWA) ────────────────────────────────────────────────
   mobile:
     build:
       context:    ./apps/mobile
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000/api/v1}
     container_name: olel-mobile
     restart: unless-stopped
     depends_on:
-      - backend
+      backend:
+        condition: service_started
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:3000/api/v1
-      NEXT_PUBLIC_WS_URL:  ws://localhost:3000
-      NODE_ENV:            ${NODE_ENV:-development}
+      NEXT_PUBLIC_API_URL:        ${NEXT_PUBLIC_API_URL:-http://localhost:4000/api/v1}
+      NEXT_PUBLIC_WS_URL:         ${NEXT_PUBLIC_WS_URL:-ws://localhost:4000}
+      NEXT_PUBLIC_DEFAULT_ZONE_ID: ${DEFAULT_ZONE_ID:-}
+      NEXT_PUBLIC_SENTRY_DSN:     ${NEXT_PUBLIC_SENTRY_DSN:-}
+      NODE_ENV:                   ${NODE_ENV:-production}
     ports:
       - "3001:3001"
 
@@ -114,15 +147,17 @@ services:
     container_name: olel-bot
     restart: unless-stopped
     depends_on:
-      - backend
+      backend:
+        condition: service_started
     environment:
       WHATSAPP_TOKEN:           ${WHATSAPP_TOKEN:-}
-      WHATSAPP_PHONE_NUMBER_ID: ${WHATSAPP_PHONE_ID:-}
+      WHATSAPP_PHONE_ID:        ${WHATSAPP_PHONE_ID:-}
       WHATSAPP_VERIFY_TOKEN:    ${WHATSAPP_VERIFY_TOKEN:-olel_webhook_secret}
-      BACKEND_URL:              http://backend:3000
-      BOT_API_KEY:              ${BOT_API_KEY:-bot_internal_api_key}
+      WHATSAPP_APP_SECRET:      ${WHATSAPP_APP_SECRET:-}
+      BACKEND_URL:              http://backend:4000
+      BOT_API_KEY:              ${BOT_API_KEY}
       BOT_PORT:                 3002
-      NODE_ENV:                 ${NODE_ENV:-development}
+      NODE_ENV:                 ${NODE_ENV:-production}
     ports:
       - "3002:3002"
 

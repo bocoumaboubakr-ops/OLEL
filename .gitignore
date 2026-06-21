@@ -49,3 +49,7 @@ Thumbs.db
 *.local
 .cache/
 tmp/
+.claude/
+
+# Redis dump (artefact de test local)
+dump.rdb

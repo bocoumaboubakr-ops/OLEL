@@ -1,0 +1,143 @@
+version: '3.9'
+
+# ── OLEL – Stack Production complète ────────────────────────────────────────
+# Inclut : Nginx, Prometheus, Grafana, exporters
+# Usage  : docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+services:
+
+  # ── Nginx Reverse Proxy ──────────────────────────────────────────────────
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: olel-nginx
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+      dashboard:
+        condition: service_started
+      mobile:
+        condition: service_started
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro      # certificats Let's Encrypt
+      - certbot_www:/var/www/certbot              # challenge ACME (renouvellement)
+      - nginx_logs:/var/log/nginx
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ── Certbot (renouvellement automatique TLS) ────────────────────────────
+  certbot:
+    image: certbot/certbot:latest
+    container_name: olel-certbot
+    restart: unless-stopped
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+    entrypoint: >
+      sh -c "trap exit TERM;
+             while :; do
+               certbot renew --quiet --webroot --webroot-path=/var/www/certbot --deploy-hook 'echo renewed';
+               sleep 12h & wait $${!};
+             done"
+
+  # ── Prometheus ────────────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: olel-prometheus
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    profiles:
+      - monitoring
+
+  # ── Grafana ───────────────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:10.3.0
+    container_name: olel-grafana
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-OlelGrafana2024!}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: "%(protocol)s://%(domain)s/grafana/"
+      GF_INSTALL_PLUGINS: "grafana-clock-panel"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3003:3000"
+    profiles:
+      - monitoring
+
+  # ── Postgres Exporter ─────────────────────────────────────────────────────
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: olel-postgres-exporter
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    environment:
+      DATA_SOURCE_NAME: postgresql://olel:${POSTGRES_PASSWORD}@postgres:5432/olel?sslmode=disable
+    profiles:
+      - monitoring
+
+  # ── Redis Exporter ────────────────────────────────────────────────────────
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.58.0
+    container_name: olel-redis-exporter
+    restart: unless-stopped
+    depends_on:
+      - redis
+    environment:
+      REDIS_ADDR: redis://redis:6379
+    profiles:
+      - monitoring
+
+  # ── Backup automatique ─────────────────────────────────────────────────────
+  backup:
+    image: alpine:3.19
+    container_name: olel-backup
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      BACKUP_DIR: /backups
+      RETENTION_DAYS: "7"
+    volumes:
+      - ./scripts/backup-db.sh:/backup-db.sh:ro
+      - backup_data:/backups
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command: >
+      sh -c "apk add --no-cache docker-cli bash &&
+             echo '0 2 * * * /bin/bash /backup-db.sh >> /var/log/olel-backup.log 2>&1' > /etc/crontabs/root &&
+             /bin/bash /backup-db.sh &&
+             crond -f -l 8"
+    profiles:
+      - backup
+
+volumes:
+  nginx_logs:
+  certbot_www:
+  prometheus_data:
+  grafana_data:
+  backup_data:
