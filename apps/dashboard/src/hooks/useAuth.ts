@@ -2,6 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import axios from 'axios';
+import { installAuthRefresh, logoutSession, onSessionLost, storeSession } from '@/lib/session';
+
+// Renouvellement automatique du jeton d'accès (15 min) sur toutes les requêtes axios
+installAuthRefresh();
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
 
@@ -21,12 +25,6 @@ export interface MfaState {
   otpauthUrl?: string;
 }
 
-function storeSession(data: { accessToken: string; refreshToken: string; user: AuthUser }) {
-  localStorage.setItem('olel_token', data.accessToken);
-  localStorage.setItem('olel_refresh', data.refreshToken);
-  localStorage.setItem('olel_user', JSON.stringify(data.user));
-}
-
 export function useAuth() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [initialized, setInitialized] = useState(false);
@@ -36,8 +34,10 @@ export function useAuth() {
 
   useEffect(() => {
     const stored = localStorage.getItem('olel_user');
-    if (stored) setUser(JSON.parse(stored));
+    if (stored) { try { setUser(JSON.parse(stored)); } catch { /* profil local illisible */ } }
     setInitialized(true);
+    // Session révoquée/suspendue côté serveur : retour à la connexion
+    return onSessionLost(() => { setUser(null); window.location.href = '/login'; });
   }, []);
 
   const login = async (phone: string, password: string) => {
@@ -103,10 +103,9 @@ export function useAuth() {
     setError(null);
   };
 
-  const logout = () => {
-    localStorage.removeItem('olel_token');
-    localStorage.removeItem('olel_refresh');
-    localStorage.removeItem('olel_user');
+  /** Révoque la session côté serveur puis purge le navigateur (audit F13). */
+  const logout = async () => {
+    await logoutSession();
     setUser(null);
     window.location.href = '/login';
   };

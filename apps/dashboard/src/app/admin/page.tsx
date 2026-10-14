@@ -243,7 +243,7 @@ function FlagsTab() {
     try {
       await axios.patch(`${API}/flags/${name}`, { enabled: !enabled }, { headers: auth() });
       setFlags((prev) => prev.map((f) => f.name === name ? { ...f, enabled: !enabled } : f));
-    } catch { /* ignore */ } finally { setToggling(null); }
+    } catch (e: any) { window.alert(e.response?.data?.message || 'Modification refusée'); } finally { setToggling(null); }
   };
 
   return (
@@ -322,7 +322,7 @@ function TrainingsTab() {
       setShowForm(false);
       setForm({ title: '', description: '', category: 'SECOURISME', isRequired: false, durationMin: 30 });
       fetch();
-    } catch { /* ignore */ } finally { setSaving(false); }
+    } catch (e: any) { window.alert(e.response?.data?.message || 'Création refusée'); } finally { setSaving(false); }
   };
 
   const handleDeactivate = async (id: string) => {
@@ -451,11 +451,12 @@ function MissionsTab() {
   const handleCreate = async () => {
     setSaving(true);
     try {
-      await axios.post(`${API}/missions`, { ...form, dueAt: form.dueAt || undefined }, { headers: auth() });
+      const zoneId = (() => { try { return JSON.parse(localStorage.getItem('olel_user') || '{}').zoneId || undefined; } catch { return undefined; } })();
+      await axios.post(`${API}/missions`, { ...form, zoneId, dueAt: form.dueAt || undefined }, { headers: auth() });
       setShowForm(false);
       setForm({ title: '', description: '', type: 'VERIFICATION', dueAt: '' });
       fetchMissions();
-    } catch { /* ignore */ } finally { setSaving(false); }
+    } catch (e: any) { window.alert(e.response?.data?.message || 'Création refusée'); } finally { setSaving(false); }
   };
 
   const handleAssign = async (missionId: string) => {
@@ -465,7 +466,7 @@ function MissionsTab() {
       setSentinelId('');
       setAssignTarget(null);
       fetchMissions();
-    } catch { /* ignore */ }
+    } catch (e: any) { window.alert(e.response?.data?.message || 'Assignation refusée'); }
   };
 
   const MISSION_TYPES = ['VERIFICATION', 'PATROUILLE', 'SENSIBILISATION', 'EVACUATION'];

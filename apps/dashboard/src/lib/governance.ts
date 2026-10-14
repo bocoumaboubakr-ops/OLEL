@@ -17,7 +17,6 @@ export const LEVEL_CONFIG: Record<AlertLevel, {
   ROUGE_FONCE: { label: 'Crise Majeure', color: '#7F1D1D', bg: '#fecaca', icon: '🔴', description: 'Crise Majeure' },
 };
 
-export const CRITICAL_LEVELS: AlertLevel[] = ['ORANGE', 'ROUGE', 'ROUGE_FONCE'];
 
 export const ROLE_LEVEL: Record<string, number> = {
   CITOYEN: 0,
@@ -49,44 +48,12 @@ export const ROLE_LABELS: Record<string, string> = {
   SUPER_ADMIN: 'Super Administrateur',
 };
 
-/** Étapes du cursus officiel (7 étapes + clôture). */
-export const WORKFLOW_STEPS = [
-  'SIGNALEMENT', 'SENTINELLE', 'COORDINATEUR', 'MAIRIE', 'PREFECTURE', 'GOUVERNANCE', 'BROADCAST', 'CLOSED',
-] as const;
-
-export const STEP_LABEL: Record<string, string> = {
-  SIGNALEMENT:  'Signalement',
-  SENTINELLE:   'Sentinelle',
-  COORDINATEUR: 'Coordinateur',
-  MAIRIE:       'Mairie',
-  PREFECTURE:   'Préfecture',
-  GOUVERNANCE:  'Gouvernance',
-  BROADCAST:    'Diffusion',
-  CLOSED:       'Clôture',
-};
-
-/** Rôle minimum (niveau) requis pour faire avancer chaque étape via advance(). */
-export const STEP_MIN_LEVEL: Record<string, number> = {
-  SIGNALEMENT:  1, // SENTINELLE
-  SENTINELLE:   2, // COORDINATEUR
-  COORDINATEUR: 3, // MAIRIE
-  MAIRIE:       4, // PREFECTURE
-  GOUVERNANCE:  5, // GOUVERNORAT (ROUGE_FONCE)
-};
-
-/** Catégorie de validation critique d'un rôle (null = ne peut pas valider). */
-export function criticalCategory(role: string): 'SENTINELLE_CATEGORY' | 'AUTORITE_LOCALE' | 'AUTORITE_ADMIN' | null {
-  if (role === 'SENTINELLE' || role === 'COORDINATEUR') return 'SENTINELLE_CATEGORY';
-  if (role === 'MAIRIE' || role === 'PREFECTURE') return 'AUTORITE_LOCALE';
-  if (role === 'GOUVERNORAT' || role === 'PROTECTION_CIVILE' || role === 'SUPERVISEUR_REGIONAL') return 'AUTORITE_ADMIN';
-  return null;
-}
-
-export const CRITICAL_CATEGORY_LABEL: Record<string, string> = {
-  SENTINELLE_CATEGORY: 'Sentinelle / Coordinateur',
-  AUTORITE_LOCALE: 'Autorité locale (Mairie / Préfecture)',
-  AUTORITE_ADMIN: 'Autorité admin (Gouvernance / Protection Civile)',
-};
+/*
+ * Les étapes, rôles requis et actions autorisées ne sont PLUS calculés ici :
+ * le serveur renvoie pour chaque alerte les actions permises à l'utilisateur
+ * (GET /alerts/:id → actions), selon la règle unique alert-policy (audit F14).
+ * Ce fichier ne garde que l'affichage (niveaux, libellés de rôles).
+ */
 
 export function hasLevel(role: string, min: number): boolean {
   return (ROLE_LEVEL[role] ?? 0) >= min;

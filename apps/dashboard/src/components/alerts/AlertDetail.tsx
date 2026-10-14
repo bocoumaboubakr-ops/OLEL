@@ -3,164 +3,99 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 
-async function compressImage(file: File): Promise<Blob> {
-  return new Promise((resolve) => {
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      const ratio = Math.min(1, 1200 / img.width);
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.round(img.width * ratio);
-      canvas.height = Math.round(img.height * ratio);
-      const ctx = canvas.getContext('2d');
-      if (!ctx) { resolve(file); return; }
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      canvas.toBlob((blob) => resolve(blob || file), 'image/jpeg', 0.75);
-    };
-    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
-    img.src = url;
-  });
-}
 import { TYPE_META, SEVERITY_COLOR, SEVERITY_LABEL, STATUS_STYLE, WORKFLOW_STEPS, STEP_LABEL } from './AlertsFeed';
-import { ROLE_LEVEL, STEP_MIN_LEVEL, CRITICAL_LEVELS, criticalCategory, AlertLevel } from '@/lib/governance';
 import { AlertLevelBadge } from '@/components/governance/AlertLevelBadge';
-import { CriticalValidationStatus } from '@/components/governance/CriticalValidationStatus';
+import { authHeader } from '@/lib/session';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
 
-// Étapes franchissables via advance() (PREFECTURE/GOUVERNANCE → broadcast dédié)
-const ADVANCE_STEPS = ['SIGNALEMENT', 'SENTINELLE', 'COORDINATEUR', 'MAIRIE'];
+// Étape courante normalisée (anciennes étapes encore présentes en base)
+const PHASE_OF: Record<string, string> = { SENTINELLE: 'SIGNALEMENT', COORDINATEUR: 'MAIRIE', GOUVERNANCE: 'PREFECTURE' };
 
-// Message d'aide affiché sous l'étape active
+// Message d'aide affiché sous l'étape active (circuit v3)
 const STEP_NEXT_ACTION: Record<string, string> = {
-  SIGNALEMENT:  'Une sentinelle doit vérifier sur le terrain (photo + GPS + gravité)',
-  SENTINELLE:   'Le coordinateur doit valider la remontée terrain',
-  COORDINATEUR: 'La mairie doit confirmer le signalement',
-  MAIRIE:       'La préfecture doit valider avant diffusion',
-  PREFECTURE:   'La préfecture peut diffuser (ou la gouvernance pour une crise majeure)',
-  GOUVERNANCE:  'La gouvernance valide les crises majeures avant diffusion',
-  BROADCAST:    'Alerte diffusée — la mairie peut clôturer avec bilan',
-  CLOSED:       'Alerte clôturée',
+  SIGNALEMENT: 'Vérification terrain par une sentinelle (photo + position GPS + gravité, depuis l\'application mobile)',
+  MAIRIE:      'La mairie valide : diffusion directe jusqu\'au niveau ORANGE, confirmation préfectorale pour ROUGE+',
+  PREFECTURE:  'L\'autorité confirme et diffuse (une autre personne que l\'auteur et les validateurs précédents)',
+  BROADCAST:   'Alerte diffusée — la mairie peut clôturer avec un bilan',
+  CLOSED:      'Alerte clôturée',
 };
 
-export function AlertDetail({ alert, currentUser, onClose, onRefetch }: {
+type Decision = { allowed: boolean; reason?: string };
+interface Actions {
+  validate: Decision; reject: Decision; broadcast: Decision; emergencyBypass: Decision;
+  close: Decision; medicalClearance: Decision; reviewBypass: Decision;
+  requiresFieldProof: boolean;
+  onValidate: { nextStep: string; diffuses: boolean } | null;
+  minBypassJustification: number;
+}
+
+export function AlertDetail({ alert: summary, currentUser, onClose, onRefetch }: {
   alert: any;
   currentUser: any;
   onClose: () => void;
   onRefetch: () => void;
 }) {
+  // Le détail (et les actions autorisées) vient du serveur : même règle que l'API (audit F14)
+  const [alert, setAlert] = useState<any>(summary);
+  const [detailError, setDetailError] = useState('');
   const [loading, setLoading] = useState(false);
   const [comment, setComment] = useState('');
   const [error, setError] = useState('');
-  const [photoUrl, setPhotoUrl] = useState('');
-  const [photoUploading, setPhotoUploading] = useState(false);
-  const [gravity, setGravity] = useState('2');
   const [reason, setReason] = useState('');
   const [broadcastMsg, setBroadcastMsg] = useState('');
+  const [reviewNote, setReviewNote] = useState('');
 
+  const loadDetail = async () => {
+    try {
+      const { data } = await axios.get(`${API}/alerts/${summary.id}`, { headers: authHeader() });
+      setAlert(data); setDetailError('');
+    } catch (e: any) {
+      setDetailError(e.response?.status === 404 ? 'Alerte hors de votre périmètre ou supprimée' : 'Détail indisponible — actions désactivées');
+    }
+  };
+  useEffect(() => { setAlert(summary); loadDetail(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [summary.id]);
+
+  const actions: Actions | undefined = alert.actions;
   const meta = TYPE_META[alert.type] || TYPE_META.AUTRE;
   const sev = SEVERITY_COLOR[alert.severity] || '#888';
   const status = STATUS_STYLE[alert.status] || STATUS_STYLE.PENDING;
-  const level = ROLE_LEVEL[currentUser.role] ?? 0;
-  const step = alert.currentStep || 'SIGNALEMENT';
+  const step = PHASE_OF[alert.currentStep] || alert.currentStep || 'SIGNALEMENT';
+  void currentUser;
 
-  const isCritical = CRITICAL_LEVELS.includes(alert.alertLevel as AlertLevel);
-  const myCriticalCategory = criticalCategory(currentUser.role);
-  const alreadyValidatedCritical = (alert.criticalValidations || []).some(
-    (v: any) => v.validator?.id === currentUser.id || v.validatorId === currentUser.id,
-  );
-  const criticalCount = new Set(
-    (alert.criticalValidations || []).map((v: any) => v.validatorCategory),
-  ).size;
-  const criticalComplete = !isCritical || criticalCount === 3;
-
-  const isTerminal = ['CLOSED', 'RESOLVED', 'REJECTED', 'CANCELLED', 'BROADCAST'].includes(alert.status);
-  const canAdvance = !isTerminal
-    && alert.status !== 'BROADCASTING'
-    && ADVANCE_STEPS.includes(step)
-    && level >= (STEP_MIN_LEVEL[step] ?? 99);
-  // Diffusion : statut VALIDATED, étape PREFECTURE ou GOUVERNANCE, rôle PREFECTURE+,
-  // et triple validation critique complète si niveau ORANGE+
-  const canBroadcast = !isTerminal
-    && alert.status === 'VALIDATED'
-    && (step === 'PREFECTURE' || step === 'GOUVERNANCE')
-    && level >= ROLE_LEVEL.PREFECTURE
-    && criticalComplete;
-  // Bouton de validation critique : niveau ORANGE+, rôle habilité, pas déjà validé
-  const canCriticalValidate = isCritical && !isTerminal && !!myCriticalCategory && !alreadyValidatedCritical;
-  const canClose = alert.status === 'BROADCAST' && level >= ROLE_LEVEL.MAIRIE;
-  const needsProof = step === 'SIGNALEMENT';
-
-  const auth = () => ({ Authorization: `Bearer ${localStorage.getItem('olel_token')}` });
-
-  const run = async (fn: () => Promise<any>) => {
+  const run = async (fn: () => Promise<any>, closeAfter = true) => {
     setLoading(true); setError('');
-    try { await fn(); onRefetch(); onClose(); }
-    catch (e: any) { setError(e.response?.data?.message || 'Erreur'); }
+    try { await fn(); onRefetch(); if (closeAfter) onClose(); else await loadDetail(); }
+    catch (e: any) { setError(e.response?.data?.message || e.message || 'Erreur'); await loadDetail(); }
     finally { setLoading(false); }
   };
 
-  const advance = (action: 'VALIDATED' | 'REJECTED' | 'ESCALATED') => run(async () => {
-    const body: any = { action, comment };
-    if (needsProof && action !== 'REJECTED') {
-      if (!photoUrl) throw new Error('Photo de preuve obligatoire — uploadez une photo avant de valider');
-      body.photoUrl = photoUrl;
-      body.gravity = Number(gravity);
-
-      // GPS : tenter la capture, utiliser coords de l'alerte en fallback
-      const gpsAvailable = typeof navigator !== 'undefined' && !!navigator.geolocation;
-      if (gpsAvailable) {
-        await new Promise<void>((res) => {
-          navigator.geolocation.getCurrentPosition(
-            (p) => { body.latitude = p.coords.latitude; body.longitude = p.coords.longitude; res(); },
-            () => {
-              // GPS refusé/indisponible : utiliser les coords du signalement d'origine
-              body.latitude = alert.latitude ?? 15.6556;
-              body.longitude = alert.longitude ?? -13.2553;
-              res();
-            },
-            { timeout: 5000, maximumAge: 30000 },
-          );
-        });
-      } else {
-        body.latitude = alert.latitude ?? 15.6556;
-        body.longitude = alert.longitude ?? -13.2553;
-      }
-    }
-    await axios.post(`${API}/alerts/${alert.id}/advance`, body, { headers: auth() });
+  const advance = (action: 'VALIDATED' | 'REJECTED') => run(async () => {
+    if (action === 'VALIDATED' && actions?.onValidate?.diffuses
+      && !window.confirm('Cette validation DÉCLENCHE la diffusion aux citoyens de la zone. Confirmer ?')) return;
+    await axios.post(`${API}/alerts/${alert.id}/advance`, { action, comment: comment || undefined }, { headers: authHeader() });
   });
 
   const broadcast = () => run(async () => {
-    if (!broadcastMsg.trim()) throw new Error('Message de diffusion obligatoire');
-    await axios.post(`${API}/alerts/${alert.id}/broadcast`, { message: broadcastMsg }, { headers: auth() });
+    if (!broadcastMsg.trim()) throw new Error('Message de diffusion obligatoire (texte exact envoyé aux citoyens)');
+    await axios.post(`${API}/alerts/${alert.id}/broadcast`, { message: broadcastMsg.trim(), idempotencyKey: `${alert.id}:${crypto.randomUUID()}` }, { headers: authHeader() });
   });
 
   const emergencyBypass = () => run(async () => {
+    const min = actions?.minBypassJustification ?? 20;
     const justification = window.prompt(
-      "🚨 DIFFUSION D'URGENCE\n\nVa contourner toutes les vérifications et diffuser MAINTENANT.\nUne notification de contrôle sera envoyée à la préfecture.\n\nJustification (obligatoire, ≥ 10 caractères) :",
+      `DIFFUSION D'URGENCE\n\nDiffuse MAINTENANT, avec la mention « vérification en cours ».\nUne revue a posteriori par une autre autorité sera exigée.\n\nJustification (obligatoire, ≥ ${min} caractères) :`,
     );
-    if (!justification || justification.trim().length < 10) {
-      throw new Error('Justification trop courte (≥ 10 caractères requis)');
-    }
-    if (!window.confirm(`Diffuser cette alerte EN URGENCE avec la justification :\n« ${justification.trim()} » ?`)) {
-      return;
-    }
-    await axios.post(`${API}/alerts/${alert.id}/emergency-bypass`, { justification: justification.trim() }, { headers: auth() });
+    if (!justification || justification.trim().length < min) throw new Error(`Justification trop courte (≥ ${min} caractères requis)`);
+    if (!window.confirm(`Diffuser cette alerte EN URGENCE avec la justification :\n« ${justification.trim()} » ?`)) return;
+    await axios.post(`${API}/alerts/${alert.id}/emergency-bypass`, { justification: justification.trim() }, { headers: authHeader() });
   });
-  const close = () => run(() => axios.post(`${API}/alerts/${alert.id}/close`, { reason }, { headers: auth() }));
-  // Validation critique : ne ferme pas le panneau, juste refetch pour voir la progression
-  const criticalValidate = async () => {
-    setLoading(true); setError('');
-    try {
-      await axios.post(`${API}/alerts/${alert.id}/critical-validate`, { comment }, { headers: auth() });
-      onRefetch();
-    } catch (e: any) {
-      setError(e.response?.data?.message || 'Erreur');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const close = () => run(() => axios.post(`${API}/alerts/${alert.id}/close`, { reason }, { headers: authHeader() }));
+  const medicalClearance = () => run(() => axios.post(`${API}/alerts/${alert.id}/medical-clearance`, {}, { headers: authHeader() }), false);
+  const reviewBypass = () => run(() => axios.post(`${API}/alerts/${alert.id}/bypass-review`, { note: reviewNote }, { headers: authHeader() }), false);
+
+  const anyAction = !!actions && (actions.validate.allowed || actions.reject.allowed || actions.broadcast.allowed
+    || actions.emergencyBypass.allowed || actions.close.allowed || actions.medicalClearance.allowed || actions.reviewBypass.allowed);
 
   const currentStepIdx = WORKFLOW_STEPS.indexOf(step as any);
 
@@ -271,138 +206,107 @@ export function AlertDetail({ alert, currentUser, onClose, onRefetch }: {
           </Section>
         )}
 
-        {/* Validation critique (ORANGE / ROUGE / ROUGE_FONCE) */}
-        {isCritical && (
-          <Section title="Validation critique requise">
-            <CriticalValidationStatus
-              alertLevel={alert.alertLevel}
-              criticalValidations={alert.criticalValidations || []}
-            />
-            {canCriticalValidate && (
-              <button
-                disabled={loading}
-                onClick={criticalValidate}
-                style={{ ...btn('#0F172A'), width: '100%', marginTop: 12 }}
-              >
-                Enregistrer ma validation ({myCriticalCategory === 'SENTINELLE_CATEGORY' ? 'sentinelle' : myCriticalCategory === 'AUTORITE_LOCALE' ? 'autorité locale' : 'autorité admin'})
-              </button>
-            )}
-            {alreadyValidatedCritical && (
-              <div style={{ marginTop: 10, fontSize: '0.78rem', color: '#15803D', textAlign: 'center', fontWeight: 500 }}>
-                Vous avez déjà validé cette alerte
-              </div>
-            )}
-          </Section>
+        {detailError && (
+          <div style={{ background: '#FEF2F2', color: '#991B1B', padding: '8px 10px', borderRadius: 6, marginBottom: 12, fontSize: '0.8rem' }}>{detailError}</div>
         )}
 
-        {/* Actions du cursus */}
-        {(canAdvance || canBroadcast || canClose) && (
-          <Section title="Action requise">
-            {error && <div style={{ background: '#fee2e2', color: '#DC2626', padding: '8px 10px', borderRadius: 6, marginBottom: 10, fontSize: '0.82rem' }}>{error}</div>}
+        {alert.requiresMedicalReview && (
+          <div style={{ marginBottom: 12, padding: '10px 12px', background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: 8, fontSize: '0.78rem', color: '#9A3412' }}>
+            Revue médicale requise : aucune diffusion (y compris d&apos;urgence) avant levée par l&apos;autorité sanitaire désignée.
+          </div>
+        )}
+        {alert.emergencyBypass && (
+          <div style={{ marginBottom: 12, padding: '10px 12px', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, fontSize: '0.78rem', color: '#991B1B' }}>
+            Diffusée en urgence — justification : « {alert.bypassJustification} »
+            <div style={{ marginTop: 4 }}>{alert.bypassReviewedAt ? `Revue a posteriori effectuée : « ${alert.bypassReviewNote} »` : 'Revue a posteriori en attente.'}</div>
+          </div>
+        )}
+        {alert.autoEscalated && (
+          <div style={{ marginBottom: 12, padding: '10px 12px', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 8, fontSize: '0.78rem', color: '#92400E' }}>
+            Diffusée automatiquement, NON confirmée par l&apos;autorité dans le délai (mention portée dans le message).
+          </div>
+        )}
 
-            {canAdvance && (
+        {/* Actions : uniquement celles que le serveur autorise pour vous */}
+        {actions && (
+          <Section title="Actions">
+            {error && <div style={{ background: '#fee2e2', color: '#DC2626', padding: '8px 10px', borderRadius: 6, marginBottom: 10, fontSize: '0.82rem' }}>{error}</div>}
+            {!anyAction && (
+              <div style={{ fontSize: '0.8rem', color: '#64748B' }}>
+                Aucune action possible pour vous sur cette alerte.
+                {actions.validate.reason && <div style={{ marginTop: 4, color: '#94A3B8' }}>{actions.validate.reason}</div>}
+              </div>
+            )}
+
+            {actions.requiresFieldProof && (
+              <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 10, padding: 12, marginBottom: 10, fontSize: '0.78rem', color: '#92400E' }}>
+                Vérification terrain requise : une sentinelle valide depuis l&apos;application mobile avec photo, position GPS capturée sur place et gravité.
+                Le tableau de bord ne fabrique jamais de position (audit F18).
+              </div>
+            )}
+
+            {(actions.validate.allowed || actions.reject.allowed) && (
               <>
-                {needsProof && (
-                  <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 10, padding: 14, marginBottom: 10 }}>
-                    <div style={{ fontSize: '0.78rem', color: '#92400E', marginBottom: 10, fontWeight: 500 }}>
-                      Validation sentinelle : preuve obligatoire (photo + GPS + gravité)
-                    </div>
-                    <div style={{ marginBottom: 10 }}>
-                      {photoUrl ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <img src={photoUrl} alt="preuve" style={{ height: 60, borderRadius: 8, objectFit: 'cover', border: '1px solid #E5E7EB' }} />
-                          <button onClick={() => setPhotoUrl('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#DC2626', fontSize: '0.78rem', fontWeight: 500 }}>Supprimer</button>
-                        </div>
-                      ) : (
-                        <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, cursor: 'pointer', background: 'white', border: '1px dashed #D97706', borderRadius: 8, padding: '11px 14px' }}>
-                          <span style={{ fontSize: '0.85rem', fontWeight: 500, color: '#92400E' }}>
-                            {photoUploading ? 'Upload en cours…' : 'Choisir une photo de preuve'}
-                          </span>
-                          <input type="file" accept="image/*" style={{ display: 'none' }}
-                            onChange={async (e) => {
-                              const file = e.target.files?.[0];
-                              if (!file) return;
-                              setPhotoUploading(true);
-                              try {
-                                const compressed = await compressImage(file);
-                                const fd = new FormData();
-                                fd.append('file', compressed, file.name.replace(/\.[^.]+$/, '.jpg'));
-                                const { data } = await axios.post(`${API}/upload/photo`, fd, { headers: { Authorization: `Bearer ${localStorage.getItem('olel_token')}`, 'Content-Type': 'multipart/form-data' } });
-                                setPhotoUrl(data.url);
-                              } catch { setError('Échec de l\'upload photo'); }
-                              finally { setPhotoUploading(false); }
-                            }}
-                          />
-                        </label>
-                      )}
-                    </div>
-                    <select value={gravity} onChange={(e) => setGravity(e.target.value)} style={{ ...inputS, marginTop: 6 }}>
-                      <option value="0">Gravité 0 — Info</option>
-                      <option value="1">Gravité 1 — Vigilance</option>
-                      <option value="2">Gravité 2 — Alerte</option>
-                      <option value="3">Gravité 3 — Urgence</option>
-                    </select>
-                    <div style={{ fontSize: '0.74rem', color: '#A16207', marginTop: 8 }}>La position GPS sera capturée automatiquement.</div>
-                  </div>
-                )}
                 <textarea
                   value={comment} onChange={(e) => setComment(e.target.value)}
                   placeholder="Commentaire (optionnel)" rows={2}
                   style={{ ...inputS, resize: 'none', marginBottom: 8 }}
                 />
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <button disabled={loading} onClick={() => advance('VALIDATED')}
-                    style={btn('#0F172A')}>Valider</button>
-                  <button disabled={loading} onClick={() => advance('REJECTED')}
-                    style={{ ...btn('white'), color: '#DC2626', border: '1px solid #FECACA' }}>Rejeter</button>
+                  {actions.validate.allowed && !actions.requiresFieldProof && (
+                    <button disabled={loading} onClick={() => advance('VALIDATED')} style={btn('#0F172A')}>
+                      {actions.onValidate?.diffuses ? 'Valider et diffuser' : 'Valider (vers confirmation)'}
+                    </button>
+                  )}
+                  {actions.reject.allowed && (
+                    <button disabled={loading} onClick={() => advance('REJECTED')}
+                      style={{ ...btn('white'), color: '#DC2626', border: '1px solid #FECACA' }}>Rejeter</button>
+                  )}
                 </div>
-                {needsProof && (
-                  <button disabled={loading} onClick={() => advance('ESCALATED')}
-                    style={{ ...btn('white'), color: '#EA580C', border: '1px solid #FED7AA', width: '100%', marginTop: 8 }}>
-                    Escalader vers la préfecture
-                  </button>
-                )}
               </>
             )}
 
-            {canBroadcast && (
+            {actions.broadcast.allowed && (
               <>
                 <textarea
                   value={broadcastMsg} onChange={(e) => setBroadcastMsg(e.target.value)}
-                  placeholder="Message de diffusion (envoyé sur tous les canaux)…" rows={3}
+                  placeholder="Consigne approuvée (texte exact envoyé, sans traduction automatique)…" rows={3}
                   style={{ ...inputS, resize: 'vertical', marginTop: 8 }}
                 />
-                <button disabled={loading} onClick={broadcast}
-                  style={{ ...btn('#0F172A'), width: '100%', marginTop: 8 }}>
-                  Diffuser l&apos;alerte multi-canal
+                <button disabled={loading} onClick={broadcast} style={{ ...btn('#0F172A'), width: '100%', marginTop: 8 }}>
+                  Confirmer et diffuser
                 </button>
               </>
             )}
 
-            {/* Bouton diffusion d'urgence — visible MAIRIE+ tant que l'alerte n'est pas diffusée */}
-            {!alert.broadcastAt && ['MAIRIE','PREFECTURE','GOUVERNORAT','PROTECTION_CIVILE','SUPERVISEUR_REGIONAL','ADMIN','SUPER_ADMIN'].includes(currentUser?.role) && (
-              <button disabled={loading} onClick={emergencyBypass}
-                style={{ ...btn('#DC2626'), width: '100%', marginTop: 12, padding: '11px', fontWeight: 600, letterSpacing: '-0.005em' }}>
-                Diffusion d&apos;urgence — court-circuit cursus
+            {actions.medicalClearance.allowed && (
+              <button disabled={loading} onClick={medicalClearance} style={{ ...btn('#9A3412'), width: '100%', marginTop: 8 }}>
+                Lever la revue médicale
               </button>
             )}
-            {alert.emergencyBypass && (
-              <div style={{ marginTop: 8, padding: '10px 12px', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, fontSize: '0.78rem', color: '#991B1B' }}>
-                Diffusée en urgence — justification : « {alert.bypassJustification} »
-              </div>
-            )}
-            {alert.autoEscalated && (
-              <div style={{ marginTop: 8, padding: '10px 12px', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 8, fontSize: '0.78rem', color: '#92400E' }}>
-                Auto-diffusée faute de confirmation autorité dans le délai (15 min)
-              </div>
+
+            {actions.reviewBypass.allowed && (
+              <>
+                <input value={reviewNote} onChange={(e) => setReviewNote(e.target.value)}
+                  placeholder="Note de revue de la diffusion d'urgence (≥ 10 caractères)" style={{ ...inputS, marginTop: 8 }} />
+                <button disabled={loading} onClick={reviewBypass} style={{ ...btn('#0F172A'), width: '100%', marginTop: 8 }}>
+                  Enregistrer la revue a posteriori
+                </button>
+              </>
             )}
 
-            {canClose && (
+            {actions.emergencyBypass.allowed && (
+              <button disabled={loading} onClick={emergencyBypass}
+                style={{ ...btn('#DC2626'), width: '100%', marginTop: 12, padding: '11px', fontWeight: 600, letterSpacing: '-0.005em' }}>
+                Diffusion d&apos;urgence (justification, revue a posteriori)
+              </button>
+            )}
+
+            {actions.close.allowed && (
               <>
                 <input value={reason} onChange={(e) => setReason(e.target.value)}
                   placeholder="Raison / bilan de clôture (obligatoire)" style={{ ...inputS, marginTop: 8 }} />
-                <button disabled={loading} onClick={close}
-                  style={{ ...btn('#0F172A'), width: '100%', marginTop: 8 }}>
+                <button disabled={loading} onClick={close} style={{ ...btn('#0F172A'), width: '100%', marginTop: 8 }}>
                   Clôturer l&apos;alerte
                 </button>
               </>
@@ -435,8 +339,8 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 // ── RecoupementSection ──────────────────────────────────────────────────────
-// Affiche les signalements proches (cluster) + données OMVS (niveau fleuve)
-// pour aider la mairie à décider du niveau de gravité et de l'urgence.
+// Affiche les signalements proches (cluster) ; aucune donnée hydrologique
+// n'est inventée tant qu'aucune source n'est connectée.
 interface ContextData {
   radiusKm: number;
   windowHours: number;
@@ -447,12 +351,7 @@ interface ContextData {
     distanceKm: number;
   }>;
   cluster: boolean;
-  omvs: {
-    relevant: boolean; mock: boolean; source: string; station: string;
-    riverLevelMeters: number; alertThresholdMeters: number; dangerThresholdMeters: number;
-    status: 'normal' | 'vigilance' | 'alerte' | 'danger';
-    flowRateM3s: number; notice: string;
-  };
+  omvs: { relevant: boolean; available: boolean; notice: string };
 }
 
 function RecoupementSection({ alertId, alertType }: { alertId: string; alertType: string }) {
@@ -487,17 +386,6 @@ function RecoupementSection({ alertId, alertType }: { alertId: string; alertType
   }
 
   const { nearbySignalements, cluster, omvs, radiusKm, windowHours } = ctx;
-  const showOmvs = omvs.relevant;
-  const statusColor: Record<string, string> = {
-    normal:    '#16A34A',
-    vigilance: '#D89A1D',
-    alerte:    '#EA580C',
-    danger:    '#DC2626',
-  };
-  const statusLabel: Record<string, string> = {
-    normal: 'Normal', vigilance: 'Vigilance', alerte: 'Alerte', danger: 'Danger',
-  };
-
   return (
     <Section title="Recoupement">
       {/* Bandeau cluster */}
@@ -540,39 +428,10 @@ function RecoupementSection({ alertId, alertType }: { alertId: string; alertType
         </div>
       )}
 
-      {/* Carte OMVS si pertinent */}
-      {showOmvs && (
-        <div style={{
-          background: 'white', border: '1px solid #F1F5F9', borderRadius: 10, padding: '12px 14px',
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
-            <span style={{ fontSize: '0.74rem', fontWeight: 600, color: '#64748B', letterSpacing: '0.02em' }}>OMVS · {omvs.station}</span>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: '0.7rem', fontWeight: 600, color: statusColor[omvs.status], background: statusColor[omvs.status] + '14', padding: '2px 8px', borderRadius: 5 }}>
-              <span style={{ width: 5, height: 5, borderRadius: '50%', background: statusColor[omvs.status] }} />
-              {statusLabel[omvs.status]}
-            </span>
-          </div>
-          <div style={{ display: 'flex', gap: 24, marginTop: 6 }}>
-            <div>
-              <div style={{ fontSize: '1.3rem', fontWeight: 700, color: '#0F172A', letterSpacing: '-0.02em', lineHeight: 1 }}>{omvs.riverLevelMeters.toFixed(2)} m</div>
-              <div style={{ fontSize: '0.7rem', color: '#94A3B8', marginTop: 2 }}>Niveau fleuve</div>
-            </div>
-            <div>
-              <div style={{ fontSize: '1.3rem', fontWeight: 700, color: '#0F172A', letterSpacing: '-0.02em', lineHeight: 1 }}>{omvs.flowRateM3s} <span style={{ fontSize: '0.78rem', color: '#64748B', fontWeight: 500 }}>m³/s</span></div>
-              <div style={{ fontSize: '0.7rem', color: '#94A3B8', marginTop: 2 }}>Débit</div>
-            </div>
-          </div>
-          <div style={{ fontSize: '0.7rem', color: '#94A3B8', marginTop: 10, lineHeight: 1.4 }}>
-            Seuils : alerte {omvs.alertThresholdMeters.toFixed(2)} m · danger {omvs.dangerThresholdMeters.toFixed(2)} m
-            {omvs.mock && <div style={{ color: '#A16207', marginTop: 2 }}>⚠ {omvs.notice}</div>}
-          </div>
-        </div>
-      )}
-
-      {/* Note explicite quand OMVS n'est pas affiché */}
-      {!showOmvs && (
-        <div style={{ fontSize: '0.72rem', color: '#94A3B8', fontStyle: 'italic' }}>
-          Données OMVS non pertinentes pour ce type d&apos;alerte ({alertType}).
+      {/* Hydrologie : aucune source connectée, aucune valeur fabriquée (audit F18/F35) */}
+      {omvs.relevant && (
+        <div style={{ fontSize: '0.74rem', color: '#92400E', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 8, padding: '8px 10px' }}>
+          {omvs.notice}
         </div>
       )}
     </Section>

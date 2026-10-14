@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import axios from 'axios';
+import { authHeader } from '@/lib/session';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
 const AUTH_ROLES = ['COORDINATEUR', 'MAIRIE', 'PREFECTURE', 'GOUVERNORAT', 'PROTECTION_CIVILE', 'SUPERVISEUR_REGIONAL', 'ADMIN', 'SUPER_ADMIN'];
@@ -64,61 +65,115 @@ export default function SentinellesPage() {
   );
 }
 
+const ACCOUNT_STATUS: Record<string, { label: string; bg: string; color: string }> = {
+  IN_TRAINING: { label: 'En formation', bg: '#FFFBEB', color: '#B45309' },
+  ACTIVE:      { label: 'Habilitée',    bg: '#F0FDF4', color: '#16A34A' },
+  SUSPENDED:   { label: 'Suspendue',    bg: '#FEF2F2', color: '#DC2626' },
+};
+
+/**
+ * Sentinelles (audit F19) : « en formation », « habilitée » et « suspendue »
+ * sont des états distincts. Terminer les modules ne suffit pas : un
+ * responsable habilite explicitement (contrôle côté serveur : rôle,
+ * territoire, traçabilité). Une suspension n'est jamais levée par la formation.
+ */
 function SentinellesTab() {
-  const auth = () => ({ Authorization: `Bearer ${localStorage.getItem('olel_token')}` });
   const [sentinelles, setSentinelles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState<string | null>(null);
 
-  useEffect(() => {
-    axios.get(`${API}/users?role=SENTINELLE&limit=200`, { headers: auth() })
-      .then(({ data }) => setSentinelles(data.users || []))
+  const load = () => {
+    axios.get(`${API}/users?role=SENTINELLE&limit=200`, { headers: authHeader() })
+      .then(({ data }) => { setSentinelles(data.users || []); setError(''); })
+      .catch(() => setError('Liste indisponible'))
       .finally(() => setLoading(false));
-  }, []);
+  };
+  useEffect(load, []);
+
+  const setStatus = async (s: any, status: 'ACTIVE' | 'SUSPENDED') => {
+    const msg = status === 'ACTIVE'
+      ? (s.status === 'IN_TRAINING'
+        ? `Habiliter ${s.name} ?${s.trainingCompletedAt ? '' : '\n\nAttention : les modules de formation requis ne sont pas tous terminés.'}\nL'aptitude terrain doit avoir été vérifiée.`
+        : `Réactiver ${s.name} ?`)
+      : `Suspendre ${s.name} ? Ses sessions seront révoquées immédiatement.`;
+    if (!window.confirm(msg)) return;
+    setBusy(s.id); setError('');
+    try {
+      await axios.patch(`${API}/users/${s.id}`, { status }, { headers: authHeader() });
+      load();
+    } catch (e: any) {
+      setError(e.response?.data?.message || 'Action refusée');
+    } finally { setBusy(null); }
+  };
 
   if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#94A3B8' }}>Chargement…</div>;
 
-  const active = sentinelles.filter((s) => s.isActive);
-  const inactive = sentinelles.filter((s) => !s.isActive);
+  const count = (st: string) => sentinelles.filter((s) => s.status === st).length;
 
   return (
     <div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 24, maxWidth: 600 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 24, maxWidth: 800 }}>
         <StatCard value={sentinelles.length} label="Total sentinelles" color="#0F172A" />
-        <StatCard value={active.length} label="Actives" color="#16A34A" />
-        <StatCard value={inactive.length} label="Inactives" color="#DC2626" />
+        <StatCard value={count('ACTIVE')} label="Habilitées" color="#16A34A" />
+        <StatCard value={count('IN_TRAINING')} label="En formation" color="#B45309" />
+        <StatCard value={count('SUSPENDED')} label="Suspendues" color="#DC2626" />
       </div>
+      {error && <div role="alert" style={{ marginBottom: 12, padding: '8px 12px', background: '#FEF2F2', color: '#991B1B', borderRadius: 8, fontSize: '0.82rem' }}>{error}</div>}
 
       <h3 style={{ fontSize: '0.9rem', color: '#0F172A', marginBottom: 12 }}>Liste des sentinelles</h3>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
         <thead>
           <tr style={{ background: '#FAFAFA', color: '#64748B', fontSize: '0.78rem' }}>
-            {['Nom', 'Téléphone', 'Zone', 'Statut', 'Dernière activité'].map((h) => (
+            {['Nom', 'Téléphone', 'Zone', 'Statut', 'Formation', 'Dernière activité', ''].map((h) => (
               <th key={h} style={{ padding: '9px 12px', textAlign: 'left', fontWeight: 600, borderBottom: '1px solid #E5E7EB' }}>{h}</th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {sentinelles.map((s) => (
-            <tr key={s.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
-              <td style={{ padding: '10px 12px', fontWeight: 600, color: '#0F172A' }}>{s.name}</td>
-              <td style={{ padding: '10px 12px', color: '#64748B' }}>{s.phone}</td>
-              <td style={{ padding: '10px 12px', color: '#64748B' }}>{s.zone?.name || '—'}</td>
-              <td style={{ padding: '10px 12px' }}>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 9px', borderRadius: 5, background: s.isActive ? '#F0FDF4' : '#FEF2F2', color: s.isActive ? '#16A34A' : '#DC2626', fontSize: '0.74rem', fontWeight: 600 }}>
-                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: s.isActive ? '#16A34A' : '#DC2626' }} />
-                  {s.isActive ? 'Active' : 'Inactive'}
-                </span>
-              </td>
-              <td style={{ padding: '10px 12px', color: '#94A3B8', fontSize: '0.78rem' }}>
-                {s.lastActiveAt ? new Date(s.lastActiveAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}
-              </td>
-            </tr>
-          ))}
+          {sentinelles.map((s) => {
+            const st = ACCOUNT_STATUS[s.status] || ACCOUNT_STATUS.SUSPENDED;
+            return (
+              <tr key={s.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
+                <td style={{ padding: '10px 12px', fontWeight: 600, color: '#0F172A' }}>{s.name}</td>
+                <td style={{ padding: '10px 12px', color: '#64748B' }}>{s.phone}</td>
+                <td style={{ padding: '10px 12px', color: '#64748B' }}>{s.zone?.name || '—'}</td>
+                <td style={{ padding: '10px 12px' }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 9px', borderRadius: 5, background: st.bg, color: st.color, fontSize: '0.74rem', fontWeight: 600 }}>
+                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: st.color }} />
+                    {st.label}
+                  </span>
+                </td>
+                <td style={{ padding: '10px 12px', color: '#64748B', fontSize: '0.78rem' }}>
+                  {s.trainingCompletedAt ? `Modules terminés le ${new Date(s.trainingCompletedAt).toLocaleDateString('fr-FR')}` : 'Modules en cours'}
+                </td>
+                <td style={{ padding: '10px 12px', color: '#94A3B8', fontSize: '0.78rem' }}>
+                  {s.lastActiveAt ? new Date(s.lastActiveAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}
+                </td>
+                <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
+                  {s.status !== 'ACTIVE' && (
+                    <button disabled={busy === s.id} onClick={() => setStatus(s, 'ACTIVE')} style={smallBtn('#0F172A', 'white')}>
+                      {s.status === 'IN_TRAINING' ? 'Habiliter' : 'Réactiver'}
+                    </button>
+                  )}
+                  {s.status !== 'SUSPENDED' && (
+                    <button disabled={busy === s.id} onClick={() => setStatus(s, 'SUSPENDED')} style={{ ...smallBtn('white', '#DC2626'), border: '1px solid #FECACA', marginLeft: 6 }}>
+                      Suspendre
+                    </button>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
   );
 }
+
+const smallBtn = (bg: string, color: string): React.CSSProperties => ({
+  background: bg, color, border: 'none', padding: '5px 10px', borderRadius: 6, cursor: 'pointer', fontSize: '0.76rem', fontWeight: 600,
+});
 
 function MissionsPanel() {
   const auth = () => ({ Authorization: `Bearer ${localStorage.getItem('olel_token')}` });
@@ -138,11 +193,15 @@ function MissionsPanel() {
   const handleCreate = async () => {
     setSaving(true);
     try {
-      await axios.post(`${API}/missions`, { ...form, dueAt: form.dueAt || undefined }, { headers: auth() });
+      // Mission rattachée à la zone de l'auteur (contrôle de territoire côté serveur)
+      const zoneId = (() => { try { return JSON.parse(localStorage.getItem('olel_user') || '{}').zoneId || undefined; } catch { return undefined; } })();
+      await axios.post(`${API}/missions`, { ...form, zoneId, dueAt: form.dueAt || undefined }, { headers: auth() });
       setShowForm(false);
       setForm({ title: '', description: '', type: 'VERIFICATION', dueAt: '' });
       fetchMissions();
-    } catch { /* ignore */ } finally { setSaving(false); }
+    } catch (e: any) {
+      window.alert(e.response?.data?.message || 'Création de la mission refusée');
+    } finally { setSaving(false); }
   };
 
   const STATUS_COLOR: Record<string, string> = { OPEN: '#64748B', ASSIGNED: '#2563eb', IN_PROGRESS: '#ea580c', DONE: '#16A34A', CANCELLED: '#94A3B8' };

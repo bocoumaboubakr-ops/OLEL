@@ -10,6 +10,8 @@ const WS = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:4000';
 export function useAlerts() {
   const [alerts, setAlerts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  // Distinguer « liste indisponible » de « aucune alerte » (audit F16)
+  const [unavailable, setUnavailable] = useState(false);
 
   const fetchAlerts = useCallback(async () => {
     const token = localStorage.getItem('olel_token');
@@ -19,13 +21,11 @@ export function useAlerts() {
         headers: { Authorization: `Bearer ${token}` },
       });
       setAlerts(data.alerts || []);
-    } catch (e: any) {
-      if (e?.response?.status === 401) {
-        localStorage.removeItem('olel_token');
-        localStorage.removeItem('olel_refresh');
-        localStorage.removeItem('olel_user');
-        window.location.href = '/login';
-      }
+      setUnavailable(false);
+    } catch {
+      // 401 : renouvellement automatique (lib/session) ; session perdue → redirection gérée par useAuth
+      setUnavailable(true);
+      return;
     } finally {
       setLoading(false);
     }
@@ -37,7 +37,8 @@ export function useAlerts() {
     const token = localStorage.getItem('olel_token');
     if (!token) return;
 
-    const socket = io(`${WS}/alerts`, { auth: { token } });
+    // Le jeton est relu à chaque (re)connexion : il change à chaque renouvellement
+    const socket = io(`${WS}/alerts`, { auth: (cb) => cb({ token: localStorage.getItem('olel_token') }) });
 
     // Le serveur n'envoie qu'un résumé minimal (audit F02) : la liste fait
     // foi via l'API, qui applique le cloisonnement territorial. On recharge
@@ -50,10 +51,15 @@ export function useAlerts() {
     socket.on('alert:changed', scheduleRefetch);
     // Session révoquée ou expirée : le serveur coupe la connexion ; le
     // rechargement renverra 401 et redirigera vers la connexion.
-    socket.on('disconnect', (reason) => { if (reason === 'io server disconnect') fetchAlerts(); });
+    socket.on('disconnect', (reason) => {
+      if (reason !== 'io server disconnect') return;
+      // Coupure par le serveur (jeton expiré/révoqué) : rafraîchir la liste
+      // (renouvelle la session si possible) puis se reconnecter avec le nouveau jeton
+      fetchAlerts().then(() => { if (localStorage.getItem('olel_token')) socket.connect(); });
+    });
 
     return () => { if (timer) clearTimeout(timer); socket.disconnect(); };
   }, [fetchAlerts]);
 
-  return { alerts, loading, refetch: fetchAlerts };
+  return { alerts, loading, unavailable, refetch: fetchAlerts };
 }

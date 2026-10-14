@@ -13,7 +13,7 @@ import { canCreate as canCreateRole, ROLE_LABELS, ROLE_LEVEL } from '@/lib/gover
 
 export default function DashboardPage() {
   const { user, initialized, logout } = useAuth();
-  const { alerts, loading, refetch } = useAlerts();
+  const { alerts, loading, unavailable, refetch } = useAlerts();
   const [selected, setSelected] = useState<any>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [activeTab, setActiveTab] = useState<'active' | 'all'>('active');
@@ -115,6 +115,12 @@ export default function DashboardPage() {
               {loading ? '…' : `${filteredAlerts.length} ${filteredAlerts.length > 1 ? 'alertes' : 'alerte'}`}
             </span>
           </div>
+          {unavailable && (
+            <div role="alert" style={{ margin: '10px 14px 0', padding: '10px 12px', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, color: '#991B1B', fontSize: '0.8rem' }}>
+              Liste des alertes indisponible (réseau ou serveur). Les informations affichées peuvent être incomplètes —{' '}
+              <button onClick={refetch} style={{ background: 'none', border: 'none', color: '#991B1B', textDecoration: 'underline', cursor: 'pointer', padding: 0, fontSize: 'inherit' }}>réessayer</button>
+            </div>
+          )}
           <div style={{ overflowY: 'auto', flex: 1 }}>
             {loading ? (
               <div style={{ padding: 32, textAlign: 'center', color: '#94A3B8', fontSize: '0.88rem' }}>Chargement…</div>
