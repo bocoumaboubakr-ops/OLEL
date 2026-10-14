@@ -29,6 +29,15 @@ enum Role {
   SUPER_ADMIN
 }
 
+/// Cycle de vie d'un compte, distinct du rôle (F07/F19) :
+/// IN_TRAINING = peut se connecter mais n'accède qu'aux formations ;
+/// ACTIVE = habilité ; SUSPENDED = aucun accès.
+enum AccountStatus {
+  IN_TRAINING
+  ACTIVE
+  SUSPENDED
+}
+
 enum AlertLevel {
   BLEU         // Information
   JAUNE        // Vigilance
@@ -124,7 +133,22 @@ model User {
   otpSecret     String?
   totpSecret    String?
   totpEnabled   Boolean  @default(false)
+  /// Secret TOTP en attente de confirmation (réenrôlement) — chiffré
+  totpPendingSecret String?
+  /// Miroir de compatibilité de `status` (= status != SUSPENDED).
+  /// Écrit uniquement via auth/account-status.ts.
   isActive      Boolean  @default(true)
+  status        AccountStatus @default(ACTIVE)
+  /// Incrémenté à chaque changement sensible (rôle, zone, statut, mot de
+  /// passe, facteur MFA) : invalide tous les jetons émis auparavant.
+  tokenVersion  Int      @default(0)
+  loginFailures    Int       @default(0)
+  loginLockedUntil DateTime?
+  mfaFailures      Int       @default(0)
+  mfaLockedUntil   DateTime?
+  trainingCompletedAt DateTime?
+  habilitatedAt   DateTime?
+  habilitatedById String?
   lastActiveAt  DateTime?
   zoneId        String?
   zone          Zone?    @relation(fields: [zoneId], references: [id])
@@ -145,10 +169,32 @@ model User {
   authoredBroadcasts       Broadcast[]               @relation("BroadcastAuthor")
   fieldVerifiedSignalements Signalement[]            @relation("FieldVerifications")
   alertsBypassed            Alert[]                   @relation("AlertBypassBy")
+  sessions                  Session[]
 
   @@index([phone])
   @@index([zoneId])
   @@map("users")
+}
+
+/// Session de rafraîchissement (F11) : un refresh token = une session,
+/// rotation à chaque usage, réutilisation d'un jeton déjà tourné = vol
+/// présumé → révocation de toutes les sessions de l'utilisateur.
+model Session {
+  id           String    @id @default(uuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash    String
+  /// Le second facteur TOTP a-t-il été vérifié pour cette session ?
+  mfa          Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  expiresAt    DateTime
+  lastUsedAt   DateTime?
+  revokedAt    DateTime?
+  revokedReason String?
+  replacedById String?
+
+  @@index([userId])
+  @@map("sessions")
 }
 
 model Zone {

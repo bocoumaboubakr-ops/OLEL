@@ -1,12 +1,14 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { UsersService } from './users.service';
-import { CreateUserDto, UpdateUserDto, CreateSentinelleDto } from './dto/create-user.dto';
+import { CreateUserDto, UpdateUserDto, CreateSentinelleDto, UpdateMeDto, ChangePasswordDto } from './dto/create-user.dto';
+import { AllowInTraining } from '../common/decorators/allow-in-training.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Role } from '@prisma/client';
+import { Caller } from './user-policy';
 
 @ApiTags('Users')
 @ApiBearerAuth()
@@ -27,17 +29,27 @@ export class UsersController {
     @Query('limit') limit?: number,
     @Query('role') role?: Role,
     @Query('zoneId') zoneId?: string,
+    @CurrentUser() caller?: Caller,
   ) {
-    return this.users.findAll({ page, limit, role, zoneId });
+    return this.users.findAll({ page, limit, role, zoneId }, caller);
   }
 
   @Get('me')
+  @AllowInTraining()
   @ApiOperation({ summary: 'Mon profil (utilisateur connecté)' })
   getMe(@CurrentUser() user: { id: string }) {
     return this.users.findOne(user.id);
   }
 
+  @Patch('me')
+  @AllowInTraining()
+  @ApiOperation({ summary: 'Modifier mon nom / e-mail (jamais rôle, statut ni zone)' })
+  updateMe(@CurrentUser() user: { id: string }, @Body() dto: UpdateMeDto) {
+    return this.users.updateMe(user.id, dto);
+  }
+
   @Patch('me/language')
+  @AllowInTraining()
   @ApiOperation({ summary: 'Changer ma langue préférée (fr | ff | wo | snk)' })
   setLanguage(@CurrentUser() user: { id: string }, @Body('language') language: string) {
     return this.users.setLanguage(user.id, language);
@@ -45,15 +57,15 @@ export class UsersController {
 
   @Get(':id')
   @Roles(Role.COORDINATEUR, Role.MAIRIE, Role.PREFECTURE, Role.GOUVERNORAT, Role.PROTECTION_CIVILE, Role.SUPERVISEUR_REGIONAL, Role.ADMIN, Role.SUPER_ADMIN)
-  findOne(@Param('id') id: string) {
-    return this.users.findOne(id);
+  findOne(@Param('id') id: string, @CurrentUser() caller: Caller) {
+    return this.users.findOneScoped(id, caller);
   }
 
   @Post()
   @Roles(Role.SUPERVISEUR_REGIONAL, Role.ADMIN, Role.SUPER_ADMIN)
-  @ApiOperation({ summary: 'Créer un utilisateur (admin seulement — tous rôles possibles)' })
-  create(@Body() dto: CreateUserDto) {
-    return this.users.create(dto);
+  @ApiOperation({ summary: 'Créer un utilisateur (rôles attribuables selon users/user-policy.ts)' })
+  create(@Body() dto: CreateUserDto, @CurrentUser() caller: Caller) {
+    return this.users.create(dto, caller);
   }
 
   /**
@@ -65,7 +77,7 @@ export class UsersController {
   @ApiOperation({ summary: 'Créer une sentinelle (mairie/admin) — génère un mot de passe temporaire' })
   createSentinelle(
     @Body() dto: CreateSentinelleDto,
-    @CurrentUser() user: { id: string; role: Role; zoneId?: string },
+    @CurrentUser() user: Caller,
   ) {
     return this.users.createSentinelle(dto, user);
   }
@@ -76,28 +88,29 @@ export class UsersController {
   update(
     @Param('id') id: string,
     @Body() dto: UpdateUserDto,
-    @CurrentUser() caller: { id: string; role: Role },
+    @CurrentUser() caller: Caller,
   ) {
     return this.users.update(id, dto, caller);
   }
 
   @Post(':id/change-password')
   @Roles(Role.SUPERVISEUR_REGIONAL, Role.ADMIN, Role.SUPER_ADMIN)
-  @ApiOperation({ summary: 'Changer le mot de passe d\'un utilisateur (admin seulement)' })
-  changePassword(
-    @Param('id') id: string,
-    @Body() body: { newPassword: string },
-  ) {
-    if (!body.newPassword || body.newPassword.length < 8) {
-      throw new BadRequestException('Le mot de passe doit contenir au moins 8 caractères');
-    }
-    return this.users.changePassword(id, body.newPassword);
+  @ApiOperation({ summary: 'Changer le mot de passe d\'un utilisateur (révoque ses sessions)' })
+  changePassword(@Param('id') id: string, @Body() body: ChangePasswordDto, @CurrentUser() caller: Caller) {
+    return this.users.changePassword(id, body.newPassword, caller);
+  }
+
+  @Post(':id/reset-mfa')
+  @Roles(Role.SUPERVISEUR_REGIONAL, Role.ADMIN, Role.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Réinitialiser le second facteur (téléphone perdu)' })
+  resetMfa(@Param('id') id: string, @CurrentUser() caller: Caller) {
+    return this.users.resetMfa(id, caller);
   }
 
   @Delete(':id')
-  @Roles(Role.SUPERVISEUR_REGIONAL, Role.ADMIN, Role.SUPER_ADMIN)
-  @ApiOperation({ summary: 'Désactiver un utilisateur' })
-  remove(@Param('id') id: string) {
-    return this.users.remove(id);
+  @Roles(Role.MAIRIE, Role.COORDINATEUR, Role.PREFECTURE, Role.GOUVERNORAT, Role.SUPERVISEUR_REGIONAL, Role.ADMIN, Role.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Suspendre un utilisateur (révoque ses sessions)' })
+  remove(@Param('id') id: string, @CurrentUser() caller: Caller) {
+    return this.users.remove(id, caller);
   }
 }

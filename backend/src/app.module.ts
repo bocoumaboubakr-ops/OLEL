@@ -1,7 +1,9 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { BullModule } from '@nestjs/bull';
-import { ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
+import { TerritoryModule } from './common/territory/territory.service';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { AlertsModule } from './alerts/alerts.module';
@@ -49,6 +51,7 @@ import { configuration } from './common/config/configuration';
     }),
 
     PrismaModule,
+    TerritoryModule,
     AuthModule,
     UsersModule,
     AlertsModule,
@@ -69,6 +72,12 @@ import { configuration } from './common/config/configuration';
     FlagsModule,
     TerritoriesModule,
     PermissionsModule,
+  ],
+  providers: [
+    // Active réellement les décorateurs @Throttle*/@SkipThrottle (audit F10).
+    // Stockage en mémoire : valable pour une instance unique ; en multi-instance,
+    // brancher un stockage Redis partagé (voir docs/AUDIT_REMEDIATION.md).
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
   ],
 })
 export class AppModule {}

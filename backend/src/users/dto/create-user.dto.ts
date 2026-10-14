@@ -7,9 +7,10 @@ import {
   MaxLength,
   IsUUID,
   Matches,
+  IsBoolean,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Role } from '@prisma/client';
+import { AccountStatus, Role } from '@prisma/client';
 
 export class CreateUserDto {
   @ApiProperty({ example: 'Amadou Diallo' })
@@ -82,7 +83,34 @@ export class UpdateUserDto {
   @IsUUID()
   zoneId?: string;
 
+  @ApiPropertyOptional({ enum: AccountStatus, description: 'IN_TRAINING | ACTIVE (habilitation) | SUSPENDED' })
+  @IsOptional()
+  @IsEnum(AccountStatus)
+  status?: AccountStatus;
+
+  @ApiPropertyOptional({ description: 'Compatibilité : true = ACTIVE, false = SUSPENDED' })
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+}
+
+export class UpdateMeDto {
   @ApiPropertyOptional()
   @IsOptional()
-  isActive?: boolean;
+  @IsString()
+  @MaxLength(100)
+  name?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsEmail()
+  email?: string;
+}
+
+export class ChangePasswordDto {
+  @ApiProperty({ minLength: 10 })
+  @IsString()
+  @MinLength(10, { message: 'Le mot de passe doit faire au moins 10 caractères' })
+  @MaxLength(128)
+  newPassword: string;
 }

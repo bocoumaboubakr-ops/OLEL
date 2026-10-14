@@ -7,6 +7,7 @@ import { randomUUID } from 'crypto';
 import { mkdirSync } from 'fs';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { BotApiKeyGuard } from '../guards/bot-api-key.guard';
+import { SkipThrottle } from '@nestjs/throttler';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || join(process.cwd(), 'uploads');
 const IMAGE_MIMES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
@@ -76,6 +77,7 @@ export class UploadController {
   }
 
   @Post('bot-media')
+  @SkipThrottle()
   @ApiHeader({ name: 'x-bot-api-key', description: 'Clé API du bot' })
   @UseGuards(BotApiKeyGuard)
   @ApiOperation({ summary: 'Upload média par le bot (image ou audio WhatsApp)' })

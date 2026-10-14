@@ -7,6 +7,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Role } from '@prisma/client';
+import { AllowInTraining } from '../common/decorators/allow-in-training.decorator';
 
 @ApiTags('Formations')
 @ApiBearerAuth()
@@ -16,18 +17,21 @@ export class TrainingsController {
   constructor(private trainings: TrainingsService) {}
 
   @Get()
+  @AllowInTraining()
   @ApiOperation({ summary: 'Modules de formation + ma progression' })
   findAll(@CurrentUser('id') userId: string) {
     return this.trainings.findAllForUser(userId);
   }
 
   @Get('me/status')
+  @AllowInTraining()
   @ApiOperation({ summary: 'Mon statut de certification (modules requis complétés ?)' })
   myStatus(@CurrentUser('id') userId: string) {
     return this.trainings.myStatus(userId);
   }
 
   @Post(':id/complete')
+  @AllowInTraining()
   @ApiOperation({ summary: 'Marquer un module comme complété' })
   complete(@Param('id') id: string, @Body() dto: CompleteModuleDto, @CurrentUser('id') userId: string) {
     return this.trainings.completeModule(userId, id, dto.score);

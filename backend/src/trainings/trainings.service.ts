@@ -52,10 +52,15 @@ export class TrainingsService {
       create: { userId, moduleId, completed: true, score, completedAt: new Date() },
     });
 
-    // Si tous les modules requis sont complétés, marquer la sentinelle active
+    // La complétion des modules requis est ENREGISTRÉE, mais n'habilite pas :
+    // l'habilitation (IN_TRAINING → ACTIVE) reste une décision d'un responsable
+    // et une suspension n'est jamais levée par une formation (audit F19).
     const status = await this.myStatus(userId);
     if (status.allRequiredDone) {
-      await this.prisma.user.update({ where: { id: userId }, data: { isActive: true, lastActiveAt: new Date() } }).catch(() => {});
+      await this.prisma.user.updateMany({
+        where: { id: userId, trainingCompletedAt: null },
+        data: { trainingCompletedAt: new Date(), lastActiveAt: new Date() },
+      });
     }
     this.audit.log({ userId, action: 'training.complete', resource: 'training_module', resourceId: moduleId, details: { score } });
     return { progress, status };

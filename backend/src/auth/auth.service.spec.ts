@@ -1,135 +1,123 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { AccountStatus } from '@prisma/client';
 import { AuthService } from './auth.service';
+import { SessionService } from './session.service';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { SmsService } from '../notifications/channels/sms.service';
+import { AuditService } from '../audit/audit.service';
 import * as bcrypt from 'bcrypt';
+
+const SECRETS: Record<string, string> = {
+  JWT_SECRET: 'unit_jwt_secret_0123456789_abcdefghijklmn',
+  JWT_REFRESH_SECRET: 'unit_refresh_secret_0123456789_abcdefghij',
+  NODE_ENV: 'test',
+};
 
 describe('AuthService', () => {
   let service: AuthService;
-  let prisma: jest.Mocked<PrismaService>;
-  let jwt: jest.Mocked<JwtService>;
+  let prisma: any;
+  let sessions: { issue: jest.Mock; rotate: jest.Mock; revokeSession: jest.Mock };
 
-  const mockUser = {
-    id: 'user-uuid',
-    phone: '+221700000001',
-    name: 'Test User',
-    role: 'ADMIN' as any,
-    passwordHash: '',
-    isActive: true,
-    totpSecret: null,
-    totpEnabled: false,
+  const mockUser: any = {
+    id: 'user-uuid', phone: '+221700000001', name: 'Test', role: 'ADMIN',
+    passwordHash: '', isActive: true, status: AccountStatus.ACTIVE, tokenVersion: 0,
+    totpSecret: null, totpEnabled: false, loginFailures: 0, loginLockedUntil: null, deletedAt: null,
   };
 
-  beforeAll(async () => {
-    mockUser.passwordHash = await bcrypt.hash('password123', 10);
-  });
+  beforeAll(async () => { mockUser.passwordHash = await bcrypt.hash('password123', 4); });
 
   beforeEach(async () => {
+    prisma = { user: { findUnique: jest.fn(), update: jest.fn().mockResolvedValue({ loginFailures: 1 }) } };
+    sessions = { issue: jest.fn().mockResolvedValue({ accessToken: 'a', refreshToken: 'r' }), rotate: jest.fn(), revokeSession: jest.fn() };
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuthService,
-        {
-          provide: PrismaService,
-          useValue: {
-            user: {
-              findUnique: jest.fn(),
-              update: jest.fn(),
-            },
-          },
-        },
-        {
-          provide: JwtService,
-          useValue: {
-            sign: jest.fn().mockReturnValue('mock-token'),
-            verify: jest.fn(),
-          },
-        },
-        {
-          provide: ConfigService,
-          useValue: { get: jest.fn().mockReturnValue('test-secret') },
-        },
-        {
-          provide: SmsService,
-          useValue: { sendSms: jest.fn() },
-        },
+        { provide: PrismaService, useValue: prisma },
+        { provide: JwtService, useValue: new JwtService({ secret: SECRETS.JWT_SECRET }) },
+        { provide: ConfigService, useValue: { get: (k: string) => SECRETS[k] } },
+        { provide: SmsService, useValue: { sendSms: jest.fn() } },
+        { provide: SessionService, useValue: sessions },
+        { provide: AuditService, useValue: { log: jest.fn() } },
       ],
     }).compile();
-
     service = module.get(AuthService);
-    prisma = module.get(PrismaService) as jest.Mocked<PrismaService>;
-    jwt = module.get(JwtService) as jest.Mocked<JwtService>;
   });
 
   describe('validateUser', () => {
-    it('should return user on valid credentials', async () => {
-      (prisma.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
-      const result = await service.validateUser('+221700000001', 'password123');
-      expect(result).toBeDefined();
-      expect(result.phone).toBe('+221700000001');
+    it('retourne l\'utilisateur sur identifiants valides', async () => {
+      prisma.user.findUnique.mockResolvedValue(mockUser);
+      expect((await service.validateUser(mockUser.phone, 'password123'))!.phone).toBe(mockUser.phone);
     });
 
-    it('should return null on wrong password', async () => {
-      (prisma.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
-      const result = await service.validateUser('+221700000001', 'wrong');
-      expect(result).toBeNull();
+    it('retourne null sur mauvais mot de passe et compte l\'échec en base', async () => {
+      prisma.user.findUnique.mockResolvedValue(mockUser);
+      expect(await service.validateUser(mockUser.phone, 'faux')).toBeNull();
+      expect(prisma.user.update).toHaveBeenCalledWith(expect.objectContaining({ data: { loginFailures: { increment: 1 } } }));
     });
 
-    it('should return null if user not found', async () => {
-      (prisma.user.findUnique as jest.Mock).mockResolvedValue(null);
-      const result = await service.validateUser('+221700000002', 'any');
-      expect(result).toBeNull();
+    it('retourne null si l\'utilisateur est inconnu', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+      expect(await service.validateUser('+221700000002', 'x')).toBeNull();
     });
 
-    it('should lock the account after 10 failed attempts', async () => {
-      (prisma.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
-      for (let i = 0; i < 10; i++) {
-        await service.validateUser('+221700000099', 'wrong');
-      }
-      await expect(service.validateUser('+221700000099', 'password123')).rejects.toThrow(
-        /verrouillé/,
-      );
+    it('retourne null pour un compte suspendu, même avec le bon mot de passe', async () => {
+      prisma.user.findUnique.mockResolvedValue({ ...mockUser, status: AccountStatus.SUSPENDED, isActive: false });
+      expect(await service.validateUser(mockUser.phone, 'password123')).toBeNull();
+    });
+
+    it('verrouille le compte au 10e échec (verrou persisté)', async () => {
+      prisma.user.findUnique.mockResolvedValue(mockUser);
+      prisma.user.update.mockResolvedValueOnce({ loginFailures: 10 });
+      await service.validateUser(mockUser.phone, 'faux');
+      expect(prisma.user.update).toHaveBeenLastCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ loginLockedUntil: expect.any(Date) }),
+      }));
+      prisma.user.findUnique.mockResolvedValue({ ...mockUser, loginLockedUntil: new Date(Date.now() + 60_000) });
+      await expect(service.validateUser(mockUser.phone, 'password123')).rejects.toThrow(/verrouillé/);
     });
   });
 
   describe('login (MFA obligatoire pour MAIRIE+)', () => {
     it('exige l\'enrôlement TOTP au 1er login d\'un ADMIN sans TOTP', async () => {
-      const result: any = await service.login(mockUser as any);
-      expect(result.mfaSetupRequired).toBe(true);
-      expect(result.mfaToken).toBe('mock-token');
-      expect(result.accessToken).toBeUndefined();
+      const r: any = await service.login(mockUser);
+      expect(r.mfaSetupRequired).toBe(true);
+      expect(r.mfaToken).toBeDefined();
+      expect(r.accessToken).toBeUndefined();
+      expect(sessions.issue).not.toHaveBeenCalled();
     });
 
     it('exige le code TOTP pour un ADMIN avec TOTP actif', async () => {
-      const result: any = await service.login({ ...mockUser, totpEnabled: true } as any);
-      expect(result.mfaRequired).toBe(true);
-      expect(result.mfaToken).toBe('mock-token');
-      expect(result.accessToken).toBeUndefined();
+      const r: any = await service.login({ ...mockUser, totpEnabled: true });
+      expect(r.mfaRequired).toBe(true);
+      expect(r.accessToken).toBeUndefined();
     });
 
-    it('délivre directement les tokens pour un CITOYEN', async () => {
-      const result: any = await service.login({ ...mockUser, role: 'CITOYEN' } as any);
-      expect(result.accessToken).toBe('mock-token');
-      expect(result.refreshToken).toBe('mock-token');
-      expect(result.user.phone).toBe('+221700000001');
+    it('ouvre une session sans MFA pour un CITOYEN ou une SENTINELLE', async () => {
+      await service.login({ ...mockUser, role: 'CITOYEN' });
+      await service.login({ ...mockUser, role: 'SENTINELLE' });
+      expect(sessions.issue).toHaveBeenCalledTimes(2);
+      expect(sessions.issue.mock.calls[0][1]).toBe(false);
     });
 
-    it('délivre directement les tokens pour une SENTINELLE', async () => {
-      const result: any = await service.login({ ...mockUser, role: 'SENTINELLE' } as any);
-      expect(result.accessToken).toBe('mock-token');
+    it('refuse un compte suspendu', async () => {
+      await expect(service.login({ ...mockUser, role: 'SENTINELLE', status: AccountStatus.SUSPENDED })).rejects.toThrow(/suspendu/);
     });
   });
 
-  describe('refreshTokens', () => {
-    it('should throw on invalid token', async () => {
-      (jwt.verify as jest.Mock).mockImplementation(() => { throw new Error('invalid'); });
-      await expect(service.refreshTokens('bad-token')).rejects.toThrow('Token invalide');
+  describe('jeton MFA intermédiaire', () => {
+    it('n\'est pas accepté comme jeton de rafraîchissement', async () => {
+      const real = new SessionService(prisma, new JwtService({ secret: SECRETS.JWT_SECRET }), { get: (k: string) => SECRETS[k] } as any);
+      const { mfaToken } = (await service.login(mockUser)) as any;
+      await expect(real.rotate(mfaToken)).rejects.toThrow();
     });
 
-    it('should reject an mfaToken used as refresh token', async () => {
-      (jwt.verify as jest.Mock).mockReturnValue({ sub: 'user-uuid', mfa: 'totp' });
-      await expect(service.refreshTokens('mfa-token')).rejects.toThrow('Token invalide');
+    it('n\'est pas accepté comme jeton d\'accès', async () => {
+      const real = new SessionService(prisma, new JwtService({ secret: SECRETS.JWT_SECRET }), { get: (k: string) => SECRETS[k] } as any);
+      const { mfaToken } = (await service.login(mockUser)) as any;
+      const payload = new JwtService({ secret: SECRETS.JWT_SECRET }).verify(mfaToken);
+      await expect(real.resolveAccess(payload)).rejects.toThrow();
     });
   });
 });

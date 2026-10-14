@@ -1,4 +1,5 @@
 import { Controller, Get, UseGuards } from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
 import { ApiTags, ApiHeader, ApiOperation } from '@nestjs/swagger';
 import { BotApiKeyGuard } from '../common/guards/bot-api-key.guard';
 import { AlertsService } from './alerts.service';
@@ -9,6 +10,8 @@ import { AlertsService } from './alerts.service';
  */
 @ApiTags('Alerts (bot)')
 @ApiHeader({ name: 'x-bot-api-key', description: 'Clé API du bot' })
+// Appel service-à-service authentifié par clé : pas de limitation par IP
+@SkipThrottle()
 @UseGuards(BotApiKeyGuard)
 @Controller('alerts-bot')
 export class AlertsBotController {

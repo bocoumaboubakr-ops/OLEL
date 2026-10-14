@@ -13,7 +13,8 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "ts-node prisma/seed.ts",
-    "seed:prod": "node prisma/seed.js"
+    "seed:prod": "node prisma/seed.js",
+    "test:e2e": "jest --config test/jest-e2e.json --runInBand"
   },
   "dependencies": {
     "@nestjs/bull": "^10.1.1",

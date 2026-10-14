@@ -9,6 +9,8 @@ import { MfaSetupDto, MfaLoginDto } from './dto/mfa.dto';
 import { OtpRequestDto, OtpVerifyDto } from './dto/otp.dto';
 import { ThrottleStrict, ThrottleNormal } from '../common/decorators/throttle.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { AllowInTraining } from '../common/decorators/allow-in-training.decorator';
+import { TotpSetupDto } from './dto/totp-verify.dto';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -70,11 +72,22 @@ export class AuthController {
   }
 
   @Post('totp/setup')
+  @ThrottleStrict()
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Configurer le TOTP (2FA)' })
-  setupTotp(@CurrentUser('id') userId: string) {
-    return this.auth.setupTotp(userId);
+  @ApiOperation({ summary: 'Changer de facteur TOTP (exige le code du facteur actuel)' })
+  setupTotp(@CurrentUser('id') userId: string, @Body() dto: TotpSetupDto) {
+    return this.auth.setupTotp(userId, dto.currentCode);
+  }
+
+  @Post('logout')
+  @UseGuards(JwtAuthGuard)
+  @AllowInTraining()
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Révoquer la session courante' })
+  logout(@CurrentUser('sessionId') sessionId: string) {
+    return this.auth.logout(sessionId);
   }
 
   @Post('totp/verify')

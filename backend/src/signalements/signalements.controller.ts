@@ -15,6 +15,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { BotApiKeyGuard } from '../common/guards/bot-api-key.guard';
+import { SkipThrottle } from '@nestjs/throttler';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Role, SignalementStatus } from '@prisma/client';
 
@@ -59,6 +60,7 @@ export class SignalementsController {
   }
 
   @Post('bot')
+  @SkipThrottle() // bot authentifié par clé : une rafale de signalements ne doit jamais être rejetée
   @ApiHeader({ name: 'x-bot-api-key', description: 'Clé API du bot' })
   @UseGuards(BotApiKeyGuard)
   @ApiOperation({ summary: 'Créer un signalement via le bot (auth par header)' })

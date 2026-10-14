@@ -11,115 +11,104 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { SmsService } from '../notifications/channels/sms.service';
 import * as bcrypt from 'bcrypt';
 import { authenticator } from 'otplib';
-import { Role, User } from '@prisma/client';
+import { createHmac, randomInt, randomUUID, timingSafeEqual } from 'crypto';
+import { AccountStatus, Role, User } from '@prisma/client';
 import { encryptTotpSecret, decryptTotpSecret, isEncrypted } from './totp-crypto';
+import { SessionService, requiresMfa } from './session.service';
+import { accountStatusData, canAuthenticate } from './account-status';
+import { AuditService } from '../audit/audit.service';
 
 const OTP_TTL_MS = 10 * 60 * 1000; // 10 minutes
 const OTP_RATE_LIMIT_MS = 60 * 1000; // 1 par minute par numéro
 const OTP_DAILY_LIMIT = 5; // max 5 OTP par numéro par 24 h (anti SMS-pumping)
 
-// Verrouillage anti-bruteforce : 10 échecs → 15 min de blocage (par numéro).
-// En mémoire : suffisant pour le MVP mono-instance ; passer sur Redis en HA.
+// Verrouillages persistés en base (partagés entre instances, survivent au redémarrage)
 const LOGIN_MAX_FAILURES = 10;
 const LOGIN_LOCK_MS = 15 * 60 * 1000;
+const MFA_MAX_FAILURES = 5;
+const MFA_LOCK_MS = 15 * 60 * 1000;
 
-// Rôles soumis au MFA obligatoire (niveau MAIRIE et au-dessus)
-const MFA_REQUIRED_ROLES: Role[] = [
-  Role.MAIRIE,
-  Role.HYDRO_METEO,
-  Role.PREFECTURE,
-  Role.GOUVERNORAT,
-  Role.PROTECTION_CIVILE,
-  Role.SUPERVISEUR_REGIONAL,
-  Role.ADMIN,
-  Role.SUPER_ADMIN,
-];
+// Hash factice : égalise le temps de réponse quand le numéro est inconnu
+const DUMMY_HASH = bcrypt.hashSync(randomUUID(), 10);
 
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
-  private readonly loginFailures = new Map<string, { count: number; lockedUntil?: number }>();
 
   constructor(
     private prisma: PrismaService,
     private jwt: JwtService,
     private cfg: ConfigService,
     private sms: SmsService,
+    private sessions: SessionService,
+    private audit: AuditService,
   ) {}
 
   async validateUser(phone: string, password: string): Promise<User | null> {
-    const entry = this.loginFailures.get(phone);
-    if (entry?.lockedUntil && entry.lockedUntil > Date.now()) {
-      const minutes = Math.ceil((entry.lockedUntil - Date.now()) / 60000);
+    const user = await this.prisma.user.findUnique({ where: { phone } });
+    if (user?.loginLockedUntil && user.loginLockedUntil > new Date()) {
+      const minutes = Math.ceil((user.loginLockedUntil.getTime() - Date.now()) / 60000);
       throw new ForbiddenException(
         `Compte temporairement verrouillé suite à trop d'échecs. Réessayez dans ${minutes} min.`,
       );
     }
 
-    const user = await this.prisma.user.findUnique({ where: { phone } });
-    const valid = user?.passwordHash && user.isActive
-      ? await bcrypt.compare(password, user.passwordHash)
-      : false;
+    const hashOk = await bcrypt.compare(password, user?.passwordHash || DUMMY_HASH);
+    const valid = !!user?.passwordHash && hashOk && canAuthenticate(user.status) && !user.deletedAt;
 
     if (!valid) {
-      const count = (entry?.count ?? 0) + 1;
-      const lockedUntil = count >= LOGIN_MAX_FAILURES ? Date.now() + LOGIN_LOCK_MS : undefined;
-      this.loginFailures.set(phone, { count, lockedUntil });
-      if (lockedUntil) this.logger.warn(`Verrouillage login : ${phone} (${count} échecs)`);
+      if (user) {
+        const updated = await this.prisma.user.update({
+          where: { id: user.id },
+          data: { loginFailures: { increment: 1 } },
+          select: { loginFailures: true },
+        });
+        if (updated.loginFailures >= LOGIN_MAX_FAILURES) {
+          await this.prisma.user.update({
+            where: { id: user.id },
+            data: { loginLockedUntil: new Date(Date.now() + LOGIN_LOCK_MS), loginFailures: 0 },
+          });
+          this.logger.warn(`Verrouillage login : compte ${user.id}`);
+        }
+      }
       return null;
     }
 
-    this.loginFailures.delete(phone);
+    if (user.loginFailures || user.loginLockedUntil) {
+      await this.prisma.user.update({ where: { id: user.id }, data: { loginFailures: 0, loginLockedUntil: null } });
+    }
     return user;
   }
 
   /**
-   * Connexion par mot de passe. Pour les rôles MAIRIE+, le MFA TOTP est
-   * obligatoire : la réponse ne contient pas de tokens mais un mfaToken
-   * temporaire (10 min) à échanger via /auth/totp/login.
+   * Premier facteur validé (mot de passe ou OTP). Pour les rôles MAIRIE+, le
+   * MFA TOTP est obligatoire : on renvoie un jeton intermédiaire (10 min) qui
+   * ne donne accès à aucune route de l'API.
    */
   async login(user: User) {
-    if (MFA_REQUIRED_ROLES.includes(user.role)) {
+    if (!canAuthenticate(user.status) || user.deletedAt) {
+      throw new UnauthorizedException('Compte suspendu — contactez votre responsable');
+    }
+    if (requiresMfa(user.role)) {
       const mfaToken = this.jwt.sign(
-        { sub: user.id, phone: user.phone, role: user.role, mfa: 'totp' },
+        { sub: user.id, tv: user.tokenVersion, typ: 'mfa_pending' },
         { expiresIn: '10m' },
       );
-      if (user.totpEnabled) {
-        return { mfaRequired: true, mfaToken };
-      }
-      // Premier login : enrôlement TOTP obligatoire avant délivrance des tokens
-      return { mfaSetupRequired: true, mfaToken };
+      return user.totpEnabled ? { mfaRequired: true, mfaToken } : { mfaSetupRequired: true, mfaToken };
     }
-    return this.issueTokens(user);
+    return this.sessions.issue(user, false);
   }
 
-  private issueTokens(user: User) {
-    const payload = { sub: user.id, phone: user.phone, role: user.role, zoneId: user.zoneId };
-    return {
-      accessToken: this.jwt.sign(payload),
-      refreshToken: this.jwt.sign(payload, {
-        secret: this.cfg.get('JWT_REFRESH_SECRET'),
-        expiresIn: '7d',
-      }),
-      user: { id: user.id, name: user.name, role: user.role, phone: user.phone, zoneId: user.zoneId },
-    };
+  refreshTokens(refreshToken: string) {
+    return this.sessions.rotate(refreshToken);
   }
 
-  async refreshTokens(refreshToken: string) {
-    try {
-      const payload = this.jwt.verify(refreshToken, {
-        secret: this.cfg.get('JWT_REFRESH_SECRET'),
-      });
-      if (payload.mfa) throw new UnauthorizedException();
-      const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
-      if (!user || !user.isActive) throw new UnauthorizedException();
-      return this.issueTokens(user);
-    } catch {
-      throw new UnauthorizedException('Token invalide ou expiré');
-    }
+  async logout(sessionId: string) {
+    await this.sessions.revokeSession(sessionId, 'logout');
+    return { success: true };
   }
 
-  /** Vérifie un mfaToken (étape intermédiaire MFA) et retourne l'utilisateur. */
+  /** Vérifie un jeton intermédiaire MFA et retourne l'utilisateur courant. */
   private async resolveMfaToken(mfaToken: string): Promise<User> {
     let payload: any;
     try {
@@ -127,43 +116,79 @@ export class AuthService {
     } catch {
       throw new UnauthorizedException('Session MFA expirée, reconnectez-vous');
     }
-    if (payload.mfa !== 'totp') throw new UnauthorizedException('Token MFA invalide');
+    if (payload?.typ !== 'mfa_pending') throw new UnauthorizedException('Token MFA invalide');
     const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
-    if (!user || !user.isActive) throw new UnauthorizedException();
+    if (!user || !canAuthenticate(user.status) || user.deletedAt || user.tokenVersion !== payload.tv) {
+      throw new UnauthorizedException('Session MFA invalide, reconnectez-vous');
+    }
     return user;
   }
 
-  /** Enrôlement TOTP pendant le login (avec mfaToken, avant d'avoir un access token). */
+  /** Enrôlement TOTP au premier login (jeton intermédiaire, avant tout accès). */
   async setupTotpWithMfaToken(mfaToken: string) {
     const user = await this.resolveMfaToken(mfaToken);
     if (user.totpEnabled) {
       throw new BadRequestException('TOTP déjà configuré pour ce compte');
     }
-    return this.generateTotpSecret(user);
+    const secret = authenticator.generateSecret();
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { totpSecret: encryptTotpSecret(secret, this.totpPassphrase()), totpEnabled: false },
+    });
+    return { secret, otpauthUrl: authenticator.keyuri(user.phone, 'OLEL', secret) };
   }
 
-  /** Étape 2 du login MFA : vérifie le code TOTP et délivre les tokens. */
+  /** Étape 2 du login MFA : vérifie le code TOTP et ouvre une session « mfa ». */
   async totpLogin(mfaToken: string, code: string) {
     const user = await this.resolveMfaToken(mfaToken);
     if (!user.totpSecret) {
       throw new BadRequestException('TOTP non configuré — appelez d\'abord /auth/totp/setup-mfa');
     }
-    const secret = this.readTotpSecret(user);
-    if (!authenticator.verify({ token: code, secret })) {
+    await this.assertMfaNotLocked(user);
+    if (!authenticator.verify({ token: code, secret: this.readTotpSecret(user) })) {
+      await this.recordMfaFailure(user.id);
       throw new UnauthorizedException('Code TOTP incorrect');
     }
-    if (!user.totpEnabled) {
-      await this.prisma.user.update({ where: { id: user.id }, data: { totpEnabled: true } });
-      this.logger.log(`TOTP activé pour ${user.phone} (${user.role})`);
-    }
-    return this.issueTokens(user);
+    const fresh = await this.prisma.user.update({
+      where: { id: user.id },
+      data: { totpEnabled: true, mfaFailures: 0, mfaLockedUntil: null },
+    });
+    if (!user.totpEnabled) this.logger.log(`TOTP activé pour le compte ${user.id} (${user.role})`);
+    return this.sessions.issue(fresh, true);
   }
 
-  // ── OTP (inscription / connexion citoyenne) ────────────────────────────────
+  private async assertMfaNotLocked(user: User) {
+    if (user.mfaLockedUntil && user.mfaLockedUntil > new Date()) {
+      throw new ForbiddenException('Trop de codes incorrects, réessayez dans 15 minutes');
+    }
+  }
 
-  /** Génère et envoie un OTP (SMS en prod, log en dev). */
+  private async recordMfaFailure(userId: string) {
+    const { mfaFailures } = await this.prisma.user.update({
+      where: { id: userId }, data: { mfaFailures: { increment: 1 } }, select: { mfaFailures: true },
+    });
+    if (mfaFailures >= MFA_MAX_FAILURES) {
+      await this.prisma.user.update({
+        where: { id: userId }, data: { mfaLockedUntil: new Date(Date.now() + MFA_LOCK_MS), mfaFailures: 0 },
+      });
+      this.logger.warn(`Verrouillage MFA : compte ${userId}`);
+    }
+  }
+
+  // ── OTP (connexion citoyenne / sentinelle) ─────────────────────────────────
+
+  /** Empreinte d'un OTP : le code n'est jamais stocké en clair. */
+  private otpDigest(phone: string, code: string): string {
+    return createHmac('sha256', this.cfg.get<string>('JWT_SECRET') || '').update(`${phone}:${code}`).digest('hex');
+  }
+
+  private devCodeAllowed(): boolean {
+    // Jamais en production, quelle que soit RETURN_OTP_DEV_CODE (aussi bloqué par env.validation).
+    if (this.cfg.get('NODE_ENV') === 'production') return false;
+    return true;
+  }
+
   async requestOtp(phone: string): Promise<{ message: string; dev_code?: string }> {
-    // Rate-limit : pas plus d'un OTP par minute par numéro
     const recent = await this.prisma.otpRequest.findFirst({
       where: { phone, createdAt: { gt: new Date(Date.now() - OTP_RATE_LIMIT_MS) } },
       orderBy: { createdAt: 'desc' },
@@ -171,8 +196,6 @@ export class AuthService {
     if (recent) {
       throw new BadRequestException('Un code a déjà été envoyé, veuillez patienter 1 minute');
     }
-
-    // Quota journalier anti SMS-pumping : 5 OTP / numéro / 24 h
     const dailyCount = await this.prisma.otpRequest.count({
       where: { phone, createdAt: { gt: new Date(Date.now() - 24 * 60 * 60 * 1000) } },
     });
@@ -180,59 +203,43 @@ export class AuthService {
       throw new BadRequestException('Limite de codes atteinte pour aujourd\'hui, réessayez demain');
     }
 
-    // Invalider les anciens codes non utilisés
-    await this.prisma.otpRequest.updateMany({
-      where: { phone, used: false },
-      data: { used: true },
-    });
+    await this.prisma.otpRequest.updateMany({ where: { phone, used: false }, data: { used: true } });
 
-    const code = String(Math.floor(100000 + Math.random() * 900000)); // 6 chiffres
+    const code = String(randomInt(100000, 1000000)); // 6 chiffres, aléatoire cryptographique
     await this.prisma.otpRequest.create({
-      data: { phone, code, expiresAt: new Date(Date.now() + OTP_TTL_MS) },
+      data: { phone, code: this.otpDigest(phone, code), expiresAt: new Date(Date.now() + OTP_TTL_MS) },
     });
 
-    const isDev = this.cfg.get('NODE_ENV') !== 'production';
-    // RETURN_OTP_DEV_CODE=true permet de récupérer le code en staging sans SMS
-    const returnCode = isDev || this.cfg.get('RETURN_OTP_DEV_CODE') === 'true';
-    if (isDev) {
+    if (this.devCodeAllowed()) {
       this.logger.log(`[DEV OTP] ${phone} → ${code}`);
-    } else if (!returnCode) {
-      try {
-        await this.sms.sendSms(phone, `OLEL : votre code de vérification est ${code}. Valable 10 minutes.`);
-      } catch (err) {
-        this.logger.error(`Échec envoi SMS OTP à ${phone}: ${(err as Error).message}`);
-        throw new BadRequestException('Envoi du SMS impossible, réessayez dans quelques minutes');
-      }
+      return { message: `Code envoyé au ${phone}`, dev_code: code };
     }
-
-    return {
-      message: `Code envoyé au ${phone}`,
-      ...(returnCode ? { dev_code: code } : {}),
-    };
+    try {
+      await this.sms.sendSms(phone, `OLEL : votre code de vérification est ${code}. Valable 10 minutes.`);
+    } catch (err) {
+      this.logger.error(`Échec envoi SMS OTP : ${(err as Error).message}`);
+      throw new BadRequestException('Envoi du SMS impossible, réessayez dans quelques minutes');
+    }
+    return { message: `Code envoyé au ${phone}` };
   }
 
-  /** Vérifie le code OTP et connecte ou crée le compte CITOYEN. */
+  /** Vérifie l'OTP puis connecte (ou crée un compte CITOYEN pour un numéro inconnu). */
   async verifyOtp(phone: string, code: string, name?: string) {
     const otpRecord = await this.prisma.otpRequest.findFirst({
       where: { phone, used: false, expiresAt: { gt: new Date() } },
       orderBy: { createdAt: 'desc' },
     });
+    // Le code est consommé dès la première tentative, réussie ou non.
+    if (otpRecord) await this.prisma.otpRequest.update({ where: { id: otpRecord.id }, data: { used: true } });
 
-    if (!otpRecord || otpRecord.code !== code) {
-      // Invalider le code immédiatement : après 1 échec l'attaquant doit redemander
-      if (otpRecord) {
-        await this.prisma.otpRequest.update({ where: { id: otpRecord.id }, data: { used: true } });
-      }
+    const expected = otpRecord ? Buffer.from(otpRecord.code) : Buffer.alloc(64);
+    const given = Buffer.from(this.otpDigest(phone, code));
+    if (!otpRecord || expected.length !== given.length || !timingSafeEqual(expected, given)) {
       throw new UnauthorizedException('Code incorrect ou expiré');
     }
 
-    // Marquer le code comme utilisé
-    await this.prisma.otpRequest.update({ where: { id: otpRecord.id }, data: { used: true } });
-
-    // Chercher ou créer le compte citoyen
     let user = await this.prisma.user.findUnique({ where: { phone } });
     if (!user) {
-      // Résoudre la zone par défaut (Matam)
       const defaultZone = await this.prisma.zone.findFirst({
         where: { parentId: null }, orderBy: { createdAt: 'asc' }, select: { id: true },
       });
@@ -241,18 +248,16 @@ export class AuthService {
           phone,
           name: name || `Citoyen ${phone.slice(-4)}`,
           role: Role.CITOYEN,
-          isActive: true,
+          ...accountStatusData(AccountStatus.ACTIVE),
           zoneId: defaultZone?.id,
-          // Pas de mot de passe pour les comptes OTP (connexion uniquement par OTP)
         },
       });
-      this.logger.log(`Nouveau citoyen créé via OTP : ${phone}`);
+      this.logger.log(`Nouveau compte citoyen créé via OTP (${user.id})`);
     }
-
-    return this.login(user);
+    return this.login(user); // refuse les comptes suspendus (audit F07)
   }
 
-  // ── TOTP (2FA pour opérateurs) ─────────────────────────────────────────────
+  // ── TOTP (2FA opérateurs) ──────────────────────────────────────────────────
 
   private totpPassphrase(): string {
     const key = this.cfg.get<string>('TOTP_ENCRYPTION_KEY');
@@ -265,45 +270,62 @@ export class AuthService {
     return key;
   }
 
-  /** Lit le secret TOTP (déchiffre, migre les secrets hérités en clair). */
-  private readTotpSecret(user: User): string {
-    const stored = user.totpSecret as string;
+  private readTotpSecret(user: User, field: 'totpSecret' | 'totpPendingSecret' = 'totpSecret'): string {
+    const stored = user[field] as string;
     const secret = decryptTotpSecret(stored, this.totpPassphrase());
-    if (!isEncrypted(stored)) {
-      // Migration transparente : re-chiffrer le secret hérité
+    if (field === 'totpSecret' && !isEncrypted(stored)) {
       this.prisma.user
-        .update({
-          where: { id: user.id },
-          data: { totpSecret: encryptTotpSecret(secret, this.totpPassphrase()) },
-        })
+        .update({ where: { id: user.id }, data: { totpSecret: encryptTotpSecret(secret, this.totpPassphrase()) } })
         .catch((err) => this.logger.error(`Migration secret TOTP ${user.id}: ${err.message}`));
     }
     return secret;
   }
 
-  private async generateTotpSecret(user: User) {
-    const secret = authenticator.generateSecret();
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: { totpSecret: encryptTotpSecret(secret, this.totpPassphrase()), totpEnabled: false },
-    });
-    const otpauthUrl = authenticator.keyuri(user.phone, 'OLEL', secret);
-    return { secret, otpauthUrl };
-  }
-
-  async setupTotp(userId: string) {
+  /**
+   * Réenrôlement TOTP par un utilisateur connecté (audit F11) : exige le code
+   * du facteur actuel, et le nouveau secret reste « en attente » tant qu'il
+   * n'est pas confirmé — le facteur actuel n'est jamais désactivé entre-temps.
+   */
+  async setupTotp(userId: string, currentCode?: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new UnauthorizedException();
-    return this.generateTotpSecret(user);
+    if (user.totpEnabled && user.totpSecret) {
+      await this.assertMfaNotLocked(user);
+      if (!currentCode || !authenticator.verify({ token: currentCode, secret: this.readTotpSecret(user) })) {
+        await this.recordMfaFailure(user.id);
+        throw new UnauthorizedException('Code du facteur actuel requis pour changer de facteur');
+      }
+    }
+    const secret = authenticator.generateSecret();
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { totpPendingSecret: encryptTotpSecret(secret, this.totpPassphrase()) },
+    });
+    return { secret, otpauthUrl: authenticator.keyuri(user.phone, 'OLEL', secret) };
   }
 
+  /** Confirme un secret en attente (et révoque les sessions), ou vérifie le facteur actuel. */
   async verifyTotp(userId: string, token: string): Promise<boolean> {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!user?.totpSecret) throw new BadRequestException('TOTP non configuré');
-    const valid = authenticator.verify({ token, secret: this.readTotpSecret(user) });
-    if (valid && !user.totpEnabled) {
-      await this.prisma.user.update({ where: { id: userId }, data: { totpEnabled: true } });
+    if (!user) throw new UnauthorizedException();
+    await this.assertMfaNotLocked(user);
+
+    if (user.totpPendingSecret) {
+      const ok = authenticator.verify({ token, secret: this.readTotpSecret(user, 'totpPendingSecret') });
+      if (!ok) { await this.recordMfaFailure(user.id); return false; }
+      await this.prisma.$transaction(async (tx) => {
+        await tx.user.update({
+          where: { id: userId },
+          data: { totpSecret: user.totpPendingSecret, totpPendingSecret: null, totpEnabled: true, mfaFailures: 0 },
+        });
+        await this.sessions.revokeAllForUser(userId, 'mfa_factor_changed', tx);
+      });
+      this.audit.log({ userId, action: 'auth.mfa_factor_changed', resource: 'user', resourceId: userId });
+      return true;
     }
-    return valid;
+    if (!user.totpSecret) throw new BadRequestException('TOTP non configuré');
+    const ok = authenticator.verify({ token, secret: this.readTotpSecret(user) });
+    if (!ok) await this.recordMfaFailure(user.id);
+    return ok;
   }
 }

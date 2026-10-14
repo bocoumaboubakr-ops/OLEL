@@ -15,6 +15,7 @@ export class RolesGuard implements CanActivate {
     ]);
     if (!required) return true;
     const { user } = context.switchToHttp().getRequest();
+    // Le rôle provient de la base (JwtStrategy), jamais du jeton.
     if (!required.includes(user?.role)) {
       throw new ForbiddenException('Accès non autorisé');
     }
