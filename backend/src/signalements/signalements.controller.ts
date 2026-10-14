@@ -94,8 +94,8 @@ export class SignalementsController {
   updateStatus(
     @Param('id') id: string,
     @Body('status') status: SignalementStatus,
-    @CurrentUser() user: { id: string; role: Role },
+    @CurrentUser() user: { id: string; role: Role; zoneId?: string | null },
   ) {
-    return this.signalements.updateStatus(id, status, user.id, user.role);
+    return this.signalements.updateStatus(id, status, user.id, user.role, user.zoneId);
   }
 }

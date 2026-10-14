@@ -1,25 +1,38 @@
 import {
   Injectable, NotFoundException, ForbiddenException,
-  BadRequestException, Logger,
+  BadRequestException, ConflictException, Logger,
 } from '@nestjs/common';
-import { InjectQueue } from '@nestjs/bull';
-import { Queue } from 'bull';
 import { PrismaService } from '../common/prisma/prisma.service';
 import {
-  AlertLevel, AlertStatus, AlertStep, AlertType,
-  CriticalValidatorCategory, Role, ValidationAction,
+  AlertLevel, AlertStatus, AlertStep, AlertType, BroadcastCertainty, BroadcastKind,
+  CriticalValidatorCategory, Prisma, Role, ValidationAction,
 } from '@prisma/client';
 import { AlertsGateway } from './alerts.gateway';
 import {
-  LEVEL_CONFIG, CRITICAL_LEVELS,
-  canBroadcast, canClose,
-  criticalCategory,
-  protectionCivileEntryStep, normalizePhase, nextStepFor, canAdvanceAt,
-  mayEmergencyBypass, needsConfirmation, PHASE,
-  AUTO_ESCALATION_MINUTES,
+  LEVEL_CONFIG, CRITICAL_LEVELS, criticalCategory, canClose,
+  protectionCivileEntryStep, normalizePhase, nextStepFor, PHASE,
+  AUTO_ESCALATION_MINUTES, hasLevel,
 } from './alert-workflow';
+import {
+  AlertFacts, refuseAdvance, refuseBroadcast, refuseBypass, autoEscalationEligible,
+  prealertEligible, routingLevel, TERMINAL_STATUSES, DIFFUSED_STATUSES,
+} from './alert-policy';
 import { AuditService } from '../audit/audit.service';
+import { TerritoryService } from '../common/territory/territory.service';
+import { BroadcastDispatcher } from '../notifications/broadcast-dispatcher.service';
+import { FlagsService } from '../flags/flags.service';
+import { buildFrozenPayload, Certainty } from '../common/i18n/alert-messages';
+import { TERRITORY_EXEMPT } from '../users/user-policy';
 import { randomUUID } from 'crypto';
+
+/** Canaux acceptés pour une diffusion : ceux réellement mis en œuvre (audit F26). */
+export const AVAILABLE_CHANNELS = ['app', 'whatsapp', 'sms'];
+
+/** Indicateurs opérationnels : automatismes de diffusion désactivés par défaut (décision D3). */
+export const FLAG_PREALERT = 'prealert_red';
+export const FLAG_AUTO_ESCALATION = 'auto_escalation_red';
+
+type OperatorCtx = { id: string; role: Role; zoneId?: string | null };
 
 @Injectable()
 export class AlertsService {
@@ -27,25 +40,116 @@ export class AlertsService {
 
   constructor(
     private prisma: PrismaService,
-    @InjectQueue('notifications') private notifQueue: Queue,
     private gateway: AlertsGateway,
     private audit: AuditService,
+    private territory: TerritoryService,
+    private dispatcher: BroadcastDispatcher,
+    private flags: FlagsService,
   ) {}
 
-  private async enqueueFanout(payload: Record<string, any>) {
+  /** Après validation de la transaction : remise à la file (reprise automatique si échec). */
+  private async afterCommit(broadcastIds: string[], alert: { id: string }) {
+    for (const id of broadcastIds) await this.dispatcher.kick(id);
     try {
-      await this.notifQueue.add('fanout', payload, { attempts: 3, backoff: 5000 });
+      await this.gateway.alertChanged(alert.id);
     } catch (e) {
-      this.logger.error(`Échec mise en file fanout: ${(e as Error).message}`);
+      this.logger.error(`Échec notification temps réel : ${(e as Error).message}`);
     }
   }
 
-  private safeBroadcast(alert: any) {
-    try {
-      this.gateway.broadcastAlert(alert);
-    } catch (e) {
-      this.logger.error(`Échec broadcast WS: ${(e as Error).message}`);
+  /** À appeler après la validation d'une transaction externe ayant créé une alerte (create avec opts.tx). */
+  async publishCreated(alert: { id: string; _intentId?: string }) {
+    await this.afterCommit(alert._intentId ? [alert._intentId] : [], alert);
+  }
+
+  /** Lit l'état courant d'une alerte sous la forme attendue par alert-policy. */
+  private async loadFacts(alertId: string) {
+    const alert = await this.prisma.alert.findUnique({
+      where: { id: alertId },
+      include: { zone: { select: { name: true } }, validations: { select: { validatorId: true, approved: true, createdAt: true }, orderBy: { createdAt: 'asc' } } },
+    });
+    if (!alert) throw new NotFoundException('Alerte introuvable');
+    const facts: AlertFacts = {
+      status: alert.status, currentStep: alert.currentStep, alertLevel: alert.alertLevel,
+      broadcastAt: alert.broadcastAt, requiresMedicalReview: alert.requiresMedicalReview,
+      createdById: alert.createdById,
+      priorValidatorIds: alert.validations.filter((v) => v.approved).map((v) => v.validatorId),
+    };
+    return { alert, facts };
+  }
+
+  /** Le territoire de l'acteur doit contenir la zone de l'alerte (audit F08). */
+  private async assertTerritory(actor: OperatorCtx, zoneId: string) {
+    if (TERRITORY_EXEMPT.includes(actor.role)) return;
+    if (!(await this.territory.isWithin(zoneId, actor.zoneId))) {
+      throw new ForbiddenException('Cette alerte est hors de votre territoire');
     }
+  }
+
+  private deny(reason: string | null, actor: OperatorCtx, alertId: string, action: string) {
+    if (!reason) return;
+    this.audit.log({ userId: actor.id, action: `${action}.denied`, resource: 'alert', resourceId: alertId, details: { reason, role: actor.role } });
+    throw new ForbiddenException(reason);
+  }
+
+  /** Canaux demandés ∩ canaux disponibles ∩ canaux activés ; refus explicite sinon. */
+  private async resolveChannels(requested: string[] | undefined, level: AlertLevel): Promise<string[]> {
+    // Par défaut : canaux du niveau effectivement mis en œuvre en envoi
+    // (l'USSD est consulté par le citoyen, le SVI n'est pas implémenté — F26).
+    // Un canal demandé explicitement mais non disponible est refusé (400).
+    const wanted = requested?.length
+      ? requested
+      : LEVEL_CONFIG[level].channels.filter((c) => AVAILABLE_CHANNELS.includes(c));
+    const unknown = wanted.filter((c) => !AVAILABLE_CHANNELS.includes(c));
+    if (unknown.length) {
+      throw new BadRequestException(`Canal non disponible : ${unknown.join(', ')} (disponibles : ${AVAILABLE_CHANNELS.join(', ')})`);
+    }
+    const messaging = wanted.filter((c) => c !== 'app');
+    const active: string[] = [];
+    for (const c of messaging) if (await this.flags.isEnabled(c)) active.push(c);
+    if (messaging.length && !active.length) {
+      throw new ConflictException('Aucun des canaux de messagerie demandés n\'est activé');
+    }
+    return [...(wanted.includes('app') ? ['app'] : []), ...active];
+  }
+
+  /**
+   * Crée l'intention de diffusion DANS la transaction de la décision, avec le
+   * texte exact par langue figé maintenant (audit F04, F23).
+   */
+  private async createIntent(tx: Prisma.TransactionClient, p: {
+    alert: { id: string; title: string; description: string; type: string; alertLevel: AlertLevel; zoneId: string };
+    authorId: string; kind: BroadcastKind; certainty: BroadcastCertainty;
+    level?: AlertLevel; approvedText?: string; targetZoneIds?: string[]; channels: string[]; idempotencyKey?: string;
+  }) {
+    const targets = p.targetZoneIds?.length ? p.targetZoneIds : [p.alert.zoneId];
+    const zones = await tx.zone.findMany({ where: { id: { in: targets } }, select: { id: true, name: true } });
+    if (zones.length !== targets.length) throw new BadRequestException('Zone cible inconnue');
+    const level = p.level ?? p.alert.alertLevel;
+    const payload = buildFrozenPayload({
+      level, certainty: p.certainty as Certainty, approvedText: p.approvedText,
+      title: p.alert.title, description: p.alert.description, zoneNames: zones.map((z) => z.name), type: p.alert.type,
+    });
+    try {
+      return await tx.broadcast.create({
+        data: {
+          alertId: p.alert.id, authorId: p.authorId, kind: p.kind, certainty: p.certainty, alertLevel: level,
+          message: payload.fr, payload, targetZoneIds: targets, channels: p.channels,
+          idempotencyKey: p.idempotencyKey || randomUUID(),
+        },
+      });
+    } catch (e) {
+      if ((e as Prisma.PrismaClientKnownRequestError).code === 'P2002') {
+        throw new ConflictException('Une diffusion de ce type existe déjà pour cette alerte');
+      }
+      throw e;
+    }
+  }
+
+  /** Transition conditionnelle : échoue (409) si l'alerte a changé entre la lecture et l'écriture (audit F17). */
+  private async transition(tx: Prisma.TransactionClient, alertId: string, expected: Prisma.AlertWhereInput, data: Prisma.AlertUncheckedUpdateManyInput) {
+    const { count } = await tx.alert.updateMany({ where: { id: alertId, broadcastAt: null, ...expected }, data });
+    if (count !== 1) throw new ConflictException('L\'alerte a été modifiée entre-temps — rechargez avant de décider');
   }
 
   async getHistory(alertId: string) {
@@ -233,15 +337,15 @@ export class AlertsService {
     if (zoneId) return zoneId;
     const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { zoneId: true } });
     if (user?.zoneId) return user.zoneId;
-    const root = await this.prisma.zone.findFirst({
-      where: { parentId: null },
-      orderBy: { createdAt: 'asc' },
-      select: { id: true },
-    });
+    const root = await this.prisma.zone.findFirst({ where: { parentId: null }, orderBy: { createdAt: 'asc' }, select: { id: true } });
     if (!root) throw new BadRequestException('Aucune zone configurée — contactez l\'administrateur');
     return root.id;
   }
 
+  /**
+   * Création d'une alerte (et de son signalement d'origine) : une seule
+   * transaction, notification interne des opérateurs incluse (audit F17, F23).
+   */
   async create(
     dto: {
       title: string; description: string; type: any;
@@ -252,82 +356,57 @@ export class AlertsService {
     },
     userId: string,
     creatorRole?: Role,
-    opts?: { linkSignalementId?: string },
+    opts?: { linkSignalementId?: string; tx?: Prisma.TransactionClient },
   ) {
     const level: AlertLevel = dto.alertLevel || AlertLevel.BLEU;
-
     let currentStep: AlertStep = AlertStep.SIGNALEMENT;
     let status: AlertStatus = AlertStatus.PENDING;
-
     if (creatorRole === Role.PROTECTION_CIVILE || creatorRole === Role.ADMIN || creatorRole === Role.SUPER_ADMIN) {
-      const entry = protectionCivileEntryStep(level);
-      currentStep = entry.step;
-      status = entry.status;
+      ({ step: currentStep, status } = protectionCivileEntryStep(level));
     } else if (creatorRole === Role.HYDRO_METEO) {
-      // Données techniques → entre à PREFECTURE directement
-      currentStep = AlertStep.PREFECTURE;
+      currentStep = AlertStep.PREFECTURE; // données techniques : entrée en phase CONFIRMÉE
       status = AlertStatus.VALIDATED;
     }
-
     const zoneId = await this.resolveZoneId(dto.zoneId, userId);
 
-    const alert = await this.prisma.alert.create({
-      data: {
-        title: dto.title,
-        description: dto.description,
-        type: dto.type,
-        alertLevel: level,
-        severity: dto.severity || 1,
-        status,
-        currentStep,
-        zoneId,
-        municipalityId: dto.municipalityId,
-        createdById: userId,
-        latitude: dto.latitude,
-        longitude: dto.longitude,
-        mediaUrls: dto.mediaUrls || [],
-        requiresMedicalReview: dto.type === 'EPIDEMIE',
-      },
-      include: {
-        zone: { select: { name: true } },
-        municipality: { select: { name: true } },
-      },
-    });
-
-    try {
+    const run = async (tx: Prisma.TransactionClient) => {
+      const alert = await tx.alert.create({
+        data: {
+          title: dto.title, description: dto.description, type: dto.type, alertLevel: level,
+          severity: dto.severity || 1, status, currentStep, zoneId,
+          municipalityId: dto.municipalityId, createdById: userId,
+          latitude: dto.latitude, longitude: dto.longitude, mediaUrls: dto.mediaUrls || [],
+          requiresMedicalReview: dto.type === 'EPIDEMIE',
+          ...(status === AlertStatus.VALIDATED ? { verifiedAt: new Date() } : {}),
+        },
+        include: { zone: { select: { name: true } }, municipality: { select: { name: true } } },
+      });
       if (opts?.linkSignalementId) {
-        // L'alerte naît d'un signalement existant (validation mairie) :
-        // on le lie au lieu de créer un doublon.
-        await this.prisma.signalement.update({
-          where: { id: opts.linkSignalementId },
-          data: { alertId: alert.id },
-        });
+        await tx.signalement.update({ where: { id: opts.linkSignalementId }, data: { alertId: alert.id } });
       } else {
-        await this.prisma.signalement.create({
+        await tx.signalement.create({
           data: {
-            userId,
-            alertId: alert.id,
-            type: dto.type,
-            text: dto.description,
-            mediaUrls: dto.mediaUrls || [],
-            latitude: dto.latitude,
-            longitude: dto.longitude,
+            userId, alertId: alert.id, type: dto.type, text: dto.description,
+            mediaUrls: dto.mediaUrls || [], latitude: dto.latitude, longitude: dto.longitude,
             channel: dto.channel || 'app',
           },
         });
       }
-    } catch (e) {
-      this.logger.error(`Échec enregistrement signalement: ${(e as Error).message}`);
-    }
+      const intent = await this.createIntent(tx, {
+        alert, authorId: userId, kind: BroadcastKind.INTERNAL, certainty: BroadcastCertainty.INTERNAL,
+        channels: ['whatsapp', 'sms'],
+      });
+      return { alert, intent };
+    };
 
-    await this.enqueueFanout({ alertId: alert.id });
-    this.safeBroadcast(alert);
-    return alert;
+    const { alert, intent } = opts?.tx ? await run(opts.tx) : await this.prisma.$transaction(run);
+    if (!opts?.tx) await this.afterCommit([intent.id], alert);
+    return Object.assign(alert, { _intentId: intent.id });
   }
 
   async advance(
     alertId: string,
-    validator: { id: string; role: Role },
+    validator: OperatorCtx,
     body: {
       action: ValidationAction;
       alertLevel?: AlertLevel;
@@ -336,318 +415,270 @@ export class AlertsService {
       gravity?: number;
     },
   ) {
-    const alert = await this.findOne(alertId);
-
-    const TERMINAL: string[] = [
-      AlertStatus.REJECTED, AlertStatus.CLOSED, AlertStatus.CANCELLED,
-      AlertStatus.BROADCAST, AlertStatus.BROADCASTING,
-    ];
-    if (TERMINAL.includes(alert.status as string)) {
-      throw new ForbiddenException('Alerte deja cloturee ou diffusee');
-    }
-    if (alert.currentStep === PHASE.DIFFUSEE || alert.currentStep === PHASE.CLOTUREE) {
-      throw new ForbiddenException('Etape terminale');
-    }
-    if (validator.role === Role.RADIO_COMMUNAUTAIRE || validator.role === Role.CITOYEN) {
-      throw new ForbiddenException('Role non habilite a valider une alerte');
-    }
-
-    const effectiveLevel = (body.alertLevel || alert.alertLevel) as AlertLevel;
-
-    if (!canAdvanceAt(validator.role, alert.currentStep, effectiveLevel) && body.action !== ValidationAction.REJECTED) {
-      throw new ForbiddenException(
-        `Role ${validator.role} insuffisant pour faire avancer cette alerte (etape ${alert.currentStep} / niveau ${effectiveLevel})`,
-      );
-    }
+    const { alert, facts } = await this.loadFacts(alertId);
+    await this.assertTerritory(validator, alert.zoneId);
+    this.deny(refuseAdvance(facts, validator, body.action, body.alertLevel), validator, alertId, 'alert.advance');
 
     const phase = normalizePhase(alert.currentStep);
     if (phase === PHASE.RECEPTION && body.action !== ValidationAction.REJECTED) {
-      if (body.latitude == null || body.longitude == null) {
-        throw new BadRequestException('Position GPS obligatoire');
-      }
-      if (!body.photoUrl && !(alert.mediaUrls && alert.mediaUrls.length)) {
-        throw new BadRequestException('Photo de preuve obligatoire');
-      }
-      if (body.gravity == null || body.gravity < 0 || body.gravity > 3) {
-        throw new BadRequestException('Niveau de gravite (0-3) obligatoire');
-      }
+      // Preuve de vérification terrain : jamais de coordonnées substituées (audit F18)
+      if (body.latitude == null || body.longitude == null) throw new BadRequestException('Position GPS obligatoire');
+      const images = [body.photoUrl, ...(alert.mediaUrls || [])].filter((u): u is string => !!u && isImageUrl(u));
+      if (!images.length) throw new BadRequestException('Photo de preuve obligatoire (un vocal ne suffit pas)');
+      if (body.gravity == null || body.gravity < 0 || body.gravity > 3) throw new BadRequestException('Niveau de gravité (0-3) obligatoire');
     }
 
-    let alertData: any = {};
+    const effectiveLevel = body.alertLevel || alert.alertLevel;
+    const data: Prisma.AlertUncheckedUpdateManyInput = {};
     let willDiffuse = false;
-
     if (body.action === ValidationAction.REJECTED) {
-      alertData = { status: AlertStatus.REJECTED, resolvedAt: new Date() };
+      data.status = AlertStatus.REJECTED;
+      data.resolvedAt = new Date();
     } else {
-      const next = nextStepFor(alert.currentStep, effectiveLevel);
+      const next = nextStepFor(alert.currentStep, routingLevel(alert.alertLevel, body.alertLevel));
       if (!next) throw new ForbiddenException('Aucune transition possible');
-      alertData.currentStep = next;
-      alertData.status = AlertStatus.VALIDATED;
-      if (next === PHASE.VERIFIEE || phase === PHASE.RECEPTION) alertData.verifiedAt = new Date();
-      if (body.gravity != null) alertData.severity = Math.max(1, body.gravity);
+      data.currentStep = next;
+      data.status = AlertStatus.VALIDATED;
+      if (phase === PHASE.RECEPTION) data.verifiedAt = new Date();
+      if (body.gravity != null) data.severity = Math.max(1, body.gravity);
       willDiffuse = next === PHASE.DIFFUSEE;
+      if (willDiffuse) Object.assign(data, { status: AlertStatus.BROADCAST, broadcastAt: new Date(), criticalValidated: true });
     }
+    if (effectiveLevel !== alert.alertLevel) data.alertLevel = effectiveLevel;
 
-    if (effectiveLevel !== alert.alertLevel) alertData.alertLevel = effectiveLevel;
-
-    const [, updated] = await this.prisma.$transaction([
-      this.prisma.validation.create({
+    const prealertOn = !willDiffuse && body.action !== ValidationAction.REJECTED && await this.flags.isEnabled(FLAG_PREALERT);
+    const intents: string[] = [];
+    await this.prisma.$transaction(async (tx) => {
+      await this.transition(tx, alertId, { status: alert.status, currentStep: alert.currentStep }, data);
+      await tx.validation.create({
         data: {
-          alertId, validatorId: validator.id,
-          approved: body.action !== ValidationAction.REJECTED,
-          action: body.action, step: alert.currentStep,
-          comment: body.comment, photoUrl: body.photoUrl,
+          alertId, validatorId: validator.id, approved: body.action !== ValidationAction.REJECTED,
+          action: body.action, step: alert.currentStep, comment: body.comment, photoUrl: body.photoUrl,
           latitude: body.latitude, longitude: body.longitude, gravity: body.gravity,
         },
-      }),
-      this.prisma.alert.update({
-        where: { id: alertId }, data: alertData,
-        include: { zone: { select: { name: true } } },
-      }),
-      this.prisma.auditLog.create({
+      });
+      await tx.auditLog.create({
         data: {
-          userId: validator.id,
-          action: `alert.${body.action.toLowerCase()}`,
-          resource: 'alert', resourceId: alertId,
-          details: { step: alert.currentStep, action: body.action, gravity: body.gravity, alertLevel: effectiveLevel },
+          userId: validator.id, action: `alert.${body.action.toLowerCase()}`, resource: 'alert', resourceId: alertId,
+          details: { step: alert.currentStep, action: body.action, gravity: body.gravity, alertLevel: effectiveLevel, diffused: willDiffuse },
         },
-      }),
+      });
+      const fresh = { ...alert, alertLevel: effectiveLevel };
+      if (willDiffuse) {
+        const channels = await this.resolveChannels(undefined, effectiveLevel);
+        intents.push((await this.createIntent(tx, {
+          alert: fresh, authorId: validator.id, kind: BroadcastKind.PRIMARY, certainty: BroadcastCertainty.CONFIRMED, channels,
+        })).id);
+      } else if (prealertOn && prealertEligible({ ...facts, status: AlertStatus.VALIDATED, currentStep: data.currentStep as AlertStep, alertLevel: effectiveLevel })
+        && !alert.citizensNotifiedAt) {
+        // Pré-alerte (indicateur activé) : texte explicitement provisoire (audit F04)
+        const channels = await this.resolveChannels(undefined, effectiveLevel);
+        intents.push((await this.createIntent(tx, {
+          alert: fresh, authorId: validator.id, kind: BroadcastKind.PREALERT, certainty: BroadcastCertainty.PREALERT, channels,
+        })).id);
+        await tx.alert.update({ where: { id: alertId }, data: { citizensNotifiedAt: new Date() } });
+      }
+    });
+
+    await this.afterCommit(intents, alert);
+    return this.findOne(alertId);
+  }
+
+  /**
+   * Bypass d'urgence : court-circuit encadré (audit F05). Message marqué
+   * « vérification en cours », revue a posteriori obligatoire.
+   */
+  async emergencyBypass(alertId: string, user: OperatorCtx, body: { justification: string; message?: string; channels?: string[] }) {
+    const { alert, facts } = await this.loadFacts(alertId);
+    await this.assertTerritory(user, alert.zoneId);
+    this.deny(refuseBypass(facts, user, body.justification), user, alertId, 'alert.emergency_bypass');
+    const channels = await this.resolveChannels(body.channels, alert.alertLevel);
+
+    let intentId = '';
+    await this.prisma.$transaction(async (tx) => {
+      await this.transition(tx, alertId, { status: { in: [AlertStatus.PENDING, AlertStatus.UNDER_REVIEW, AlertStatus.VALIDATED] } }, {
+        status: AlertStatus.BROADCAST, currentStep: PHASE.DIFFUSEE, broadcastAt: new Date(),
+        emergencyBypass: true, bypassJustification: body.justification.trim(), bypassById: user.id,
+      });
+      intentId = (await this.createIntent(tx, {
+        alert, authorId: user.id, kind: BroadcastKind.PRIMARY, certainty: BroadcastCertainty.EMERGENCY_BYPASS,
+        approvedText: body.message, channels,
+      })).id;
+      await tx.auditLog.create({
+        data: { userId: user.id, action: 'alert.emergency_bypass', resource: 'alert', resourceId: alertId, details: { justification: body.justification, channels, role: user.role, previousStatus: alert.status } },
+      });
+    });
+    await this.afterCommit([intentId], alert);
+    return this.findOne(alertId);
+  }
+
+  /** Revue a posteriori d'un bypass par une autorité distincte (PRÉFECTURE+). */
+  async reviewBypass(alertId: string, user: OperatorCtx, note: string) {
+    const { alert } = await this.loadFacts(alertId);
+    await this.assertTerritory(user, alert.zoneId);
+    if (!alert.emergencyBypass) throw new BadRequestException('Cette alerte n\'a pas fait l\'objet d\'une diffusion d\'urgence');
+    if (alert.bypassReviewedAt) throw new ConflictException('Bypass déjà revu');
+    if (!hasLevel(user.role, Role.PREFECTURE)) throw new ForbiddenException('Revue réservée à PREFECTURE ou supérieur');
+    if (alert.bypassById === user.id) throw new ForbiddenException('La revue doit être faite par une autre personne que l\'auteur du bypass');
+    if (!note || note.trim().length < 10) throw new BadRequestException('Note de revue (≥ 10 caractères) obligatoire');
+    await this.prisma.$transaction([
+      this.prisma.alert.update({ where: { id: alertId }, data: { bypassReviewedAt: new Date(), bypassReviewedById: user.id, bypassReviewNote: note.trim() } }),
+      this.prisma.auditLog.create({ data: { userId: user.id, action: 'alert.bypass_review', resource: 'alert', resourceId: alertId, details: { note } } }),
     ]);
-
-    this.safeBroadcast(updated);
-
-    const cfg = LEVEL_CONFIG[effectiveLevel];
-    const updatedPhase = normalizePhase(updated.currentStep);
-    if (
-      body.action !== ValidationAction.REJECTED &&
-      cfg.notifyCitizensFromStep === PHASE.VERIFIEE &&
-      updatedPhase === PHASE.VERIFIEE &&
-      !updated.citizensNotifiedAt
-    ) {
-      await this.enqueueFanout({ alertId, isBroadcast: true, preview: true });
-      await this.prisma.alert.update({ where: { id: alertId }, data: { citizensNotifiedAt: new Date() } });
-    }
-
-    if (willDiffuse) await this.autoBroadcast(updated.id, validator);
-    return updated;
+    return this.findOne(alertId);
   }
 
-  /** Diffusion auto en bout de cursus (advance qui aboutit a DIFFUSEE). */
-  private async autoBroadcast(alertId: string, validator: { id: string; role: Role }) {
-    const alert = await this.prisma.alert.findUnique({ where: { id: alertId } });
-    if (!alert || alert.broadcastAt) return;
-    const cfg = LEVEL_CONFIG[alert.alertLevel as AlertLevel];
-    const channels = cfg.channels;
-    const message = `[OLEL] ${cfg.label.toUpperCase()} - ${alert.title}\n${alert.description}` +
-      (alert.latitude && alert.longitude ? `\nPosition : ${alert.latitude.toFixed(4)},${alert.longitude.toFixed(4)}` : '');
-    const broadcast = await this.prisma.broadcast.create({
-      data: { alertId, authorId: validator.id, message, targetZoneIds: [alert.zoneId], channels, idempotencyKey: randomUUID() },
-    });
-    await this.prisma.alert.update({
-      where: { id: alertId },
-      data: { status: AlertStatus.BROADCAST, currentStep: PHASE.DIFFUSEE, broadcastAt: new Date(), criticalValidated: true },
-    });
-    await this.enqueueFanout({ alertId, isBroadcast: true, broadcastId: broadcast.id, channels });
-    this.audit.log({
-      userId: validator.id, action: 'alert.broadcast_auto', resource: 'alert', resourceId: alertId,
-      details: { trigger: 'cursus_complete', channels },
-    });
-  }
-
-  /** Bypass d'urgence MAIRIE+ : court-circuit vers DIFFUSION. */
-  async emergencyBypass(alertId: string, user: { id: string; role: Role }, body: { justification: string }) {
-    if (!mayEmergencyBypass(user.role)) {
-      throw new ForbiddenException("Diffusion d'urgence reservee a MAIRIE ou superieur");
-    }
-    if (!body.justification || body.justification.trim().length < 10) {
-      throw new BadRequestException("Justification (>= 10 caracteres) obligatoire");
-    }
-    const alert = await this.findOne(alertId);
-    if (alert.broadcastAt) throw new ForbiddenException('Alerte deja diffusee');
-    const cfg = LEVEL_CONFIG[alert.alertLevel as AlertLevel];
-    const channels = cfg.channels;
-    const message = `[OLEL] ${cfg.label.toUpperCase()} (URGENCE) - ${alert.title}\n${alert.description}` +
-      (alert.latitude && alert.longitude ? `\nPosition : ${alert.latitude.toFixed(4)},${alert.longitude.toFixed(4)}` : '');
-    const broadcast = await this.prisma.broadcast.create({
-      data: { alertId, authorId: user.id, message, targetZoneIds: [alert.zoneId], channels, idempotencyKey: randomUUID() },
-    });
-    const updated = await this.prisma.alert.update({
-      where: { id: alertId },
-      data: {
-        status: AlertStatus.BROADCAST, currentStep: PHASE.DIFFUSEE,
-        broadcastAt: new Date(), verifiedAt: new Date(),
-        emergencyBypass: true, bypassJustification: body.justification,
-        bypassById: user.id, criticalValidated: true,
-      },
-      include: { zone: { select: { name: true } } },
-    });
-    await this.enqueueFanout({ alertId, isBroadcast: true, broadcastId: broadcast.id, channels });
-    this.safeBroadcast(updated);
-    this.audit.log({
-      userId: user.id, action: 'alert.emergency_bypass', resource: 'alert', resourceId: alertId,
-      details: { justification: body.justification, channels, role: user.role },
-    });
-    return updated;
-  }
-
-  /** Scheduler : auto-diffusion des ROUGE/ROUGE_FONCE non confirmees a temps. */
+  /**
+   * Auto-escalade (indicateur désactivé par défaut, décision D3) : une alerte
+   * ROUGE+ vérifiée, toujours ouverte et non rejetée, non confirmée dans le
+   * délai, part avec la mention « non confirmée par l'autorité ».
+   * La transition est conditionnelle : jamais deux diffusions, jamais une
+   * alerte rejetée, annulée ou clôturée (audit F03).
+   */
   async autoEscalateStale(): Promise<number> {
+    if (!(await this.flags.isEnabled(FLAG_AUTO_ESCALATION))) return 0;
     const cutoff = new Date(Date.now() - AUTO_ESCALATION_MINUTES * 60 * 1000);
-    const stale = await this.prisma.alert.findMany({
+    const candidates = await this.prisma.alert.findMany({
       where: {
-        currentStep: PHASE.VERIFIEE,
+        status: AlertStatus.VALIDATED, currentStep: PHASE.VERIFIEE,
         alertLevel: { in: [AlertLevel.ROUGE, AlertLevel.ROUGE_FONCE] },
-        broadcastAt: null,
-        verifiedAt: { lt: cutoff },
+        broadcastAt: null, requiresMedicalReview: false, verifiedAt: { lt: cutoff },
       },
+      select: { id: true },
     });
-    for (const a of stale) {
-      const cfg = LEVEL_CONFIG[a.alertLevel as AlertLevel];
-      const broadcast = await this.prisma.broadcast.create({
-        data: {
-          alertId: a.id, authorId: a.createdById,
-          message: `[OLEL] ${cfg.label.toUpperCase()} (non confirmee par l'autorite - auto-diffusion ${AUTO_ESCALATION_MINUTES} min) - ${a.title}\n${a.description}`,
-          targetZoneIds: [a.zoneId], channels: cfg.channels, idempotencyKey: randomUUID(),
-        },
-      });
-      await this.prisma.alert.update({
-        where: { id: a.id },
-        data: { status: AlertStatus.BROADCAST, currentStep: PHASE.DIFFUSEE, broadcastAt: new Date(), autoEscalated: true },
-      });
-      await this.enqueueFanout({ alertId: a.id, isBroadcast: true, broadcastId: broadcast.id, channels: cfg.channels });
-      this.audit.log({
-        userId: a.createdById, action: 'alert.auto_escalated', resource: 'alert', resourceId: a.id,
-        details: { reason: `non confirmee apres ${AUTO_ESCALATION_MINUTES} min`, level: a.alertLevel },
-      });
+    let n = 0;
+    for (const { id } of candidates) {
+      const { alert, facts } = await this.loadFacts(id);
+      if (!autoEscalationEligible(facts)) continue;
+      const lastValidator = alert.validations.filter((v) => v.approved).pop()?.validatorId ?? alert.createdById;
+      try {
+        let intentId = '';
+        const channels = await this.resolveChannels(undefined, alert.alertLevel);
+        await this.prisma.$transaction(async (tx) => {
+          await this.transition(tx, id, { status: AlertStatus.VALIDATED, currentStep: PHASE.VERIFIEE, requiresMedicalReview: false }, {
+            status: AlertStatus.BROADCAST, currentStep: PHASE.DIFFUSEE, broadcastAt: new Date(), autoEscalated: true,
+          });
+          intentId = (await this.createIntent(tx, {
+            alert, authorId: lastValidator, kind: BroadcastKind.PRIMARY, certainty: BroadcastCertainty.UNCONFIRMED_AUTO, channels,
+          })).id;
+          await tx.auditLog.create({
+            data: { action: 'alert.auto_escalated', resource: 'alert', resourceId: id, details: { reason: `non confirmée après ${AUTO_ESCALATION_MINUTES} min`, level: alert.alertLevel, verifiedBy: lastValidator } },
+          });
+        });
+        await this.afterCommit([intentId], alert);
+        n++;
+      } catch (e) {
+        if (!(e instanceof ConflictException)) this.logger.error(`Auto-escalade ${id} : ${(e as Error).message}`);
+      }
     }
-    if (stale.length) this.logger.warn(`Auto-escalade : ${stale.length} alerte(s) diffusee(s) faute de confirmation`);
-    return stale.length;
+    if (n) this.logger.warn(`Auto-escalade : ${n} alerte(s) diffusée(s) sans confirmation de l'autorité`);
+    return n;
   }
 
+  /** Diffusion directe : texte approuvé, zones et canaux choisis exécutés tels quels (audit F04, F05). */
   async broadcast(
     alertId: string,
-    user: { id: string; role: Role },
+    user: OperatorCtx,
     dto: { message?: string; targetZoneIds?: string[]; channels?: string[]; idempotencyKey?: string },
   ) {
-    const alert = await this.findOne(alertId);
-    if (!canBroadcast(user.role)) {
-      throw new ForbiddenException('Diffusion reservee a MAIRIE ou superieur');
+    if (dto.idempotencyKey) {
+      const replay = await this.prisma.broadcast.findUnique({ where: { idempotencyKey: dto.idempotencyKey } });
+      if (replay) {
+        if (replay.alertId !== alertId) throw new ConflictException('Clé d\'idempotence déjà utilisée pour une autre alerte');
+        return { alert: await this.findOne(alertId), broadcast: replay, replayed: true };
+      }
     }
-    if (alert.broadcastAt) throw new ForbiddenException('Alerte deja diffusee');
-    const phase = normalizePhase(alert.currentStep);
-    const needsConf = needsConfirmation(alert.alertLevel as AlertLevel);
-    if (phase === PHASE.RECEPTION) {
-      throw new ForbiddenException('Alerte non verifiee - passez par /advance');
+    const { alert, facts } = await this.loadFacts(alertId);
+    await this.assertTerritory(user, alert.zoneId);
+    this.deny(refuseBroadcast(facts, user), user, alertId, 'alert.broadcast');
+    const targets = dto.targetZoneIds?.length ? dto.targetZoneIds : [alert.zoneId];
+    for (const z of targets) {
+      if (!TERRITORY_EXEMPT.includes(user.role) && !(await this.territory.isWithin(z, user.zoneId))) {
+        throw new ForbiddenException('Zone cible hors de votre territoire');
+      }
     }
-    if (needsConf && phase !== PHASE.CONFIRMEE && !alert.emergencyBypass) {
-      throw new ForbiddenException('Niveau ROUGE/ROUGE_FONCE : confirmation autorite requise');
-    }
+    const channels = await this.resolveChannels(dto.channels, alert.alertLevel);
 
-    const cfg = LEVEL_CONFIG[alert.alertLevel as AlertLevel];
-    const channels = dto.channels || cfg.channels;
-    const targetZoneIds = dto.targetZoneIds || [alert.zoneId];
-    const message = dto.message || `[OLEL] ${cfg.label.toUpperCase()} - ${alert.title}\n${alert.description}`;
-
-    const broadcastRecord = await this.prisma.broadcast.create({
-      data: { alertId, authorId: user.id, message, targetZoneIds, channels, idempotencyKey: dto.idempotencyKey || randomUUID() },
+    let broadcastRecord: any;
+    await this.prisma.$transaction(async (tx) => {
+      await this.transition(tx, alertId, { status: AlertStatus.VALIDATED, requiresMedicalReview: false }, {
+        status: AlertStatus.BROADCAST, currentStep: PHASE.DIFFUSEE, broadcastAt: new Date(), criticalValidated: true,
+      });
+      broadcastRecord = await this.createIntent(tx, {
+        alert, authorId: user.id, kind: BroadcastKind.PRIMARY, certainty: BroadcastCertainty.CONFIRMED,
+        approvedText: dto.message, targetZoneIds: targets, channels, idempotencyKey: dto.idempotencyKey,
+      });
+      await tx.auditLog.create({
+        data: { userId: user.id, action: 'alert.broadcast', resource: 'alert', resourceId: alertId, details: { alertLevel: alert.alertLevel, channels, targetZoneIds: targets, broadcastId: broadcastRecord.id } },
+      });
     });
-    const updated = await this.prisma.alert.update({
-      where: { id: alertId },
-      data: { status: AlertStatus.BROADCAST, currentStep: PHASE.DIFFUSEE, broadcastAt: new Date(), criticalValidated: true },
-      include: { zone: { select: { name: true } } },
-    });
-    await this.enqueueFanout({ alertId, isBroadcast: true, broadcastId: broadcastRecord.id, channels });
-    this.safeBroadcast(updated);
-    this.audit.log({
-      userId: user.id, action: 'alert.broadcast', resource: 'alert', resourceId: alertId,
-      details: { alertLevel: alert.alertLevel, channels, targetZoneIds },
-    });
-    return { alert: updated, broadcast: broadcastRecord };
+    await this.afterCommit([broadcastRecord.id], alert);
+    return { alert: await this.findOne(alertId), broadcast: broadcastRecord };
   }
 
-  async close(alertId: string, user: { id: string; role: Role }, reason: string) {
-    const alert = await this.findOne(alertId);
-    if (!canClose(user.role)) {
-      throw new ForbiddenException('Rôle insuffisant pour clôturer');
-    }
+  async close(alertId: string, user: OperatorCtx, reason: string) {
+    const { alert } = await this.loadFacts(alertId);
+    await this.assertTerritory(user, alert.zoneId);
+    if (!canClose(user.role)) throw new ForbiddenException('Rôle insuffisant pour clôturer');
     if (alert.status !== AlertStatus.BROADCAST) {
-      throw new ForbiddenException(
-        `Seule une alerte diffusée peut être clôturée (statut actuel : ${alert.status})`,
-      );
+      throw new ForbiddenException(`Seule une alerte diffusée peut être clôturée (statut actuel : ${alert.status})`);
     }
-    if (!reason || reason.trim().length < 3) {
-      throw new BadRequestException('Raison de clôture obligatoire (3 caractères minimum)');
-    }
-
-    const updated = await this.prisma.alert.update({
-      where: { id: alertId },
-      data: {
-        status: AlertStatus.CLOSED,
-        currentStep: AlertStep.CLOSED,
-        closedAt: new Date(),
-        closureReason: reason,
-        resolvedAt: new Date(),
-      },
-      include: { zone: { select: { name: true } } },
+    if (!reason || reason.trim().length < 3) throw new BadRequestException('Raison de clôture obligatoire (3 caractères minimum)');
+    const { count } = await this.prisma.alert.updateMany({
+      where: { id: alertId, status: AlertStatus.BROADCAST },
+      data: { status: AlertStatus.CLOSED, currentStep: AlertStep.CLOSED, closedAt: new Date(), closureReason: reason, resolvedAt: new Date() },
     });
-
-    this.safeBroadcast(updated);
+    if (count !== 1) throw new ConflictException('L\'alerte a été modifiée entre-temps');
     this.audit.log({ userId: user.id, action: 'alert.close', resource: 'alert', resourceId: alertId, details: { reason } });
-    return updated;
+    await this.afterCommit([], alert);
+    return this.findOne(alertId);
   }
 
-  async getQueue(user: { id: string; role: Role }) {
-    const caller = await this.prisma.user.findUnique({ where: { id: user.id }, select: { zoneId: true } });
-    const zoneFilter = caller?.zoneId ? { zoneId: caller.zoneId } : {};
+  /**
+   * File de travail (audit F14) : alertes ouvertes du territoire sur
+   * lesquelles l'utilisateur peut RÉELLEMENT agir selon alert-policy — la
+   * même règle que celle appliquée par l'API, donc jamais de désaccord.
+   */
+  async getQueue(user: OperatorCtx) {
+    const scope = TERRITORY_EXEMPT.includes(user.role) || !user.zoneId ? undefined : await this.territory.subtree(user.zoneId);
+    const zoneFilter = scope ? { zoneId: { in: scope } } : {};
+    const include = { zone: { select: { name: true, code: true } }, municipality: { select: { name: true } }, validations: { select: { validatorId: true, approved: true } } };
+    const order: Prisma.AlertOrderByWithRelationInput[] = [{ alertLevel: 'desc' }, { severity: 'desc' }, { createdAt: 'asc' }];
 
-    let where: any = { ...zoneFilter };
     if (user.role === Role.RADIO_COMMUNAUTAIRE) {
-      // Les radios ne valident pas : elles reçoivent les alertes diffusées à relayer
-      where = { ...where, status: AlertStatus.BROADCAST };
-    } else if (user.role === Role.SENTINELLE) {
-      where = { ...where, currentStep: AlertStep.SIGNALEMENT, status: AlertStatus.PENDING };
-    } else if (user.role === Role.COORDINATEUR) {
-      where = { ...where, currentStep: AlertStep.SENTINELLE, status: AlertStatus.UNDER_REVIEW };
-    } else if (user.role === Role.MAIRIE || user.role === Role.HYDRO_METEO) {
-      where = { ...where, currentStep: AlertStep.COORDINATEUR, status: AlertStatus.UNDER_REVIEW };
-    } else if (user.role === Role.PREFECTURE) {
-      where = { ...where, currentStep: AlertStep.MAIRIE, status: AlertStatus.UNDER_REVIEW };
-    } else {
-      where = { ...where, currentStep: AlertStep.PREFECTURE, status: AlertStatus.VALIDATED };
+      return this.prisma.alert.findMany({ where: { ...zoneFilter, status: { in: DIFFUSED_STATUSES } }, orderBy: order, include, take: 50 });
     }
-
-    return this.prisma.alert.findMany({
-      where,
-      orderBy: [{ alertLevel: 'desc' }, { severity: 'desc' }, { createdAt: 'asc' }],
-      include: {
-        zone: { select: { name: true, code: true } },
-        municipality: { select: { name: true } },
-        criticalValidations: true,
-      },
-      take: 50,
+    const open = await this.prisma.alert.findMany({
+      where: { ...zoneFilter, status: { notIn: [...TERMINAL_STATUSES, ...DIFFUSED_STATUSES] }, broadcastAt: null },
+      orderBy: order, include, take: 200,
     });
+    const actionable = open.filter((a) => {
+      const facts: AlertFacts = {
+        status: a.status, currentStep: a.currentStep, alertLevel: a.alertLevel, broadcastAt: a.broadcastAt,
+        requiresMedicalReview: a.requiresMedicalReview, createdById: a.createdById,
+        priorValidatorIds: a.validations.filter((v) => v.approved).map((v) => v.validatorId),
+      };
+      return refuseAdvance(facts, user, ValidationAction.VALIDATED) === null || refuseBroadcast(facts, user) === null;
+    });
+    // Bypass à revoir a posteriori (PRÉFECTURE+)
+    const reviews = hasLevel(user.role, Role.PREFECTURE)
+      ? await this.prisma.alert.findMany({ where: { ...zoneFilter, emergencyBypass: true, bypassReviewedAt: null, NOT: { bypassById: user.id } }, include, take: 50 })
+      : [];
+    return [...actionable.slice(0, 50), ...reviews];
   }
 
-  async medicalClearance(alertId: string, user: { id: string; role: Role }) {
-    if (
-      user.role !== Role.PROTECTION_CIVILE &&
-      user.role !== Role.ADMIN &&
-      user.role !== Role.SUPER_ADMIN
-    ) {
+  async medicalClearance(alertId: string, user: OperatorCtx) {
+    // Autorité habilitée à lever la revue médicale : décision D1 (défaut : PROTECTION_CIVILE)
+    if (user.role !== Role.PROTECTION_CIVILE && user.role !== Role.ADMIN && user.role !== Role.SUPER_ADMIN) {
       throw new ForbiddenException('Seule la Protection Civile peut lever le blocage médical');
     }
-    const alert = await this.findOne(alertId);
-    if (!alert.requiresMedicalReview) {
-      throw new BadRequestException('Aucun blocage médical actif sur cette alerte');
-    }
-    const updated = await this.prisma.alert.update({
-      where: { id: alertId },
-      data: { requiresMedicalReview: false },
-      include: { zone: { select: { name: true } } },
-    });
+    const { alert } = await this.loadFacts(alertId);
+    await this.assertTerritory(user, alert.zoneId);
+    if (!alert.requiresMedicalReview) throw new BadRequestException('Aucun blocage médical actif sur cette alerte');
+    await this.prisma.alert.update({ where: { id: alertId }, data: { requiresMedicalReview: false } });
     this.audit.log({ userId: user.id, action: 'alert.medical_clearance', resource: 'alert', resourceId: alertId, details: {} });
-    this.safeBroadcast(updated);
-    return updated;
+    await this.afterCommit([], alert);
+    return this.findOne(alertId);
   }
 
   async getBroadcasts(alertId?: string) {
@@ -662,14 +693,9 @@ export class AlertsService {
   }
 }
 
-function hasLevelMin(role: Role, min: Role): boolean {
-  const levels: Record<Role, number> = {
-    CITOYEN: 0, SENTINELLE: 1, RADIO_COMMUNAUTAIRE: 1, COORDINATEUR: 2,
-    MAIRIE: 3, HYDRO_METEO: 3, PREFECTURE: 4,
-    GOUVERNORAT: 5, PROTECTION_CIVILE: 5, SUPERVISEUR_REGIONAL: 6,
-    ADMIN: 99, SUPER_ADMIN: 99,
-  };
-  return levels[role] >= levels[min];
+/** Une preuve photo doit être une image (pas un vocal) — audit F18. */
+function isImageUrl(url: string): boolean {
+  return /\.(jpe?g|png|webp|heic|gif)(\?|$)/i.test(url);
 }
 
 /** Distance grand cercle (Haversine) entre deux points GPS, en km. */

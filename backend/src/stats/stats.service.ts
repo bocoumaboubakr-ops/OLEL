@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
-import { AlertStatus, AlertType, SignalementStatus } from '@prisma/client';
+import { AlertType, DeliveryStatus, SignalementStatus } from '@prisma/client';
+import { PUBLIC_ACTIVE_STATUSES } from '../alerts/alert-policy';
 
 @Injectable()
 export class StatsService {
@@ -21,13 +22,14 @@ export class StatsService {
       notificationsSent,
     ] = await Promise.all([
       this.prisma.alert.count(),
-      this.prisma.alert.count({ where: { status: AlertStatus.ACTIVE } }),
+      this.prisma.alert.count({ where: { status: { in: PUBLIC_ACTIVE_STATUSES } } }),
       this.prisma.alert.count({ where: { createdAt: { gte: thirtyDaysAgo } } }),
       this.prisma.signalement.count({ where: { status: SignalementStatus.PENDING } }),
       this.prisma.user.count(),
       this.prisma.alert.groupBy({ by: ['type'], _count: { _all: true } }),
       this.prisma.alert.groupBy({ by: ['severity'], _count: { _all: true } }),
-      this.prisma.notificationLog.count({ where: { status: 'sent' } }),
+      // Messages acceptés par un fournisseur (≠ livrés, ≠ simulés) — audit F22
+      this.prisma.broadcastDelivery.count({ where: { status: { in: [DeliveryStatus.SENT, DeliveryStatus.DELIVERED, DeliveryStatus.READ] } } }),
     ]);
 
     const alertsByType: Record<string, number> = {};

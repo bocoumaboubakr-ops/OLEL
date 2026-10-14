@@ -25,6 +25,18 @@ export class TerritoryService {
     return rows.map((r) => r.id);
   }
 
+  /** Zone + ses ancêtres jusqu'à la racine (autorités dont le territoire la contient). */
+  async ancestorsInclusive(zoneId: string): Promise<string[]> {
+    const rows = await this.prisma.$queryRaw<{ id: string }[]>`
+      WITH RECURSIVE up AS (
+        SELECT id, "parentId" FROM zones WHERE id = ${zoneId}
+        UNION
+        SELECT z.id, z."parentId" FROM zones z JOIN up ON z.id = up."parentId"
+      )
+      SELECT id FROM up`;
+    return rows.map((r) => r.id);
+  }
+
   /** Union des sous-arbres de plusieurs zones. */
   async subtreeOfMany(zoneIds: string[]): Promise<string[]> {
     const all = new Set<string>();

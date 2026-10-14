@@ -1,4 +1,6 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException, ConflictException, Logger } from '@nestjs/common';
+import { TerritoryService } from '../common/territory/territory.service';
+import { TERRITORY_EXEMPT } from '../users/user-policy';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { AlertsService } from '../alerts/alerts.service';
 import { AlertLevel, Role, SignalementStatus } from '@prisma/client';
@@ -31,7 +33,15 @@ const GLOBAL_ROLES: Role[] = [
 export class SignalementsService {
   private readonly logger = new Logger(SignalementsService.name);
 
-  constructor(private prisma: PrismaService, private alerts: AlertsService) {}
+  constructor(private prisma: PrismaService, private alerts: AlertsService, private territory: TerritoryService) {}
+
+  /** Le signalement doit être dans le territoire de l'opérateur (audit F08). */
+  private async assertInTerritory(zoneId: string | null | undefined, role?: Role, actorZoneId?: string | null) {
+    if (role && TERRITORY_EXEMPT.includes(role)) return;
+    if (!zoneId || !(await this.territory.isWithin(zoneId, actorZoneId))) {
+      throw new ForbiddenException('Ce signalement est hors de votre territoire');
+    }
+  }
 
   /**
    * Zones visibles par un opérateur local : sa zone, tous ses ascendants
@@ -222,12 +232,13 @@ export class SignalementsService {
     return updated;
   }
 
-  async updateStatus(id: string, status: SignalementStatus, reviewerId: string, reviewerRole?: Role) {
+  async updateStatus(id: string, status: SignalementStatus, reviewerId: string, reviewerRole?: Role, reviewerZoneId?: string | null) {
     const existing = await this.prisma.signalement.findUnique({
       where: { id },
       include: { user: { select: { zoneId: true, zone: { select: { name: true } } } } },
     });
     if (!existing) throw new NotFoundException(`Signalement ${id} introuvable`);
+    await this.assertInTerritory(existing.user?.zoneId, reviewerRole, reviewerZoneId);
 
     // Garde du cursus : on ne valide pas en aveugle un signalement WhatsApp
     // sans preuve. Seul PREFECTURE+ peut passer outre (cas exceptionnel).
@@ -242,26 +253,23 @@ export class SignalementsService {
       );
     }
 
-    const [updated] = await this.prisma.$transaction([
-      this.prisma.signalement.update({ where: { id }, data: { status } }),
-      this.prisma.auditLog.create({
+    // Une seule transaction : statut du signalement (conditionnel), création
+    // de l'alerte, notification interne, audit. Si l'alerte ne peut pas être
+    // créée, rien n'est validé (audit F17).
+    let created: any = null;
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const { count } = await tx.signalement.updateMany({ where: { id, status: existing.status, alertId: existing.alertId }, data: { status } });
+      if (count !== 1) throw new ConflictException('Ce signalement a été traité entre-temps — rechargez');
+      await tx.auditLog.create({
         data: {
-          userId: reviewerId,
-          action: `signalement.${status.toLowerCase()}`,
-          resource: 'signalement',
-          resourceId: id,
+          userId: reviewerId, action: `signalement.${status.toLowerCase()}`, resource: 'signalement', resourceId: id,
           details: { previousStatus: existing.status, newStatus: status },
         },
-      }),
-    ]);
-
-    // Cursus OLEL : un signalement VALIDÉ entre dans le cycle de vie alerte.
-    // L'alerte apparaît dans le flux « en cours » (feed + carte + file par rôle).
-    if (status === SignalementStatus.VALIDATED && !existing.alertId) {
-      try {
+      });
+      if (status === SignalementStatus.VALIDATED && !existing.alertId) {
         const label = TYPE_LABEL[existing.type] || existing.type;
         const zoneName = existing.user?.zone?.name;
-        const alert = await this.alerts.create(
+        created = await this.alerts.create(
           {
             title: zoneName ? `${label} — ${zoneName}` : `${label} — signalement citoyen`,
             description: existing.text,
@@ -276,15 +284,16 @@ export class SignalementsService {
           },
           reviewerId,
           reviewerRole,
-          { linkSignalementId: id },
+          { linkSignalementId: id, tx },
         );
-        return { ...updated, alertId: alert.id };
-      } catch (e) {
-        // La validation reste acquise même si la création d'alerte échoue
-        this.logger.error(`Transformation signalement ${id} en alerte échouée : ${(e as Error).message}`);
       }
-    }
+      return tx.signalement.findUnique({ where: { id } });
+    });
 
+    if (created) {
+      await this.alerts.publishCreated(created);
+      return { ...updated, alertId: created.id };
+    }
     return updated;
   }
 }

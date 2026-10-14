@@ -2,7 +2,7 @@ import { Controller, Get, Post, Body, Param, Query, UseGuards } from '@nestjs/co
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { AlertsService } from './alerts.service';
 import { CreateAlertDto } from './dto/create-alert.dto';
-import { ValidateAlertDto, CloseAlertDto, BroadcastAlertDto } from './dto/validate-alert.dto';
+import { ValidateAlertDto, CloseAlertDto, BroadcastAlertDto, EmergencyBypassDto, BypassReviewDto } from './dto/validate-alert.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -112,8 +112,15 @@ export class AlertsController {
   @Post(':id/emergency-bypass')
   @Roles(Role.MAIRIE, Role.PREFECTURE, Role.GOUVERNORAT, Role.PROTECTION_CIVILE, Role.SUPERVISEUR_REGIONAL, Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({ summary: "Diffusion d'urgence (court-circuit cursus, justification obligatoire)" })
-  emergencyBypass(@Param('id') id: string, @Body() body: { justification: string }, @CurrentUser() user: { id: string; role: Role }) {
+  emergencyBypass(@Param('id') id: string, @Body() body: EmergencyBypassDto, @CurrentUser() user: { id: string; role: Role; zoneId?: string | null }) {
     return this.alerts.emergencyBypass(id, user, body);
+  }
+
+  @Post(':id/bypass-review')
+  @Roles(Role.PREFECTURE, Role.GOUVERNORAT, Role.PROTECTION_CIVILE, Role.SUPERVISEUR_REGIONAL, Role.ADMIN, Role.SUPER_ADMIN)
+  @ApiOperation({ summary: "Revue a posteriori d'une diffusion d'urgence (autre personne que l'auteur)" })
+  reviewBypass(@Param('id') id: string, @Body() body: BypassReviewDto, @CurrentUser() user: { id: string; role: Role; zoneId?: string | null }) {
+    return this.alerts.reviewBypass(id, user, body.note);
   }
 
   @Post(':id/close')

@@ -6,6 +6,10 @@ const DEFAULT_FLAGS = [
   { name: 'sms', enabled: true },
   { name: 'ussd', enabled: true },
   { name: 'ivr', enabled: false },
+  // Automatismes de diffusion sans confirmation humaine : désactivés par
+  // défaut, activables par un administrateur (décision D3, audit F03/F04).
+  { name: 'prealert_red', enabled: false },
+  { name: 'auto_escalation_red', enabled: false },
 ];
 
 @Injectable()

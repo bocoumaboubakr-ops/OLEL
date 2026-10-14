@@ -1,16 +1,19 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { getQueueToken } from '@nestjs/bull';
 import { AlertsService } from './alerts.service';
 import { AlertsGateway } from './alerts.gateway';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
-import { NotFoundException, ForbiddenException } from '@nestjs/common';
+import { TerritoryService } from '../common/territory/territory.service';
+import { BroadcastDispatcher } from '../notifications/broadcast-dispatcher.service';
+import { FlagsService } from '../flags/flags.service';
+import { NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+
+const module_territory = (svc: AlertsService) => (svc as any).territory as { isWithin: jest.Mock };
 
 describe('AlertsService', () => {
   let service: AlertsService;
   let prisma: any;
-  let queue: any;
-  let gateway: any;
+  let audit: any;
 
   const mockAlert = {
     id: 'alert-uuid',
@@ -57,25 +60,17 @@ describe('AlertsService', () => {
             },
           },
         },
-        {
-          provide: getQueueToken('notifications'),
-          useValue: { add: jest.fn() },
-        },
-        {
-          provide: AlertsGateway,
-          useValue: { broadcastAlert: jest.fn() },
-        },
-        {
-          provide: AuditService,
-          useValue: { log: jest.fn() },
-        },
+        { provide: AlertsGateway, useValue: { alertChanged: jest.fn() } },
+        { provide: AuditService, useValue: { log: jest.fn() } },
+        { provide: TerritoryService, useValue: { isWithin: jest.fn().mockResolvedValue(true) } },
+        { provide: BroadcastDispatcher, useValue: { kick: jest.fn() } },
+        { provide: FlagsService, useValue: { isEnabled: jest.fn().mockResolvedValue(false) } },
       ],
     }).compile();
 
     service = module.get(AlertsService);
     prisma = module.get(PrismaService);
-    queue = module.get(getQueueToken('notifications'));
-    gateway = module.get(AlertsGateway);
+    audit = module.get(AuditService);
   });
 
   describe('findAll', () => {
@@ -99,27 +94,34 @@ describe('AlertsService', () => {
     });
   });
 
-  describe('create', () => {
-    it('should create alert and queue notification', async () => {
-      await service.create({ title: 'Test', description: 'Desc', type: 'SECHERESSE', zoneId: 'zone-uuid', severity: 2 }, 'user-uuid');
-      expect(queue.add).toHaveBeenCalledWith('fanout', expect.any(Object), expect.any(Object));
-      expect(gateway.broadcastAlert).toHaveBeenCalled();
-    });
-  });
-
   describe('advance', () => {
     it('should throw ForbiddenException on a terminal (CLOSED) alert', async () => {
       prisma.alert.findUnique.mockResolvedValue({ ...mockAlert, status: 'CLOSED', currentStep: 'CLOSED', signalements: [], validations: [] });
       await expect(
         service.advance('alert-uuid', { id: 'validator-uuid', role: 'ADMIN' as any }, { action: 'VALIDATED' as any }),
       ).rejects.toThrow(ForbiddenException);
+      // Le refus est tracé (audit F05)
+      expect(audit.log).toHaveBeenCalledWith(expect.objectContaining({ action: 'alert.advance.denied' }));
+    });
+
+    it('refuse une alerte hors du territoire du validateur', async () => {
+      prisma.alert.findUnique.mockResolvedValue({ ...mockAlert, alertLevel: 'JAUNE', status: 'PENDING', currentStep: 'SIGNALEMENT', signalements: [], validations: [] });
+      (module_territory(service)).isWithin.mockResolvedValue(false);
+      await expect(
+        service.advance('alert-uuid', { id: 'v', role: 'SENTINELLE' as any, zoneId: 'autre' }, { action: 'VALIDATED' as any, latitude: 1, longitude: 1, gravity: 1, photoUrl: '/uploads/p.jpg' }),
+      ).rejects.toThrow(ForbiddenException);
     });
 
     it('should reject sentinelle validation without GPS/photo/gravity', async () => {
-      prisma.alert.findUnique.mockResolvedValue({ ...mockAlert, status: 'PENDING', currentStep: 'SIGNALEMENT', signalements: [], validations: [] });
+      prisma.alert.findUnique.mockResolvedValue({ ...mockAlert, alertLevel: 'JAUNE', status: 'PENDING', currentStep: 'SIGNALEMENT', signalements: [], validations: [] });
       await expect(
-        service.advance('alert-uuid', { id: 'v', role: 'SENTINELLE' as any }, { action: 'VALIDATED' as any }),
-      ).rejects.toThrow();
+        service.advance('alert-uuid', { id: 'v', role: 'SENTINELLE' as any, zoneId: 'zone-uuid' }, { action: 'VALIDATED' as any }),
+      ).rejects.toThrow(BadRequestException);
+      // un vocal ne remplace pas la photo de preuve
+      prisma.alert.findUnique.mockResolvedValue({ ...mockAlert, alertLevel: 'JAUNE', status: 'PENDING', currentStep: 'SIGNALEMENT', mediaUrls: ['/uploads/v.ogg'], signalements: [], validations: [] });
+      await expect(
+        service.advance('alert-uuid', { id: 'v', role: 'SENTINELLE' as any, zoneId: 'zone-uuid' }, { action: 'VALIDATED' as any, latitude: 15.6, longitude: -13.2, gravity: 2 }),
+      ).rejects.toThrow(/Photo/);
     });
   });
 });

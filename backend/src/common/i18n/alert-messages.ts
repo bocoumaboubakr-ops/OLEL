@@ -70,3 +70,65 @@ export function broadcastMessage(
 export function operatorMessage(type: string, title: string, zoneName: string): string {
   return `[OLEL] ${NEW_REPORT.fr}\nType : ${type}\n${title}\n${ZONE_WORD.fr} : ${zoneName}\n${CONNECT.fr}`;
 }
+
+// ── Diffusion figée (audit F04) ─────────────────────────────────────────────
+// Le texte EXACT envoyé à chaque langue est calculé une fois, au moment de la
+// décision, puis stocké dans Broadcast.payload. Le processeur l'envoie tel
+// quel : aucune reconstruction ultérieure depuis le titre ou la description.
+
+export type Certainty = 'CONFIRMED' | 'UNCONFIRMED_AUTO' | 'EMERGENCY_BYPASS' | 'PREALERT' | 'INTERNAL';
+
+/**
+ * Mention du niveau de certitude, en tête de message.
+ * ⚠️ ff / wo / snk : base de travail À FAIRE RELIRE par des locuteurs natifs
+ * (même réserve que le reste de ce fichier — décision D5).
+ */
+const CERTAINTY_TAG: Record<Certainty, Record<Lang, string>> = {
+  CONFIRMED: { fr: '', ff: '', wo: '', snk: '' },
+  INTERNAL: { fr: '', ff: '', wo: '', snk: '' },
+  UNCONFIRMED_AUTO: {
+    fr: 'NON CONFIRMÉE PAR L\'AUTORITÉ',
+    ff: 'LAAMU TEEŊTINAAKI',
+    wo: 'NJIITU YI WÓORALUÑU KO',
+    snk: 'SAXURUYEN NA A WÓORAL',
+  },
+  EMERGENCY_BYPASS: {
+    fr: 'DIFFUSION D\'URGENCE — VÉRIFICATION EN COURS',
+    ff: 'NELDUGOL HEÑORDE — ƳEEWGOL NO WAƊA',
+    wo: 'YÓNNEE CI JAMONO BU TÀNG — SEET GI NGI CI KAW',
+    snk: 'TANPINTE NELLI — MANGINƝE TI A DI',
+  },
+  PREALERT: {
+    fr: 'PRÉ-ALERTE — INFORMATION NON CONFIRMÉE',
+    ff: 'REENTAARE ADANNDE — KABARU TEEŊTINAAKI',
+    wo: 'ARTU BU JIITU — XIBAAR BU ÑU WÓORALUL',
+    snk: 'XIBAARE FOLLE — A NA WÓORAL',
+  },
+};
+
+export interface FrozenPayloadInput {
+  level: string;
+  certainty: Certainty;
+  /** Texte approuvé par l'autorité (s'il est fourni, il est envoyé tel quel, sans traduction automatique). */
+  approvedText?: string;
+  title: string;
+  description: string;
+  zoneNames: string[];
+  type?: string;
+}
+
+/** Calcule le texte exact par langue, à figer dans Broadcast.payload. */
+export function buildFrozenPayload(i: FrozenPayloadInput): Record<Lang, string> {
+  const out = {} as Record<Lang, string>;
+  for (const lang of SUPPORTED_LANGS) {
+    if (i.certainty === 'INTERNAL') {
+      out[lang] = operatorMessage(i.type || '', i.title, i.zoneNames.join(', '));
+      continue;
+    }
+    const tag = CERTAINTY_TAG[i.certainty][lang];
+    const header = `[OLEL] ${levelPrefix(i.level, lang)}${tag ? ` — ${tag}` : ''}`;
+    const body = i.approvedText?.trim() || `${i.title}\n${i.description}`;
+    out[lang] = `${header}\n${body}\n${ZONE_WORD[lang]} : ${i.zoneNames.join(', ')}\n${FOLLOW_INSTRUCTIONS[lang]}`;
+  }
+  return out;
+}

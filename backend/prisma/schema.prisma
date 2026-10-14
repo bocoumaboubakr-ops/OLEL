@@ -260,6 +260,10 @@ model Alert {
   bypassById          String?
   bypassBy            User?     @relation("AlertBypassBy", fields: [bypassById], references: [id], onDelete: SetNull)
   autoEscalated       Boolean   @default(false)
+  /// Revue a posteriori d'une diffusion d'urgence (audit F05)
+  bypassReviewedAt    DateTime?
+  bypassReviewedById  String?
+  bypassReviewNote    String?
   verifiedAt          DateTime?
   citizensNotifiedAt  DateTime?
   @@index([zoneId, createdAt(sort: Desc)])
@@ -560,23 +564,106 @@ model AlertCriticalValidation {
 
 // ── Diffusion enrichie ─────────────────────────────────────────────────────────
 
+/// Nature d'une diffusion : au plus une de chaque par alerte (audit F17).
+enum BroadcastKind {
+  INTERNAL   // notification des opérateurs d'un nouveau signalement
+  PREALERT   // pré-alerte citoyenne avant confirmation (si activée)
+  PRIMARY    // diffusion publique principale
+}
+
+/// Niveau de certitude affiché dans le message (audit F04, F05).
+enum BroadcastCertainty {
+  CONFIRMED
+  UNCONFIRMED_AUTO
+  EMERGENCY_BYPASS
+  PREALERT
+  INTERNAL
+}
+
+enum BroadcastStatus {
+  PENDING      // décision enregistrée, pas encore remise à la file
+  DISPATCHING  // remise à la file, envois en cours
+  DONE         // tous les destinataires atteints
+  PARTIAL      // échecs persistants pour une partie des destinataires
+  FAILED       // aucun destinataire atteint
+  CANCELLED    // alerte retirée avant exécution
+}
+
+enum DeliveryStatus {
+  QUEUED     // destinataire réservé par un processeur (verrou anti-doublon)
+  SENT       // accepté par le fournisseur (≠ livré)
+  DELIVERED  // livraison confirmée par le fournisseur
+  READ       // lu (si le canal le rapporte)
+  FAILED
+  SIMULATED  // aucun envoi réel (environnement de test) — jamais compté comme envoyé
+  SKIPPED    // canal désactivé ou non configuré
+}
+
+/// Intention de diffusion durable (outbox, audit F04/F22/F23) : créée dans
+/// la MÊME transaction que la décision, exécutée telle quelle par le
+/// processeur (texte figé par langue, zones, canaux), reprise jusqu'à
+/// aboutissement.
 model Broadcast {
   id               String   @id @default(uuid())
   alertId          String
   alert            Alert    @relation(fields: [alertId], references: [id])
   authorId         String
   author           User     @relation("BroadcastAuthor", fields: [authorId], references: [id])
+  /// Texte approuvé (référence française) — conservé pour l'historique
   message          String
   templateId       String?
   targetZoneIds    String[]
   channels         String[]
+  /// NULL pour les diffusions antérieures à la migration (doublons historiques possibles)
+  kind             BroadcastKind?
+  certainty        BroadcastCertainty?
+  status           BroadcastStatus    @default(PENDING)
+  /// Texte exact envoyé, par langue, figé à l'approbation : { fr, ff, wo, snk }
+  payload          Json?
+  alertLevel       AlertLevel?
   totalRecipients  Int      @default(0)
+  sentCount        Int      @default(0)
+  /// Livraisons CONFIRMÉES par le fournisseur (et non plus « appel réussi »)
   deliveredCount   Int      @default(0)
+  failedCount      Int      @default(0)
+  simulatedCount   Int      @default(0)
   costXof          Float    @default(0)
+  attempts         Int      @default(0)
+  lastError        String?
+  dispatchedAt     DateTime?
+  completedAt      DateTime?
   idempotencyKey   String   @unique
   createdAt        DateTime @default(now())
 
+  deliveries       BroadcastDelivery[]
+
+  @@unique([alertId, kind])
   @@index([alertId])
   @@index([authorId])
+  @@index([status])
   @@map("broadcasts")
+}
+
+/// Une ligne par destinataire et canal : idempotence des reprises (jamais
+/// deux envois réussis au même destinataire) et suivi fournisseur.
+model BroadcastDelivery {
+  id                String         @id @default(uuid())
+  broadcastId       String
+  broadcast         Broadcast      @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
+  userId            String?
+  recipient         String
+  channel           String
+  lang              String         @default("fr")
+  status            DeliveryStatus
+  providerMessageId String?
+  error             String?
+  attempts          Int            @default(1)
+  deliveredAt       DateTime?
+  readAt            DateTime?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  @@unique([broadcastId, recipient, channel])
+  @@index([providerMessageId])
+  @@map("broadcast_deliveries")
 }

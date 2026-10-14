@@ -24,6 +24,6 @@ import { AuditModule } from '../audit/audit.module';
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy, SessionService],
-  exports: [AuthService, SessionService],
+  exports: [AuthService, SessionService, JwtModule],
 })
 export class AuthModule {}
