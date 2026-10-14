@@ -15,7 +15,7 @@ import {
 } from './alert-workflow';
 import {
   AlertFacts, refuseAdvance, refuseBroadcast, refuseBypass, autoEscalationEligible,
-  prealertEligible, routingLevel, TERMINAL_STATUSES, DIFFUSED_STATUSES,
+  prealertEligible, routingLevel, TERMINAL_STATUSES, DIFFUSED_STATUSES, PUBLIC_ACTIVE_STATUSES,
 } from './alert-policy';
 import { AuditService } from '../audit/audit.service';
 import { TerritoryService } from '../common/territory/territory.service';
@@ -679,6 +679,37 @@ export class AlertsService {
     this.audit.log({ userId: user.id, action: 'alert.medical_clearance', resource: 'alert', resourceId: alertId, details: {} });
     await this.afterCommit([], alert);
     return this.findOne(alertId);
+  }
+
+  /**
+   * Alertes publiques en vigueur pour une zone (consultation citoyenne
+   * USSD / WhatsApp — audit F16) : alertes diffusées vers cette zone, une
+   * zone parente ou une zone qu'elle contient. Sans zone connue : toute la
+   * région. Informations publiques uniquement.
+   */
+  async publicActiveFor(zoneId?: string | null, take = 5) {
+    const root = zoneId ?? (await this.prisma.zone.findFirst({ where: { parentId: null }, orderBy: { createdAt: 'asc' }, select: { id: true } }))?.id;
+    const zones = root
+      ? [...new Set([...(await this.territory.ancestorsInclusive(root)), ...(await this.territory.subtree(root))])]
+      : [];
+    const alerts = await this.prisma.alert.findMany({
+      where: {
+        status: { in: PUBLIC_ACTIVE_STATUSES },
+        ...(zones.length ? {
+          OR: [
+            { zoneId: { in: zones } },
+            { broadcasts: { some: { kind: BroadcastKind.PRIMARY, targetZoneIds: { hasSome: zones } } } },
+          ],
+        } : {}),
+      },
+      orderBy: [{ alertLevel: 'desc' }, { broadcastAt: 'desc' }],
+      take,
+      include: { zone: { select: { name: true } } },
+    });
+    return alerts.map((a) => ({
+      id: a.id, title: a.title, alertLevel: a.alertLevel, status: a.status, type: a.type,
+      zone: a.zone ? { name: a.zone.name } : null, broadcastAt: a.broadcastAt, createdAt: a.createdAt,
+    }));
   }
 
   async getBroadcasts(alertId?: string) {

@@ -292,6 +292,9 @@ model Signalement {
   fieldVerifiedById String?
   fieldVerifiedBy   User?       @relation("FieldVerifications", fields: [fieldVerifiedById], references: [id], onDelete: SetNull)
   fieldNotes        String?
+  // Référence de la source (canal:identifiant fournisseur — ex. ussd:<session>,
+  // wa:<message id>) : un même message reçu deux fois ne crée qu'un signalement.
+  sourceRef   String?           @unique
   createdAt   DateTime          @default(now())
 
   @@index([userId])

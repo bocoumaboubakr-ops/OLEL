@@ -3,7 +3,8 @@ import { TerritoryService } from '../common/territory/territory.service';
 import { TERRITORY_EXEMPT } from '../users/user-policy';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { AlertsService } from '../alerts/alerts.service';
-import { AlertLevel, Role, SignalementStatus } from '@prisma/client';
+import { AccountStatus, AlertLevel, Prisma, Role, SignalementStatus } from '@prisma/client';
+import { accountStatusData } from '../auth/account-status';
 
 const TYPE_LABEL: Record<string, string> = {
   INONDATION: 'Inondation', SECHERESSE: 'Sécheresse', INCENDIE: 'Incendie',
@@ -122,9 +123,29 @@ export class SignalementsService {
     });
   }
 
-  async createFromBot(dto: { type: any; phone?: string; severity?: number; language?: string; description?: string; text?: string; latitude?: number; longitude?: number; mediaUrls?: string[] }) {
-    // Attribuer le signalement au citoyen identifié par son numéro WhatsApp ;
-    // création automatique du compte CITOYEN au 1er signalement (comme le flux OTP).
+  async createFromBot(dto: { type: any; phone?: string; severity?: number; language?: string; description?: string; text?: string; latitude?: number; longitude?: number; mediaUrls?: string[]; messageId?: string }) {
+    return this.createFromChannel({
+      ...dto, channel: 'whatsapp',
+      sourceRef: dto.messageId ? `wa:${dto.messageId}` : undefined,
+    });
+  }
+
+  /**
+   * Réception d'un signalement par un canal sans compte connecté (WhatsApp,
+   * USSD, SVI). Attribué au citoyen identifié par son numéro (compte créé au
+   * premier signalement). Idempotent sur `sourceRef` : une même réception
+   * répétée par le fournisseur renvoie le signalement déjà enregistré.
+   * Renvoie `duplicate: true` dans ce cas (audit F06, F25).
+   */
+  async createFromChannel(dto: {
+    type: any; channel: 'whatsapp' | 'ussd' | 'ivr'; sourceRef?: string;
+    phone?: string; severity?: number; language?: string; description?: string; text?: string;
+    latitude?: number; longitude?: number; mediaUrls?: string[];
+  }) {
+    if (dto.sourceRef) {
+      const existing = await this.prisma.signalement.findUnique({ where: { sourceRef: dto.sourceRef } });
+      if (existing) return { ...existing, duplicate: true };
+    }
     const lang = ['fr', 'ff', 'wo', 'snk'].includes(dto.language || '') ? dto.language! : 'fr';
     let user = null;
     if (dto.phone) {
@@ -134,18 +155,24 @@ export class SignalementsService {
         const defaultZone = await this.prisma.zone.findFirst({
           where: { parentId: null }, orderBy: { createdAt: 'asc' }, select: { id: true },
         });
-        user = await this.prisma.user.create({
-          data: {
-            phone,
-            name: `Citoyen ${phone.slice(-4)}`,
-            role: 'CITOYEN',
-            isActive: true,
-            language: lang,
-            zoneId: defaultZone?.id,
-          },
-        });
+        try {
+          user = await this.prisma.user.create({
+            data: {
+              phone,
+              name: `Citoyen ${phone.slice(-4)}`,
+              role: 'CITOYEN',
+              ...accountStatusData(AccountStatus.ACTIVE),
+              language: lang,
+              zoneId: defaultZone?.id,
+            },
+          });
+        } catch (e) {
+          // Deux réceptions simultanées d'un nouveau numéro : le compte vient d'être créé par l'autre
+          if ((e as Prisma.PrismaClientKnownRequestError).code !== 'P2002') throw e;
+          user = await this.prisma.user.findUniqueOrThrow({ where: { phone } });
+        }
       } else if (dto.language && user.language !== lang) {
-        // Mémoriser la langue choisie sur WhatsApp pour les futures notifications
+        // Mémoriser la langue choisie pour les futures notifications
         await this.prisma.user.update({ where: { id: user.id }, data: { language: lang } });
       }
     }
@@ -155,18 +182,29 @@ export class SignalementsService {
       if (!user) throw new Error(`Compte bot introuvable (${botPhone}). Vérifiez le seed.`);
     }
 
-    return this.prisma.signalement.create({
-      data: {
-        userId: user.id,
-        type: dto.type,
-        text: dto.description || dto.text || '',
-        severity: dto.severity,
-        mediaUrls: dto.mediaUrls || [],
-        latitude: dto.latitude,
-        longitude: dto.longitude,
-        channel: 'whatsapp',
-      },
-    });
+    try {
+      const created = await this.prisma.signalement.create({
+        data: {
+          userId: user.id,
+          type: dto.type,
+          text: dto.description || dto.text || '',
+          severity: dto.severity,
+          mediaUrls: dto.mediaUrls || [],
+          latitude: dto.latitude,
+          longitude: dto.longitude,
+          channel: dto.channel,
+          sourceRef: dto.sourceRef,
+        },
+      });
+      return { ...created, duplicate: false };
+    } catch (e) {
+      // Deux réceptions simultanées du même message : la seconde renvoie la première
+      if (dto.sourceRef && (e as Prisma.PrismaClientKnownRequestError).code === 'P2002') {
+        const existing = await this.prisma.signalement.findUnique({ where: { sourceRef: dto.sourceRef } });
+        if (existing) return { ...existing, duplicate: true };
+      }
+      throw e;
+    }
   }
 
   /**

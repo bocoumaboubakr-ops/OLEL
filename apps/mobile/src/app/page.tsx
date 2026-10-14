@@ -106,6 +106,7 @@ export default function MobilePage() {
   const [reportTheme, setReportTheme] = useState<Theme | null>(null);
   const [reportOption, setReportOption] = useState<RiskOption | null>(null);
   const [reportStep, setReportStep] = useState<'theme' | 'option' | 'confirm' | 'done'>('theme');
+  const [reportOutcome, setReportOutcome] = useState<SendOutcome | null>(null);
   const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
   useOfflineQueue();
 
@@ -208,7 +209,8 @@ export default function MobilePage() {
             selectedOption={reportOption}
             onSelectTheme={(theme) => { setReportTheme(theme); setReportStep('option'); }}
             onSelectOption={(option) => { setReportOption(option); setReportStep('confirm'); }}
-            onSent={() => setReportStep('done')}
+            outcome={reportOutcome}
+            onSent={(o) => { setReportOutcome(o); setReportStep('done'); }}
             onBackToTheme={() => { setReportTheme(null); setReportOption(null); setReportStep('theme'); }}
             onBackToOption={() => { setReportOption(null); setReportStep('option'); }}
             onDone={() => { fetchAlerts(); setTab('alerts'); }}
@@ -475,19 +477,20 @@ function InfoCard({ label, value, sub, onClick }: { label: string; value: string
 // ── ReportScreen : 3 étapes (thématique → option → confirm) ──────────────────
 function ReportScreen({
   step, selectedTheme, selectedOption,
-  onSelectTheme, onSelectOption, onSent, onBackToTheme, onBackToOption, onDone,
+  onSelectTheme, onSelectOption, onSent, onBackToTheme, onBackToOption, onDone, outcome,
 }: {
   step: 'theme' | 'option' | 'confirm' | 'done';
   selectedTheme: Theme | null;
   selectedOption: RiskOption | null;
   onSelectTheme: (t: Theme) => void;
   onSelectOption: (o: RiskOption) => void;
-  onSent: () => void;
+  onSent: (o: SendOutcome) => void;
+  outcome: SendOutcome | null;
   onBackToTheme: () => void;
   onBackToOption: () => void;
   onDone: () => void;
 }) {
-  if (step === 'done') return <ReportSuccess onDone={onDone} />;
+  if (step === 'done') return <ReportSuccess outcome={outcome} onDone={onDone} />;
   if (step === 'confirm' && selectedTheme && selectedOption) {
     return <ReportConfirm theme={selectedTheme} option={selectedOption} onSent={onSent} onBack={onBackToOption} />;
   }
@@ -652,7 +655,7 @@ function ManualGpsInput({ onSet }: { onSet: (lat: number, lng: number) => void }
   );
 }
 
-function ReportConfirm({ theme, option, onSent, onBack }: { theme: Theme; option: RiskOption; onSent: () => void; onBack: () => void }) {
+function ReportConfirm({ theme, option, onSent, onBack }: { theme: Theme; option: RiskOption; onSent: (o: SendOutcome) => void; onBack: () => void }) {
   const [note, setNote] = useState('');
   const [captured, setCaptured] = useState<CapturedMedia[]>([]);
   const [sending, setSending] = useState(false);
@@ -682,12 +685,12 @@ function ReportConfirm({ theme, option, onSent, onBack }: { theme: Theme; option
 
       if (!navigator.onLine) {
         await queueSignalement(payload);
-        onSent();
+        onSent({ kind: 'queued' });
         return;
       }
 
-      await axios.post(`${API}/alerts`, payload, { headers: { Authorization: `Bearer ${token}` } });
-      onSent();
+      const { data } = await axios.post(`${API}/alerts`, payload, { headers: { Authorization: `Bearer ${token}` } });
+      onSent({ kind: 'received', ref: String(data?.id ?? '').slice(0, 8).toUpperCase() });
     } catch (e: any) {
       const msg = e.response?.data?.message;
       setError(Array.isArray(msg) ? msg.join(', ') : (msg || 'Erreur lors de l\'envoi'));
@@ -741,18 +744,34 @@ function ReportConfirm({ theme, option, onSent, onBack }: { theme: Theme; option
   );
 }
 
-function ReportSuccess({ onDone }: { onDone: () => void }) {
+/**
+ * Résultat réel d'un envoi (audit F06) : on n'affiche jamais « transmis aux
+ * autorités ». Hors connexion, le signalement est seulement enregistré sur
+ * le téléphone ; en ligne, il est reçu par OLEL et attend l'examen d'un
+ * opérateur.
+ */
+type SendOutcome = { kind: 'queued' } | { kind: 'received'; ref: string };
+
+function ReportSuccess({ outcome, onDone }: { outcome: SendOutcome | null; onDone: () => void }) {
+  const queued = outcome?.kind === 'queued';
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60dvh', padding: '0 24px', textAlign: 'center' }}>
       <div style={{
         width: 56, height: 56, borderRadius: '50%',
-        background: '#DCFCE7', color: '#16A34A',
+        background: queued ? '#FEF3C7' : '#DCFCE7', color: queued ? '#B45309' : '#16A34A',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         fontSize: '1.6rem', fontWeight: 600, marginBottom: 20,
-      }}>✓</div>
-      <h2 style={{ color: '#0F172A', margin: '0 0 8px', fontSize: '1.3rem', fontWeight: 700, letterSpacing: '-0.02em' }}>Signalement envoyé</h2>
-      <p style={{ color: '#64748B', margin: '0 0 28px', lineHeight: 1.6, maxWidth: 320, fontSize: '0.92rem' }}>
-        Votre signalement a été transmis aux autorités. Un agent va l&apos;examiner.
+      }}>{queued ? '…' : '✓'}</div>
+      <h2 style={{ color: '#0F172A', margin: '0 0 8px', fontSize: '1.3rem', fontWeight: 700, letterSpacing: '-0.02em' }}>
+        {queued ? 'Enregistré sur ce téléphone' : 'Signalement reçu par OLEL'}
+      </h2>
+      <p style={{ color: '#64748B', margin: '0 0 12px', lineHeight: 1.6, maxWidth: 320, fontSize: '0.92rem' }}>
+        {queued
+          ? 'Pas de réseau : votre signalement n\'a pas encore été envoyé. Il partira automatiquement au retour de la connexion.'
+          : <>Il est en attente d&apos;examen par un opérateur.{outcome?.kind === 'received' && outcome.ref ? <> Référence : <strong>{outcome.ref}</strong>.</> : null}</>}
+      </p>
+      <p style={{ color: '#92400E', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 8, padding: '8px 12px', margin: '0 0 24px', maxWidth: 320, fontSize: '0.8rem', lineHeight: 1.5 }}>
+        OLEL ne remplace pas les secours : en cas de danger immédiat, contactez-les directement.
       </p>
       <button onClick={onDone} style={{ background: '#0F172A', color: 'white', border: 'none', padding: '13px 28px', borderRadius: 10, fontSize: '0.92rem', fontWeight: 600, cursor: 'pointer', letterSpacing: '-0.01em' }}>
         Voir les alertes
@@ -1615,6 +1634,31 @@ function SignalementFieldVerifyForm({ signalement, onBack, onDone }: { signaleme
   );
 }
 
+/**
+ * Numéros d'urgence affichés (audit F35 : aucun numéro non vérifié).
+ * Par défaut, seuls les numéros concordants dans toutes les sources
+ * consultées (18, 17). Les autres (SAMU — 15 ou 1515 selon les sources —,
+ * Protection civile de Matam) ne seront affichés qu'après confirmation
+ * officielle, via NEXT_PUBLIC_EMERGENCY_NUMBERS='[{"label":"…","number":"…"}]'.
+ */
+const DEFAULT_EMERGENCY_NUMBERS = [
+  { label: 'Sapeurs-Pompiers', number: '18' },
+  { label: 'Police secours',   number: '17' },
+];
+
+function emergencyNumbers(): { label: string; number: string }[] {
+  try {
+    const raw = process.env.NEXT_PUBLIC_EMERGENCY_NUMBERS;
+    if (raw) {
+      const list = JSON.parse(raw);
+      if (Array.isArray(list) && list.length && list.every((x) => typeof x?.label === 'string' && /^[\d\s+]{2,20}$/.test(String(x?.number)))) {
+        return list;
+      }
+    }
+  } catch { /* configuration invalide : liste par défaut */ }
+  return DEFAULT_EMERGENCY_NUMBERS;
+}
+
 function SosModal({ onClose }: { onClose: () => void }) {
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 9998, display: 'flex', alignItems: 'flex-end' }} onClick={onClose}>
@@ -1626,12 +1670,7 @@ function SosModal({ onClose }: { onClose: () => void }) {
         </div>
         <p style={{ margin: '0 0 16px', fontSize: '0.82rem', color: '#64748B' }}>Appel direct — tarif standard</p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {[
-            { label: 'Sapeurs-Pompiers',     number: '18' },
-            { label: 'Police / Gendarmerie', number: '17' },
-            { label: 'SAMU Sénégal',         number: '15' },
-            { label: 'Protection Civile',    number: '33 869 19 20' },
-          ].map(({ label, number }) => (
+          {emergencyNumbers().map(({ label, number }) => (
             <a key={number} href={`tel:${number.replace(/\s/g, '')}`}
               style={{
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',

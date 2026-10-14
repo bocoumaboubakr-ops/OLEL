@@ -1,10 +1,12 @@
 import { Module } from '@nestjs/common';
 import { UssdController } from './ussd.controller';
-import { NotificationsModule } from '../notifications/notifications.module';
-import { PrismaModule } from '../common/prisma/prisma.module';
+import { UssdService } from './ussd.service';
+import { SignalementsModule } from '../signalements/signalements.module';
+import { AlertsModule } from '../alerts/alerts.module';
 
 @Module({
-  imports: [NotificationsModule, PrismaModule],
+  imports: [SignalementsModule, AlertsModule],
   controllers: [UssdController],
+  providers: [UssdService],
 })
 export class UssdModule {}
