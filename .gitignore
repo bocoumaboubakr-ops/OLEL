@@ -20,6 +20,8 @@ build/
 out/
 *.tsbuildinfo
 .turbo/
+# Généré par Next.js à chaque build/dev (références de types de routes)
+next-env.d.ts
 
 # ── Prisma ───────────────────────────────────────────────────
 # Le client généré ne doit pas être committé

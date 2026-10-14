@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import axios from 'axios';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -164,7 +165,7 @@ export default function SignalementsPage() {
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
       }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
-          <a href="/" style={{ color: '#0F172A', textDecoration: 'none', fontWeight: 700, fontSize: '1.05rem', letterSpacing: '-0.02em' }}>OLEL</a>
+          <Link href="/" style={{ color: '#0F172A', textDecoration: 'none', fontWeight: 700, fontSize: '1.05rem', letterSpacing: '-0.02em' }}>OLEL</Link>
           <span style={{ color: '#CBD5E1' }}>›</span>
           <span style={{ fontSize: '0.92rem', color: '#0F172A', fontWeight: 600, letterSpacing: '-0.01em' }}>Signalements citoyens</span>
         </div>

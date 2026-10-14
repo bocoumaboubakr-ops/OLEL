@@ -18,7 +18,8 @@ const nextConfig = {
           { key: 'X-Frame-Options', value: 'DENY' },
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-          { key: 'Permissions-Policy', value: 'geolocation=(self), camera=(), microphone=()' },
+          // Caméra et micro autorisés pour la preuve photo/vocale des signalements
+          { key: 'Permissions-Policy', value: 'geolocation=(self), camera=(self), microphone=(self)' },
         ],
       },
     ];
@@ -29,4 +30,7 @@ module.exports = withSentryConfig(nextConfig, {
   silent: true,
   org: process.env.SENTRY_ORG,
   project: process.env.SENTRY_PROJECT,
+  // Ne jamais publier les source maps : générées seulement pour l'envoi à
+  // Sentry (si configuré), puis supprimées du build servi.
+  sourcemaps: { disable: !process.env.SENTRY_AUTH_TOKEN, deleteSourcemapsAfterUpload: true },
 });

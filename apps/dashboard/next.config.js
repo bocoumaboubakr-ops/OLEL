@@ -30,4 +30,7 @@ module.exports = withSentryConfig(nextConfig, {
   silent: true,
   org: process.env.SENTRY_ORG,
   project: process.env.SENTRY_PROJECT,
+  // Ne jamais publier les source maps : générées seulement pour l'envoi à
+  // Sentry (si configuré), puis supprimées du build servi.
+  sourcemaps: { disable: !process.env.SENTRY_AUTH_TOKEN, deleteSourcemapsAfterUpload: true },
 });
