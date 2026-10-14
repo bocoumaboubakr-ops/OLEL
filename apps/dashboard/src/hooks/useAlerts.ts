@@ -39,15 +39,20 @@ export function useAlerts() {
 
     const socket = io(`${WS}/alerts`, { auth: { token } });
 
-    socket.on('alert:new', (alert: any) => {
-      setAlerts((prev) => [alert, ...prev].slice(0, 200));
-    });
+    // Le serveur n'envoie qu'un résumé minimal (audit F02) : la liste fait
+    // foi via l'API, qui applique le cloisonnement territorial. On recharge
+    // donc la liste (regroupé sur 1 s) au lieu de fusionner le contenu reçu.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const scheduleRefetch = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(fetchAlerts, 1000);
+    };
+    socket.on('alert:changed', scheduleRefetch);
+    // Session révoquée ou expirée : le serveur coupe la connexion ; le
+    // rechargement renverra 401 et redirigera vers la connexion.
+    socket.on('disconnect', (reason) => { if (reason === 'io server disconnect') fetchAlerts(); });
 
-    socket.on('alert:global', (updated: any) => {
-      setAlerts((prev) => prev.map((a) => (a.id === updated.id ? { ...a, ...updated } : a)));
-    });
-
-    return () => { socket.disconnect(); };
+    return () => { if (timer) clearTimeout(timer); socket.disconnect(); };
   }, [fetchAlerts]);
 
   return { alerts, loading, refetch: fetchAlerts };
