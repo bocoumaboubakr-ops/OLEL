@@ -1,15 +1,6 @@
-import {
-  IsString,
-  IsEnum,
-  IsNumber,
-  IsOptional,
-  IsUUID,
-  Min,
-  Max,
-  MaxLength,
-} from 'class-validator';
+import { IsString, IsEnum, IsNumber, IsOptional, IsUUID, Min, Max, MaxLength, Matches } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { AlertLevel, AlertType } from '@prisma/client';
+import { AlertLevel, AlertType, LocationSource } from '@prisma/client';
 import { IsOlelMediaList } from '../../common/media/olel-media.decorator';
 
 export class CreateAlertDto {
@@ -27,7 +18,7 @@ export class CreateAlertDto {
   @IsEnum(AlertType)
   type: AlertType;
 
-  @ApiPropertyOptional({ enum: AlertLevel, default: 'BLEU', description: 'Niveau d\'alerte (BLEU par défaut)' })
+  @ApiPropertyOptional({ enum: AlertLevel, description: 'Niveau proposé (opérateurs). Pour un citoyen ou une sentinelle, le niveau découle de la gravité déclarée.' })
   @IsOptional()
   @IsEnum(AlertLevel)
   alertLevel?: AlertLevel;
@@ -58,15 +49,34 @@ export class CreateAlertDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsNumber()
+  @Min(-90)
+  @Max(90)
   latitude?: number;
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsNumber()
+  @Min(-180)
+  @Max(180)
   longitude?: number;
 
   @ApiPropertyOptional({ type: [String] })
   @IsOptional()
   @IsOlelMediaList()
   mediaUrls?: string[];
+
+  @ApiPropertyOptional({ enum: LocationSource, description: 'Provenance de la position : GPS de l\'appareil ou saisie manuelle' })
+  @IsOptional()
+  @IsEnum(LocationSource)
+  locationSource?: LocationSource;
+
+  @ApiPropertyOptional({ description: 'Sous-type métier structuré (ex. ELEVAGE_EPIZOOTIE)', example: 'INFRA_ROUTE_COUPEE' })
+  @IsOptional()
+  @Matches(/^[A-Z0-9_]{2,40}$/)
+  subtype?: string;
+
+  @ApiPropertyOptional({ description: 'Identifiant de requête généré par le client (rejeu hors connexion sans doublon)' })
+  @IsOptional()
+  @IsUUID()
+  clientRequestId?: string;
 }

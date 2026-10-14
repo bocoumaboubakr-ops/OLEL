@@ -1,6 +1,6 @@
 import { IsArray, IsEnum, IsInt, IsNumber, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { AlertLevel, ValidationAction } from '@prisma/client';
+import { AlertLevel, LocationSource, ValidationAction } from '@prisma/client';
 import { IsOlelMedia } from '../../common/media/olel-media.decorator';
 
 /** Action de validation dans le cursus (sentinelle / mairie / préfecture). */
@@ -33,6 +33,18 @@ export class ValidateAlertDto {
   @Min(-180)
   @Max(180)
   longitude?: number;
+
+  @ApiPropertyOptional({ enum: LocationSource, description: 'Provenance de la position : GPS de l\'appareil ou saisie manuelle' })
+  @IsOptional()
+  @IsEnum(LocationSource)
+  locationSource?: LocationSource;
+
+  @ApiPropertyOptional({ description: 'Précision annoncée par l\'appareil (mètres)' })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100000)
+  locationAccuracyM?: number;
 
   @ApiPropertyOptional({ minimum: 0, maximum: 3, description: 'Gravité 0-3 (obligatoire étape sentinelle)' })
   @IsOptional()

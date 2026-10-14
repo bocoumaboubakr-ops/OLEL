@@ -3,7 +3,8 @@ import { TerritoryService } from '../common/territory/territory.service';
 import { TERRITORY_EXEMPT } from '../users/user-policy';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { AlertsService } from '../alerts/alerts.service';
-import { AccountStatus, AlertLevel, Prisma, Role, SignalementStatus } from '@prisma/client';
+import { levelFromDeclaredSeverity } from '../alerts/alert-workflow';
+import { AccountStatus, LocationSource, Prisma, Role, SignalementStatus } from '@prisma/client';
 import { accountStatusData } from '../auth/account-status';
 
 const TYPE_LABEL: Record<string, string> = {
@@ -13,64 +14,36 @@ const TYPE_LABEL: Record<string, string> = {
   AUTRE: 'Danger signalé',
 };
 
-// Gravité citoyenne (1-3) → niveau d'alerte officiel d'entrée
-const SEVERITY_TO_LEVEL: Record<number, AlertLevel> = {
-  1: AlertLevel.JAUNE,
-  2: AlertLevel.ORANGE,
-  3: AlertLevel.ROUGE,
-};
-
-// Rôles qui voient les signalements sans restriction territoriale
-const GLOBAL_ROLES: Role[] = [
-  Role.ADMIN,
-  Role.SUPER_ADMIN,
-  Role.PREFECTURE,
-  Role.GOUVERNORAT,
-  Role.PROTECTION_CIVILE,
-  Role.SUPERVISEUR_REGIONAL,
-];
-
 @Injectable()
 export class SignalementsService {
   private readonly logger = new Logger(SignalementsService.name);
 
   constructor(private prisma: PrismaService, private alerts: AlertsService, private territory: TerritoryService) {}
 
-  /** Le signalement doit être dans le territoire de l'opérateur (audit F08). */
-  private async assertInTerritory(zoneId: string | null | undefined, role?: Role, actorZoneId?: string | null) {
-    if (role && TERRITORY_EXEMPT.includes(role)) return;
-    if (!zoneId || !(await this.territory.isWithin(zoneId, actorZoneId))) {
-      throw new ForbiddenException('Ce signalement est hors de votre territoire');
-    }
+  /**
+   * Zones dont un opérateur voit et traite les signalements (audit F08/F09) :
+   *  - son territoire (sa zone et TOUS ses descendants, parcours récursif) ;
+   *  - ses zones ascendantes : signalements « non localisés » d'un citoyen
+   *    rattaché à la région ou au département (commune inconnue), que
+   *    l'opérateur local doit pouvoir trier. Jamais les zones sœurs.
+   * null = sans restriction (administration).
+   */
+  private async scopeZones(actor: { role?: Role; zoneId?: string | null }): Promise<string[] | null> {
+    if (actor.role && TERRITORY_EXEMPT.includes(actor.role)) return null;
+    if (!actor.zoneId) return [];
+    const [down, up] = await Promise.all([this.territory.subtree(actor.zoneId), this.territory.ancestorsInclusive(actor.zoneId)]);
+    return [...new Set([...down, ...up])];
   }
 
-  /**
-   * Zones visibles par un opérateur local : sa zone, tous ses ascendants
-   * (zone racine Matam) et tous ses descendants. Permet à une MAIRIE
-   * d'Ourossogui de voir un signalement créé via le bot WhatsApp dont le
-   * citoyen est rattaché à la zone racine (commune inconnue).
-   */
-  private async visibleZoneIds(zoneId: string): Promise<string[]> {
-    const ids = new Set<string>([zoneId]);
-    let cur = await this.prisma.zone.findUnique({
-      where: { id: zoneId }, select: { id: true, parentId: true },
-    });
-    while (cur?.parentId) {
-      ids.add(cur.parentId);
-      cur = await this.prisma.zone.findUnique({
-        where: { id: cur.parentId }, select: { id: true, parentId: true },
-      });
-    }
-    const children = await this.prisma.zone.findMany({
-      where: { parentId: { in: Array.from(ids) } }, select: { id: true },
-    });
-    children.forEach((z) => ids.add(z.id));
-    return Array.from(ids);
+  private async assertInScope(zoneId: string | null | undefined, actor: { role?: Role; zoneId?: string | null }) {
+    const zones = await this.scopeZones(actor);
+    if (zones === null) return;
+    if (!zoneId || !zones.includes(zoneId)) throw new ForbiddenException('Ce signalement est hors de votre territoire');
   }
 
   async findAll(
     params: { page?: number; limit?: number; status?: SignalementStatus; zoneId?: string },
-    caller?: { role: Role; zoneId?: string | null },
+    caller: { role: Role; zoneId?: string | null },
   ) {
     const page = Math.max(1, Number(params.page) || 1);
     const limit = Math.min(100, Math.max(1, Number(params.limit) || 20));
@@ -79,12 +52,9 @@ export class SignalementsService {
     const where: any = {};
     if (params.status) where.status = params.status;
 
-    if (caller && !GLOBAL_ROLES.includes(caller.role) && caller.zoneId) {
-      const visible = await this.visibleZoneIds(caller.zoneId);
-      where.user = { zoneId: { in: visible } };
-    } else if (params.zoneId) {
-      where.user = { zoneId: params.zoneId };
-    }
+    const zones = await this.scopeZones(caller);
+    if (zones !== null) where.user = { zoneId: { in: params.zoneId ? zones.filter((z) => z === params.zoneId) : zones } };
+    else if (params.zoneId) where.user = { zoneId: params.zoneId };
 
     const [items, total] = await Promise.all([
       this.prisma.signalement.findMany({
@@ -123,7 +93,7 @@ export class SignalementsService {
     });
   }
 
-  async createFromBot(dto: { type: any; phone?: string; severity?: number; language?: string; description?: string; text?: string; latitude?: number; longitude?: number; mediaUrls?: string[]; messageId?: string }) {
+  async createFromBot(dto: { type: any; phone?: string; severity?: number; language?: string; description?: string; text?: string; latitude?: number; longitude?: number; mediaUrls?: string[]; messageId?: string; subtype?: string }) {
     return this.createFromChannel({
       ...dto, channel: 'whatsapp',
       sourceRef: dto.messageId ? `wa:${dto.messageId}` : undefined,
@@ -138,7 +108,7 @@ export class SignalementsService {
    * Renvoie `duplicate: true` dans ce cas (audit F06, F25).
    */
   async createFromChannel(dto: {
-    type: any; channel: 'whatsapp' | 'ussd' | 'ivr'; sourceRef?: string;
+    type: any; channel: 'whatsapp' | 'ussd' | 'ivr'; sourceRef?: string; subtype?: string;
     phone?: string; severity?: number; language?: string; description?: string; text?: string;
     latitude?: number; longitude?: number; mediaUrls?: string[];
   }) {
@@ -194,6 +164,7 @@ export class SignalementsService {
           longitude: dto.longitude,
           channel: dto.channel,
           sourceRef: dto.sourceRef,
+          subtype: dto.subtype,
         },
       });
       return { ...created, duplicate: false };
@@ -223,7 +194,7 @@ export class SignalementsService {
   /** Vérification terrain par une sentinelle/coordinateur (avec GPS obligatoire). */
   async fieldVerify(
     id: string,
-    dto: { latitude: number; longitude: number; mediaUrls?: string[]; notes?: string },
+    dto: { latitude: number; longitude: number; mediaUrls?: string[]; notes?: string; locationSource?: LocationSource; locationAccuracyM?: number },
     verifier: { id: string; role: Role; zoneId?: string | null },
   ) {
     const existing = await this.prisma.signalement.findUnique({
@@ -237,13 +208,7 @@ export class SignalementsService {
     if (existing.fieldVerifiedAt) {
       throw new BadRequestException('Vérification terrain déjà effectuée');
     }
-    // Scoping : la sentinelle doit appartenir à la zone (arbre) du signalement
-    if (!GLOBAL_ROLES.includes(verifier.role) && verifier.zoneId && existing.user?.zoneId) {
-      const visible = await this.visibleZoneIds(verifier.zoneId);
-      if (!visible.includes(existing.user.zoneId)) {
-        throw new ForbiddenException('Hors de votre zone de couverture');
-      }
-    }
+    await this.assertInScope(existing.user?.zoneId, verifier);
 
     const [updated] = await this.prisma.$transaction([
       this.prisma.signalement.update({
@@ -255,6 +220,8 @@ export class SignalementsService {
           fieldVerifiedAt: new Date(),
           fieldVerifiedById: verifier.id,
           fieldNotes: dto.notes,
+          fieldLocationSource: dto.locationSource,
+          fieldLocationAccuracyM: dto.locationAccuracyM,
         },
       }),
       this.prisma.auditLog.create({
@@ -276,7 +243,18 @@ export class SignalementsService {
       include: { user: { select: { zoneId: true, zone: { select: { name: true } } } } },
     });
     if (!existing) throw new NotFoundException(`Signalement ${id} introuvable`);
-    await this.assertInTerritory(existing.user?.zoneId, reviewerRole, reviewerZoneId);
+    await this.assertInScope(existing.user?.zoneId, { role: reviewerRole, zoneId: reviewerZoneId });
+    if (status !== SignalementStatus.VALIDATED && status !== SignalementStatus.REJECTED) {
+      throw new BadRequestException('Statut attendu : VALIDATED ou REJECTED');
+    }
+    // Zone de l'alerte : celle du citoyen si elle est dans le territoire du
+    // validateur ; sinon (signalement non localisé, citoyen rattaché à une zone
+    // parente) l'opérateur le prend en charge dans SA zone — jamais une
+    // alerte régionale créée par défaut.
+    const citizenZone = existing.user?.zoneId ?? null;
+    const alertZoneId = !reviewerZoneId || (reviewerRole && TERRITORY_EXEMPT.includes(reviewerRole)) || (citizenZone && (await this.territory.isWithin(citizenZone, reviewerZoneId)))
+      ? citizenZone ?? reviewerZoneId ?? undefined
+      : reviewerZoneId;
 
     // Garde du cursus : on ne valide pas en aveugle un signalement WhatsApp
     // sans preuve. Seul PREFECTURE+ peut passer outre (cas exceptionnel).
@@ -312,9 +290,10 @@ export class SignalementsService {
             title: zoneName ? `${label} — ${zoneName}` : `${label} — signalement citoyen`,
             description: existing.text,
             type: existing.type,
-            alertLevel: SEVERITY_TO_LEVEL[existing.severity ?? 1] || AlertLevel.JAUNE,
+            alertLevel: levelFromDeclaredSeverity(existing.severity),
+            subtype: existing.subtype ?? undefined,
             severity: existing.severity ?? 1,
-            zoneId: existing.user?.zoneId || undefined,
+            zoneId: alertZoneId || undefined,
             latitude: existing.latitude ?? undefined,
             longitude: existing.longitude ?? undefined,
             mediaUrls: existing.mediaUrls,

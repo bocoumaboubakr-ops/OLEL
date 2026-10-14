@@ -75,7 +75,7 @@ describe('AlertsService', () => {
 
   describe('findAll', () => {
     it('should return paginated alerts', async () => {
-      const result = await service.findAll({ page: 1, limit: 20 });
+      const result = await service.findAll({ page: 1, limit: 20 }, { id: 'admin', role: 'SUPER_ADMIN' as any });
       expect(result.alerts).toHaveLength(1);
       expect(result.total).toBe(1);
     });

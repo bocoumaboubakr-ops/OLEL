@@ -30,7 +30,6 @@ export class SignalementsController {
   @Roles(
     Role.SENTINELLE,
     Role.COORDINATEUR,
-    Role.RADIO_COMMUNAUTAIRE,
     Role.MAIRIE,
     Role.HYDRO_METEO,
     Role.PREFECTURE,
@@ -89,8 +88,8 @@ export class SignalementsController {
   @Patch(':id/status')
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.MAIRIE, Role.PREFECTURE, Role.ADMIN)
-  @ApiOperation({ summary: 'Valider ou rejeter un signalement' })
+  @Roles(Role.MAIRIE, Role.PREFECTURE, Role.GOUVERNORAT, Role.PROTECTION_CIVILE, Role.SUPERVISEUR_REGIONAL, Role.ADMIN, Role.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Valider ou rejeter un signalement (territoire de l\'opérateur)' })
   updateStatus(
     @Param('id') id: string,
     @Body('status') status: SignalementStatus,

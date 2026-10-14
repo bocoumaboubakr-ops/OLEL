@@ -8,6 +8,8 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Role } from '@prisma/client';
 
+type Actor = { id: string; role: Role; zoneId?: string | null };
+
 @ApiTags('Missions')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -16,9 +18,10 @@ export class MissionsController {
   constructor(private missions: MissionsService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Liste des missions (filtrée par zone si zoneId fourni)' })
+  @Roles(Role.SENTINELLE, Role.COORDINATEUR, Role.MAIRIE, Role.PREFECTURE, Role.GOUVERNORAT, Role.PROTECTION_CIVILE, Role.SUPERVISEUR_REGIONAL, Role.ADMIN, Role.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Liste des missions du territoire (sentinelle : les siennes et les missions ouvertes)' })
   @ApiQuery({ name: 'zoneId', required: false })
-  findAll(@CurrentUser() user: { id: string; role: Role }, @Query('zoneId') zoneId?: string) {
+  findAll(@CurrentUser() user: Actor, @Query('zoneId') zoneId?: string) {
     return this.missions.findAll(user, zoneId);
   }
 
@@ -31,15 +34,15 @@ export class MissionsController {
   @Post()
   @Roles(Role.COORDINATEUR, Role.MAIRIE, Role.PREFECTURE, Role.GOUVERNORAT, Role.PROTECTION_CIVILE, Role.SUPERVISEUR_REGIONAL, Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({ summary: 'Créer une mission (coordinateur+)' })
-  create(@Body() dto: CreateMissionDto, @CurrentUser('id') userId: string) {
-    return this.missions.create(dto, userId);
+  create(@Body() dto: CreateMissionDto, @CurrentUser() user: Actor) {
+    return this.missions.create(dto, user);
   }
 
   @Post(':id/assign')
   @Roles(Role.COORDINATEUR, Role.MAIRIE, Role.PREFECTURE, Role.GOUVERNORAT, Role.PROTECTION_CIVILE, Role.SUPERVISEUR_REGIONAL, Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({ summary: 'Assigner une mission à une sentinelle' })
-  assign(@Param('id') id: string, @Body() dto: AssignMissionDto) {
-    return this.missions.assign(id, dto.sentinelId);
+  assign(@Param('id') id: string, @Body() dto: AssignMissionDto, @CurrentUser() user: Actor) {
+    return this.missions.assign(id, dto.sentinelId, user);
   }
 
   @Post(':id/accept')

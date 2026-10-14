@@ -1,21 +1,22 @@
 import {
   Injectable, NotFoundException, ForbiddenException,
-  BadRequestException, ConflictException, Logger,
+  BadRequestException, ConflictException, GoneException, Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import {
   AlertLevel, AlertStatus, AlertStep, AlertType, BroadcastCertainty, BroadcastKind,
-  CriticalValidatorCategory, Prisma, Role, ValidationAction,
+  CriticalValidatorCategory, LocationSource, Prisma, Role, ValidationAction,
 } from '@prisma/client';
 import { AlertsGateway } from './alerts.gateway';
 import {
   LEVEL_CONFIG, CRITICAL_LEVELS, criticalCategory, canClose,
   protectionCivileEntryStep, normalizePhase, nextStepFor, PHASE,
-  AUTO_ESCALATION_MINUTES, hasLevel,
+  AUTO_ESCALATION_MINUTES, hasLevel, levelFromDeclaredSeverity,
 } from './alert-workflow';
 import {
   AlertFacts, refuseAdvance, refuseBroadcast, refuseBypass, autoEscalationEligible,
   prealertEligible, routingLevel, TERMINAL_STATUSES, DIFFUSED_STATUSES, PUBLIC_ACTIVE_STATUSES,
+  MIN_BYPASS_JUSTIFICATION,
 } from './alert-policy';
 import { AuditService } from '../audit/audit.service';
 import { TerritoryService } from '../common/territory/territory.service';
@@ -33,6 +34,7 @@ export const FLAG_PREALERT = 'prealert_red';
 export const FLAG_AUTO_ESCALATION = 'auto_escalation_red';
 
 type OperatorCtx = { id: string; role: Role; zoneId?: string | null };
+export type ReaderCtx = OperatorCtx;
 
 @Injectable()
 export class AlertsService {
@@ -152,7 +154,55 @@ export class AlertsService {
     if (count !== 1) throw new ConflictException('L\'alerte a été modifiée entre-temps — rechargez avant de décider');
   }
 
-  async getHistory(alertId: string) {
+  // ── Lecture cloisonnée (audit F08) ─────────────────────────────────────
+  /**
+   * Périmètre de lecture des alertes, appliqué à CHAQUE lecture :
+   *  - administration : tout ;
+   *  - opérateur : alertes dont la zone est dans son territoire (sous-arbre) ;
+   *  - radio : alertes diffusées de son territoire ;
+   *  - citoyen : ses propres signalements + alertes publiques en vigueur
+   *    concernant sa zone (même définition que USSD/WhatsApp).
+   */
+  private async readScope(user: ReaderCtx): Promise<Prisma.AlertWhereInput> {
+    if (TERRITORY_EXEMPT.includes(user.role)) return {};
+    if (user.role === Role.CITOYEN) {
+      const zones = await this.publicZonesFor(user.zoneId);
+      return {
+        OR: [
+          { createdById: user.id },
+          {
+            status: { in: PUBLIC_ACTIVE_STATUSES },
+            ...(zones.length ? { OR: [{ zoneId: { in: zones } }, { broadcasts: { some: { kind: BroadcastKind.PRIMARY, targetZoneIds: { hasSome: zones } } } }] } : {}),
+          },
+        ],
+      };
+    }
+    if (!user.zoneId) return { id: { in: [] } };
+    const territory = await this.territory.subtree(user.zoneId);
+    if (user.role === Role.RADIO_COMMUNAUTAIRE) return { zoneId: { in: territory }, status: { in: PUBLIC_ACTIVE_STATUSES } };
+    return { zoneId: { in: territory } };
+  }
+
+  /** Zones dont les alertes publiques concernent un citoyen : ancêtres + descendants de sa zone. */
+  private async publicZonesFor(zoneId?: string | null): Promise<string[]> {
+    const root = zoneId ?? (await this.prisma.zone.findFirst({ where: { parentId: null }, orderBy: { createdAt: 'asc' }, select: { id: true } }))?.id;
+    if (!root) return [];
+    return [...new Set([...(await this.territory.ancestorsInclusive(root)), ...(await this.territory.subtree(root))])];
+  }
+
+  private isOperator(user: ReaderCtx) {
+    return user.role !== Role.CITOYEN && user.role !== Role.RADIO_COMMUNAUTAIRE;
+  }
+
+  /** 404 (et non 403) hors périmètre : on ne révèle pas l'existence d'une alerte. */
+  private async assertReadable(alertId: string, user: ReaderCtx, operatorOnly = false) {
+    if (operatorOnly && !this.isOperator(user)) throw new ForbiddenException('Réservé aux opérateurs');
+    const found = await this.prisma.alert.findFirst({ where: { AND: [{ id: alertId }, await this.readScope(user)] }, select: { id: true } });
+    if (!found) throw new NotFoundException('Alerte introuvable');
+  }
+
+  async getHistory(alertId: string, user: ReaderCtx) {
+    await this.assertReadable(alertId, user, true);
     return this.prisma.validation.findMany({
       where: { alertId },
       orderBy: { createdAt: 'asc' },
@@ -160,7 +210,9 @@ export class AlertsService {
     });
   }
 
-  async getCriticalValidationStatus(alertId: string) {
+  /** Historique des co-signatures (ancien circuit) : lecture seule, non bloquante. */
+  async getCriticalValidationStatus(alertId: string, user: ReaderCtx) {
+    await this.assertReadable(alertId, user, true);
     const alert = await this.findOne(alertId);
     const cvs = await this.prisma.alertCriticalValidation.findMany({
       where: { alertId },
@@ -183,45 +235,20 @@ export class AlertsService {
     };
   }
 
-  async addCriticalValidation(
-    alertId: string,
-    validator: { id: string; role: Role },
-    comment?: string,
-  ) {
-    const category = criticalCategory(validator.role);
-    if (!category) {
-      throw new ForbiddenException(`Le rôle ${validator.role} ne peut pas effectuer de validation critique`);
-    }
-    const alert = await this.findOne(alertId);
-    if (!CRITICAL_LEVELS.includes(alert.alertLevel as AlertLevel)) {
-      throw new BadRequestException('Cette alerte ne requiert pas de validation critique (niveau < ORANGE)');
-    }
-
-    const cv = await this.prisma.alertCriticalValidation.upsert({
-      where: { alertId_validatorId: { alertId, validatorId: validator.id } },
-      update: { comment, validatedAt: new Date() },
-      create: { alertId, validatorId: validator.id, validatorCategory: category, comment },
-    });
-
-    // Vérifier si les 3 catégories sont maintenant couvertes
-    const allCvs = await this.prisma.alertCriticalValidation.findMany({ where: { alertId } });
-    const done = (
-      allCvs.some(v => v.validatorCategory === CriticalValidatorCategory.SENTINELLE_CATEGORY) &&
-      allCvs.some(v => v.validatorCategory === CriticalValidatorCategory.AUTORITE_LOCALE) &&
-      allCvs.some(v => v.validatorCategory === CriticalValidatorCategory.AUTORITE_ADMIN)
-    );
-    if (done) {
-      await this.prisma.alert.update({ where: { id: alertId }, data: { criticalValidated: true } });
-    }
-
-    this.audit.log({ userId: validator.id, action: 'alert.critical_validate', resource: 'alert', resourceId: alertId, details: { category, done } });
-    return { criticalValidation: cv, allValidated: done };
+  /**
+   * Ancienne « triple validation » : n'est plus une règle du circuit (v3 :
+   * vérification, confirmation par l'autorité pour ROUGE+, double regard).
+   * L'enregistrer laisserait croire à un contrôle que l'API n'applique pas
+   * (audit F14) : l'opération est retirée.
+   */
+  async addCriticalValidation(): Promise<never> {
+    throw new GoneException('La triple validation n\'est plus une étape du circuit : utilisez Valider / Confirmer');
   }
 
   async findAll(filters: {
     zoneId?: string; status?: AlertStatus; type?: AlertType;
     step?: AlertStep; alertLevel?: AlertLevel; page?: number; limit?: number;
-  }) {
+  }, user: ReaderCtx) {
     const { zoneId, status, type, step, alertLevel } = filters;
     // Coercition Int : les query params arrivent en string
     const page = Math.max(1, Number(filters.page) || 1);
@@ -232,10 +259,11 @@ export class AlertsService {
     if (type)        where.type = type;
     if (step)        where.currentStep = step;
     if (alertLevel)  where.alertLevel = alertLevel;
+    const scoped: Prisma.AlertWhereInput = { AND: [where, await this.readScope(user)] };
 
     const [alerts, total] = await Promise.all([
       this.prisma.alert.findMany({
-        where,
+        where: scoped,
         skip: (page - 1) * limit,
         take: limit,
         include: {
@@ -244,9 +272,9 @@ export class AlertsService {
         },
         orderBy: { createdAt: 'desc' },
       }),
-      this.prisma.alert.count({ where }),
+      this.prisma.alert.count({ where: scoped }),
     ]);
-    return { alerts, total, page, limit };
+    return { alerts: this.isOperator(user) ? alerts : alerts.map((a) => publicView(a, user)), total, page, limit };
   }
 
   /**
@@ -261,7 +289,8 @@ export class AlertsService {
    *
    * Défauts : rayon 15 km · fenêtre 48 h (équilibre département/jour).
    */
-  async getContext(id: string, opts?: { radiusKm?: number; windowHours?: number }) {
+  async getContext(id: string, user: ReaderCtx, opts?: { radiusKm?: number; windowHours?: number }) {
+    await this.assertReadable(id, user, true);
     const alert = await this.prisma.alert.findUnique({
       where: { id },
       select: { id: true, type: true, latitude: true, longitude: true, zoneId: true, createdAt: true },
@@ -309,7 +338,47 @@ export class AlertsService {
       generatedAt: new Date().toISOString(),
       nearbySignalements,
       cluster: nearbySignalements.length >= 2,
-      omvs: buildMockOmvsData(alert.type),
+      // Aucune source hydrométrique n'est connectée : aucune valeur n'est
+      // fabriquée dans un panneau d'aide à la décision (audit F18/F35).
+      omvs: hydrologyUnavailable(alert.type),
+    };
+  }
+
+  /**
+   * Détail d'une alerte pour un lecteur : périmètre vérifié, vue publique
+   * pour citoyen/radio, et pour un opérateur les actions qu'il peut
+   * réellement effectuer (calculées par alert-policy — audit F14).
+   */
+  async findOneFor(id: string, user: ReaderCtx) {
+    await this.assertReadable(id, user);
+    const alert = await this.findOne(id);
+    if (!this.isOperator(user)) return publicView(alert, user);
+    return { ...alert, actions: await this.actionsFor(id, user) };
+  }
+
+  /** Actions autorisées pour l'utilisateur, avec la raison d'un refus. */
+  async actionsFor(alertId: string, user: OperatorCtx) {
+    const { alert, facts } = await this.loadFacts(alertId);
+    const inTerritory = TERRITORY_EXEMPT.includes(user.role) || (await this.territory.isWithin(alert.zoneId, user.zoneId));
+    const r = (reason: string | null) => (inTerritory ? { allowed: !reason, reason: reason ?? undefined } : { allowed: false, reason: 'Hors de votre territoire' });
+    const phase = normalizePhase(alert.currentStep);
+    const next = nextStepFor(alert.currentStep, alert.alertLevel);
+    return {
+      validate: r(refuseAdvance(facts, user, ValidationAction.VALIDATED)),
+      reject: r(refuseAdvance(facts, user, ValidationAction.REJECTED)),
+      broadcast: r(refuseBroadcast(facts, user)),
+      emergencyBypass: r(refuseBypass(facts, user, 'x'.repeat(MIN_BYPASS_JUSTIFICATION))),
+      close: r(!canClose(user.role) ? 'Rôle insuffisant pour clôturer' : alert.status !== AlertStatus.BROADCAST ? 'Seule une alerte diffusée peut être clôturée' : null),
+      medicalClearance: r(!alert.requiresMedicalReview ? 'Aucune revue médicale en attente'
+        : (user.role !== Role.PROTECTION_CIVILE && !TERRITORY_EXEMPT.includes(user.role)) ? 'Réservé à la Protection Civile (décision D1)' : null),
+      reviewBypass: r(!alert.emergencyBypass || alert.bypassReviewedAt ? 'Aucune diffusion d\'urgence à revoir'
+        : !hasLevel(user.role, Role.PREFECTURE) ? 'Revue réservée à PREFECTURE ou supérieur'
+        : alert.bypassById === user.id ? 'La revue doit être faite par une autre personne' : null),
+      /** Étape RÉCEPTION : la validation exige une preuve terrain (GPS capturé + photo + gravité). */
+      requiresFieldProof: phase === PHASE.RECEPTION,
+      /** Effet d'une validation : étape suivante, et si elle déclenche la diffusion. */
+      onValidate: next ? { nextStep: next, diffuses: next === PHASE.DIFFUSEE } : null,
+      minBypassJustification: MIN_BYPASS_JUSTIFICATION,
     };
   }
 
@@ -353,12 +422,22 @@ export class AlertsService {
       zoneId?: string; municipalityId?: string;
       latitude?: number; longitude?: number;
       mediaUrls?: string[]; channel?: string;
+      subtype?: string; locationSource?: LocationSource; clientRequestId?: string;
     },
     userId: string,
     creatorRole?: Role,
     opts?: { linkSignalementId?: string; tx?: Prisma.TransactionClient },
-  ) {
-    const level: AlertLevel = dto.alertLevel || AlertLevel.BLEU;
+  ): Promise<any> {
+    // Rejeu d'un envoi hors connexion : même requête client → même alerte (audit F15)
+    const sourceRef = !opts?.linkSignalementId && dto.clientRequestId ? `app:${userId}:${dto.clientRequestId}` : undefined;
+    if (sourceRef) {
+      const prior = await this.prisma.signalement.findUnique({ where: { sourceRef }, select: { alertId: true } });
+      if (prior?.alertId) return { ...(await this.findOne(prior.alertId)), duplicate: true };
+    }
+    // Citoyen / sentinelle : le niveau découle de la gravité déclarée (même règle
+    // que WhatsApp/USSD) ; seul un opérateur propose un niveau officiel (audit F21).
+    const declaredOnly = !creatorRole || creatorRole === Role.CITOYEN || creatorRole === Role.SENTINELLE;
+    const level: AlertLevel = (!declaredOnly && dto.alertLevel) || levelFromDeclaredSeverity(dto.severity);
     let currentStep: AlertStep = AlertStep.SIGNALEMENT;
     let status: AlertStatus = AlertStatus.PENDING;
     if (creatorRole === Role.PROTECTION_CIVILE || creatorRole === Role.ADMIN || creatorRole === Role.SUPER_ADMIN) {
@@ -376,6 +455,7 @@ export class AlertsService {
           severity: dto.severity || 1, status, currentStep, zoneId,
           municipalityId: dto.municipalityId, createdById: userId,
           latitude: dto.latitude, longitude: dto.longitude, mediaUrls: dto.mediaUrls || [],
+          subtype: dto.subtype, locationSource: dto.latitude != null ? dto.locationSource : undefined,
           requiresMedicalReview: dto.type === 'EPIDEMIE',
           ...(status === AlertStatus.VALIDATED ? { verifiedAt: new Date() } : {}),
         },
@@ -388,7 +468,8 @@ export class AlertsService {
           data: {
             userId, alertId: alert.id, type: dto.type, text: dto.description,
             mediaUrls: dto.mediaUrls || [], latitude: dto.latitude, longitude: dto.longitude,
-            channel: dto.channel || 'app',
+            channel: dto.channel || 'app', subtype: dto.subtype, sourceRef,
+            locationSource: dto.latitude != null ? dto.locationSource : undefined,
           },
         });
       }
@@ -399,7 +480,18 @@ export class AlertsService {
       return { alert, intent };
     };
 
-    const { alert, intent } = opts?.tx ? await run(opts.tx) : await this.prisma.$transaction(run);
+    let created: { alert: any; intent: { id: string } };
+    try {
+      created = opts?.tx ? await run(opts.tx) : await this.prisma.$transaction(run);
+    } catch (e) {
+      // Deux rejeux simultanés de la même requête client : renvoyer l'alerte déjà créée
+      if (sourceRef && (e as Prisma.PrismaClientKnownRequestError).code === 'P2002') {
+        const prior = await this.prisma.signalement.findUnique({ where: { sourceRef }, select: { alertId: true } });
+        if (prior?.alertId) return { ...(await this.findOne(prior.alertId)), duplicate: true };
+      }
+      throw e;
+    }
+    const { alert, intent } = created;
     if (!opts?.tx) await this.afterCommit([intent.id], alert);
     return Object.assign(alert, { _intentId: intent.id });
   }
@@ -412,6 +504,7 @@ export class AlertsService {
       alertLevel?: AlertLevel;
       comment?: string; photoUrl?: string;
       latitude?: number; longitude?: number;
+      locationSource?: LocationSource; locationAccuracyM?: number;
       gravity?: number;
     },
   ) {
@@ -455,6 +548,9 @@ export class AlertsService {
           alertId, validatorId: validator.id, approved: body.action !== ValidationAction.REJECTED,
           action: body.action, step: alert.currentStep, comment: body.comment, photoUrl: body.photoUrl,
           latitude: body.latitude, longitude: body.longitude, gravity: body.gravity,
+          // Provenance enregistrée telle que déclarée par l'appareil (audit F18)
+          locationSource: body.latitude != null ? body.locationSource : undefined,
+          locationAccuracyM: body.latitude != null ? body.locationAccuracyM : undefined,
         },
       });
       await tx.auditLog.create({
@@ -712,9 +808,10 @@ export class AlertsService {
     }));
   }
 
-  async getBroadcasts(alertId?: string) {
+  async getBroadcasts(user: ReaderCtx, alertId?: string) {
+    const scope = await this.readScope(user);
     return this.prisma.broadcast.findMany({
-      where: alertId ? { alertId } : {},
+      where: { ...(alertId ? { alertId } : {}), alert: scope },
       orderBy: { createdAt: 'desc' },
       include: {
         author: { select: { name: true, role: true } },
@@ -742,41 +839,29 @@ function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): nu
 }
 
 /**
- * Mock OMVS — à brancher en V2 sur l'API portail-omvs.org ou ANACIM.
- * Renvoie des valeurs plausibles selon la saison (hivernage juin-octobre).
- * Seuils Matam : alerte 5,20 m · danger 5,80 m (chiffres ordres de grandeur).
+ * Panneau hydrologie : aucune source (OMVS, ANACIM, DGPRE) n'est connectée.
+ * On l'indique explicitement plutôt que d'afficher des valeurs simulées.
  */
-function buildMockOmvsData(alertType: AlertType) {
-  const month = new Date().getMonth();
-  const isHivernage = month >= 5 && month <= 9;
-  const baseLevel = isHivernage ? 4.5 : 2.4;
-  // Variation pseudo-aléatoire reproductible (basée sur le jour)
-  const day = new Date().getDate();
-  const variance = ((day % 7) - 3) * 0.15;
-  const level = +(baseLevel + variance).toFixed(2);
-
-  const ALERT_THRESHOLD = 5.2;
-  const DANGER_THRESHOLD = 5.8;
-
-  let status: 'normal' | 'vigilance' | 'alerte' | 'danger' = 'normal';
-  if (level >= DANGER_THRESHOLD) status = 'danger';
-  else if (level >= ALERT_THRESHOLD) status = 'alerte';
-  else if (level >= ALERT_THRESHOLD - 0.3) status = 'vigilance';
-
-  // OMVS pertinent uniquement pour les risques hydrométéo
-  const relevant = ['INONDATION', 'SECHERESSE'].includes(alertType);
-
+function hydrologyUnavailable(alertType: AlertType) {
   return {
-    relevant,
-    mock: true, // à retirer quand l'API réelle sera branchée
-    source: 'OMVS — Organisation pour la Mise en Valeur du fleuve Sénégal',
-    fetchedAt: new Date().toISOString(),
-    station: 'Matam',
-    riverLevelMeters: level,
-    alertThresholdMeters: ALERT_THRESHOLD,
-    dangerThresholdMeters: DANGER_THRESHOLD,
-    status,
-    flowRateM3s: +(280 + variance * 100).toFixed(0),
-    notice: 'Données simulées — branchement portail-omvs.org prévu en V2',
+    relevant: ['INONDATION', 'SECHERESSE'].includes(alertType),
+    available: false,
+    notice: 'Aucune source hydrométrique connectée (OMVS/ANACIM non intégrés) — ne pas utiliser pour décider.',
+  };
+}
+
+/**
+ * Vue publique d'une alerte (citoyen, radio) : ni validations, ni identité des
+ * signaleurs, ni signalements liés. Les médias et la position précise ne sont
+ * visibles que par l'auteur du signalement.
+ */
+function publicView(a: any, user: ReaderCtx) {
+  const own = a.createdById === user.id;
+  return {
+    id: a.id, title: a.title, description: a.description, type: a.type,
+    alertLevel: a.alertLevel, status: a.status, currentStep: a.currentStep,
+    zoneId: a.zoneId, zone: a.zone ? { name: a.zone.name } : null,
+    broadcastAt: a.broadcastAt, closedAt: a.closedAt, createdAt: a.createdAt, updatedAt: a.updatedAt,
+    ...(own ? { mediaUrls: a.mediaUrls, latitude: a.latitude, longitude: a.longitude, mine: true } : {}),
   };
 }

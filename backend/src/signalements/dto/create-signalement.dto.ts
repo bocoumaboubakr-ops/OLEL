@@ -11,7 +11,7 @@ import {
   Min,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { AlertType } from '@prisma/client';
+import { AlertType, LocationSource } from '@prisma/client';
 import { IsOlelMediaList } from '../../common/media/olel-media.decorator';
 
 export class CreateSignalementDto {
@@ -27,11 +27,15 @@ export class CreateSignalementDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsNumber()
+  @Min(-90)
+  @Max(90)
   latitude?: number;
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsNumber()
+  @Min(-180)
+  @Max(180)
   longitude?: number;
 
   @ApiPropertyOptional()
@@ -90,17 +94,26 @@ export class CreateSignalementBotDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsNumber()
+  @Min(-90)
+  @Max(90)
   latitude?: number;
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsNumber()
+  @Min(-180)
+  @Max(180)
   longitude?: number;
 
   @ApiPropertyOptional({ type: [String] })
   @IsOptional()
   @IsOlelMediaList()
   mediaUrls?: string[];
+
+  @ApiPropertyOptional({ description: 'Sous-type métier structuré (ex. ELEVAGE_EPIZOOTIE)', example: 'INFRA_ROUTE_COUPEE' })
+  @IsOptional()
+  @Matches(/^[A-Z0-9_]{2,40}$/)
+  subtype?: string;
 
   @ApiPropertyOptional({ description: 'Identifiant du message WhatsApp (dédoublonnage des réceptions répétées)' })
   @IsOptional()
@@ -113,16 +126,32 @@ export class CreateSignalementBotDto {
 export class FieldVerifySignalementDto {
   @ApiProperty({ description: 'Latitude relevée par la sentinelle sur place' })
   @IsNumber()
+  @Min(-90)
+  @Max(90)
   latitude: number;
 
   @ApiProperty({ description: 'Longitude relevée par la sentinelle sur place' })
   @IsNumber()
+  @Min(-180)
+  @Max(180)
   longitude: number;
 
   @ApiPropertyOptional({ description: 'Photo(s) prise(s) sur place (URLs)' })
   @IsOptional()
   @IsOlelMediaList()
   mediaUrls?: string[];
+
+  @ApiPropertyOptional({ enum: LocationSource, description: 'Provenance de la position : GPS de l\'appareil ou saisie manuelle' })
+  @IsOptional()
+  @IsEnum(LocationSource)
+  locationSource?: LocationSource;
+
+  @ApiPropertyOptional({ description: 'Précision annoncée par l\'appareil (mètres)' })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100000)
+  locationAccuracyM?: number;
 
   @ApiPropertyOptional({ description: 'Notes terrain : ampleur, victimes, accessibilité' })
   @IsOptional()

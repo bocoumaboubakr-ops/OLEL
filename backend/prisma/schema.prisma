@@ -88,6 +88,12 @@ enum AlertStep {
   CLOSED
 }
 
+/// Provenance d'une position : capturée par l'appareil ou saisie à la main.
+enum LocationSource {
+  DEVICE_GPS
+  MANUAL
+}
+
 enum ValidationAction {
   VALIDATED
   REJECTED
@@ -228,6 +234,9 @@ model Alert {
   status      AlertStatus @default(PENDING)
   currentStep AlertStep   @default(SIGNALEMENT)
   severity    Int         @default(1)
+  // Sous-type métier structuré (audit F21) et provenance de la position déclarée
+  subtype     String?
+  locationSource LocationSource?
   zoneId      String
   zone        Zone        @relation(fields: [zoneId], references: [id])
   municipalityId String?
@@ -284,6 +293,9 @@ model Signalement {
   latitude    Float?
   longitude   Float?
   severity    Int?              // 1=vigilance, 2=alerte, 3=urgence (estimé par le signaleur)
+  // Sous-type métier structuré (ex. ELEVAGE_EPIZOOTIE, INFRA_ROUTE_COUPEE) — audit F21
+  subtype     String?
+  locationSource LocationSource?
   status      SignalementStatus @default(PENDING)
   channel     String            @default("web")
   // Vérification terrain par une sentinelle (cursus OLEL) :
@@ -292,6 +304,8 @@ model Signalement {
   fieldVerifiedById String?
   fieldVerifiedBy   User?       @relation("FieldVerifications", fields: [fieldVerifiedById], references: [id], onDelete: SetNull)
   fieldNotes        String?
+  fieldLocationSource    LocationSource?
+  fieldLocationAccuracyM Float?
   // Référence de la source (canal:identifiant fournisseur — ex. ussd:<session>,
   // wa:<message id>) : un même message reçu deux fois ne crée qu'un signalement.
   sourceRef   String?           @unique
@@ -316,6 +330,9 @@ model Validation {
   photoUrl    String?
   latitude    Float?
   longitude   Float?
+  // Provenance de la preuve de position (audit F18) : jamais substituée
+  locationSource    LocationSource?
+  locationAccuracyM Float?
   gravity     Int?
   createdAt   DateTime          @default(now())
 

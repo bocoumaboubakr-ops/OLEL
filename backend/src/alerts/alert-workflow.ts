@@ -93,6 +93,17 @@ export function needsConfirmation(level: AlertLevel): boolean {
   return level === AlertLevel.ROUGE || level === AlertLevel.ROUGE_FONCE;
 }
 
+/**
+ * Gravité déclarée par un citoyen/une sentinelle (1-3) → niveau officiel
+ * d'entrée, identique pour tous les canaux (application, WhatsApp, USSD).
+ * Le niveau est ensuite confirmé ou ajusté par les validateurs (audit F21).
+ */
+export function levelFromDeclaredSeverity(severity?: number | null): AlertLevel {
+  if (severity === 3) return AlertLevel.ROUGE;
+  if (severity === 2) return AlertLevel.ORANGE;
+  return AlertLevel.JAUNE;
+}
+
 /** Prochaine étape selon le niveau et l'étape courante. null si terminale. */
 export function nextStepFor(currentStep: AlertStep, level: AlertLevel): AlertStep | null {
   const phase = normalizePhase(currentStep);
