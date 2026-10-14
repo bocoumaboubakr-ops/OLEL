@@ -6,6 +6,7 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { MetricsService } from './metrics/metrics.service';
 import { SentryService } from './common/sentry/sentry.service';
+import { MediaUrlInterceptor } from './common/media/media-url.interceptor';
 
 /**
  * Configuration HTTP partagée par main.ts et les tests e2e : les tests
@@ -64,6 +65,7 @@ export function configureApp(app: NestExpressApplication) {
   const metricsService = app.get(MetricsService);
   const sentryService = app.get(SentryService);
   app.useGlobalFilters(new HttpExceptionFilter(sentryService));
-  app.useGlobalInterceptors(new LoggingInterceptor(metricsService));
+  // Médias : URL signées à durée courte dans les réponses authentifiées (audit F12)
+  app.useGlobalInterceptors(new LoggingInterceptor(metricsService), new MediaUrlInterceptor());
 
 }

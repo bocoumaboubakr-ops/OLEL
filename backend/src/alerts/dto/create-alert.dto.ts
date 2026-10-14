@@ -3,16 +3,14 @@ import {
   IsEnum,
   IsNumber,
   IsOptional,
-  IsArray,
   IsUUID,
   Min,
   Max,
   MaxLength,
-  IsUrl,
-  ArrayMaxSize,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { AlertLevel, AlertType } from '@prisma/client';
+import { IsOlelMediaList } from '../../common/media/olel-media.decorator';
 
 export class CreateAlertDto {
   @ApiProperty({ example: 'Inondation secteur Ourossogui' })
@@ -69,8 +67,6 @@ export class CreateAlertDto {
 
   @ApiPropertyOptional({ type: [String] })
   @IsOptional()
-  @IsArray()
-  @IsUrl({}, { each: true })
-  @ArrayMaxSize(10)
+  @IsOlelMediaList()
   mediaUrls?: string[];
 }

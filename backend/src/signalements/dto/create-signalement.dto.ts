@@ -4,17 +4,15 @@ import {
   IsNumber,
   IsInt,
   IsOptional,
-  IsArray,
   IsUUID,
   Matches,
   Max,
   MaxLength,
   Min,
-  IsUrl,
-  ArrayMaxSize,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { AlertType } from '@prisma/client';
+import { IsOlelMediaList } from '../../common/media/olel-media.decorator';
 
 export class CreateSignalementDto {
   @ApiProperty({ enum: AlertType })
@@ -49,9 +47,7 @@ export class CreateSignalementDto {
 
   @ApiPropertyOptional({ type: [String] })
   @IsOptional()
-  @IsArray()
-  @IsUrl({ require_tld: false }, { each: true })
-  @ArrayMaxSize(10)
+  @IsOlelMediaList()
   mediaUrls?: string[];
 }
 
@@ -103,10 +99,14 @@ export class CreateSignalementBotDto {
 
   @ApiPropertyOptional({ type: [String] })
   @IsOptional()
-  @IsArray()
-  @IsUrl({ require_tld: false }, { each: true })
-  @ArrayMaxSize(10)
+  @IsOlelMediaList()
   mediaUrls?: string[];
+
+  @ApiPropertyOptional({ description: 'Identifiant du message WhatsApp (dédoublonnage des réceptions répétées)' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  messageId?: string;
 }
 
 /** Vérification terrain par une SENTINELLE (avant validation MAIRIE). */
@@ -121,9 +121,7 @@ export class FieldVerifySignalementDto {
 
   @ApiPropertyOptional({ description: 'Photo(s) prise(s) sur place (URLs)' })
   @IsOptional()
-  @IsArray()
-  @IsUrl({ require_tld: false }, { each: true })
-  @ArrayMaxSize(10)
+  @IsOlelMediaList()
   mediaUrls?: string[];
 
   @ApiPropertyOptional({ description: 'Notes terrain : ampleur, victimes, accessibilité' })

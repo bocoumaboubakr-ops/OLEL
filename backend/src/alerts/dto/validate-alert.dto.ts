@@ -1,6 +1,7 @@
 import { IsArray, IsEnum, IsInt, IsNumber, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { AlertLevel, ValidationAction } from '@prisma/client';
+import { IsOlelMedia } from '../../common/media/olel-media.decorator';
 
 /** Action de validation dans le cursus (sentinelle / mairie / préfecture). */
 export class ValidateAlertDto {
@@ -14,9 +15,9 @@ export class ValidateAlertDto {
   @MaxLength(500)
   comment?: string;
 
-  @ApiPropertyOptional({ description: 'Photo de preuve (obligatoire pour valider un signalement)' })
+  @ApiPropertyOptional({ description: 'Photo de preuve (obligatoire pour valider un signalement) — média déposé via /upload' })
   @IsOptional()
-  @IsString()
+  @IsOlelMedia()
   photoUrl?: string;
 
   @ApiPropertyOptional({ description: 'Position capturée sur place (jamais substituée)' })

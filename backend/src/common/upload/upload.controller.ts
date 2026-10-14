@@ -1,91 +1,78 @@
-import { Controller, Post, UploadedFile, UseGuards, UseInterceptors, BadRequestException } from '@nestjs/common';
+import { Controller, Post, UploadedFile, UseGuards, UseInterceptors, BadRequestException, Logger } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiConsumes, ApiBody, ApiHeader } from '@nestjs/swagger';
-import { diskStorage } from 'multer';
-import { extname, join } from 'path';
+import { memoryStorage } from 'multer';
+import { join } from 'path';
 import { randomUUID } from 'crypto';
 import { mkdirSync } from 'fs';
+import { writeFile } from 'fs/promises';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { BotApiKeyGuard } from '../guards/bot-api-key.guard';
 import { SkipThrottle } from '@nestjs/throttler';
+import { MediaKind, UPLOAD_DIR, canonicalMediaUrl, sniffMedia } from '../media/media';
 
-const UPLOAD_DIR = process.env.UPLOAD_DIR || join(process.cwd(), 'uploads');
-const IMAGE_MIMES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-// WhatsApp envoie de l'audio en ogg/opus ; MediaRecorder mobile en webm/mp4.
-const AUDIO_MIMES = ['audio/ogg', 'audio/mpeg', 'audio/mp4', 'audio/aac', 'audio/webm', 'audio/amr', 'audio/3gpp', 'audio/x-m4a'];
 const IMAGE_MAX = 10 * 1024 * 1024; // 10 MB
 const AUDIO_MAX = 16 * 1024 * 1024; // 16 MB (~limite média WhatsApp)
 
-mkdirSync(UPLOAD_DIR, { recursive: true });
+mkdirSync(UPLOAD_DIR, { recursive: true, mode: 0o750 });
 
-function publicUrl(filename: string): string {
-  // PUBLIC_API_URL doit pointer vers une adresse joignable par le navigateur
-  // des opérateurs (IP du VPS ou domaine), PAS localhost.
-  const base = (process.env.PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_URL || `http://localhost:${process.env.PORT || 4000}`)
-    .replace(/\/api\/v1\/?$/, '');
-  return `${base}/uploads/${filename}`;
-}
+/** Réception en mémoire (taille bornée) : le fichier n'est écrit qu'après vérification du contenu. */
+const receive = (maxSize: number) => FileInterceptor('file', { storage: memoryStorage(), limits: { fileSize: maxSize, files: 1 } });
 
-function buildInterceptor(allowed: string[], maxSize: number) {
-  return FileInterceptor('file', {
-    storage: diskStorage({
-      destination: UPLOAD_DIR,
-      filename: (_req, file, cb) => cb(null, `${randomUUID()}${extname(file.originalname).toLowerCase() || guessExt(file.mimetype)}`),
-    }),
-    limits: { fileSize: maxSize },
-    fileFilter: (_req, file, cb) => {
-      if (allowed.includes(file.mimetype)) cb(null, true);
-      else cb(new BadRequestException(`Format non supporté : ${file.mimetype}`), false);
-    },
-  });
-}
-
-function guessExt(mimetype: string): string {
-  const map: Record<string, string> = {
-    'audio/ogg': '.ogg', 'audio/mpeg': '.mp3', 'audio/mp4': '.m4a', 'audio/aac': '.aac',
-    'audio/webm': '.webm', 'audio/amr': '.amr', 'audio/3gpp': '.3gp', 'audio/x-m4a': '.m4a',
-    'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/gif': '.gif',
-  };
-  return map[mimetype] || '';
-}
-
+/**
+ * Upload de médias — audit F12.
+ * Le type MIME et le nom fournis par le client sont ignorés : le contenu est
+ * identifié par sa signature binaire, l'extension est imposée, le nom est
+ * aléatoire. La réponse contient la référence canonique ; pour un appel
+ * authentifié, elle est convertie en URL signée à durée courte.
+ */
 @ApiTags('Upload')
 @Controller('upload')
 export class UploadController {
+  private readonly logger = new Logger(UploadController.name);
+
+  private async store(file: Express.Multer.File | undefined, allowed: MediaKind[]) {
+    if (!file?.buffer?.length) throw new BadRequestException('Aucun fichier fourni');
+    const media = sniffMedia(file.buffer);
+    if (!media || !allowed.includes(media.kind)) {
+      throw new BadRequestException(`Contenu non reconnu comme ${allowed.join(' ou ')} (formats acceptés : JPEG, PNG, WEBP, GIF, OGG, MP3, M4A, AAC, WEBM, AMR, 3GP)`);
+    }
+    const filename = `${randomUUID()}.${media.ext}`;
+    await writeFile(join(UPLOAD_DIR, filename), file.buffer, { mode: 0o640, flag: 'wx' });
+    return { url: canonicalMediaUrl(filename), filename, size: file.size, mimetype: media.mime, kind: media.kind };
+  }
+
   @Post('photo')
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: 'Upload d\'une photo (max 10 MB, JPEG/PNG/WEBP/GIF)' })
+  @ApiOperation({ summary: 'Upload d\'une photo (max 10 MB, JPEG/PNG/WEBP/GIF — contenu vérifié)' })
   @ApiConsumes('multipart/form-data')
   @ApiBody({ schema: { type: 'object', properties: { file: { type: 'string', format: 'binary' } } } })
-  @UseInterceptors(buildInterceptor(IMAGE_MIMES, IMAGE_MAX))
+  @UseInterceptors(receive(IMAGE_MAX))
   uploadPhoto(@UploadedFile() file: Express.Multer.File) {
-    if (!file) throw new BadRequestException('Aucun fichier fourni');
-    return { url: publicUrl(file.filename), filename: file.filename, size: file.size, mimetype: file.mimetype };
+    return this.store(file, ['image']);
   }
 
   @Post('audio')
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: 'Upload d\'un message vocal (max 16 MB, ogg/mp3/m4a/webm)' })
+  @ApiOperation({ summary: 'Upload d\'un message vocal (max 16 MB, ogg/mp3/m4a/webm/amr — contenu vérifié)' })
   @ApiConsumes('multipart/form-data')
   @ApiBody({ schema: { type: 'object', properties: { file: { type: 'string', format: 'binary' } } } })
-  @UseInterceptors(buildInterceptor(AUDIO_MIMES, AUDIO_MAX))
+  @UseInterceptors(receive(AUDIO_MAX))
   uploadAudio(@UploadedFile() file: Express.Multer.File) {
-    if (!file) throw new BadRequestException('Aucun fichier fourni');
-    return { url: publicUrl(file.filename), filename: file.filename, size: file.size, mimetype: file.mimetype };
+    return this.store(file, ['audio']);
   }
 
   @Post('bot-media')
   @SkipThrottle()
   @ApiHeader({ name: 'x-bot-api-key', description: 'Clé API du bot' })
   @UseGuards(BotApiKeyGuard)
-  @ApiOperation({ summary: 'Upload média par le bot (image ou audio WhatsApp)' })
+  @ApiOperation({ summary: 'Upload média par le bot (image ou audio WhatsApp — contenu vérifié)' })
   @ApiConsumes('multipart/form-data')
   @ApiBody({ schema: { type: 'object', properties: { file: { type: 'string', format: 'binary' } } } })
-  @UseInterceptors(buildInterceptor([...IMAGE_MIMES, ...AUDIO_MIMES], AUDIO_MAX))
+  @UseInterceptors(receive(AUDIO_MAX))
   uploadBotMedia(@UploadedFile() file: Express.Multer.File) {
-    if (!file) throw new BadRequestException('Aucun fichier fourni');
-    return { url: publicUrl(file.filename), filename: file.filename, size: file.size, mimetype: file.mimetype };
+    return this.store(file, ['image', 'audio']);
   }
 }

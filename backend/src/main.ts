@@ -1,10 +1,10 @@
-import { NestFactory, Reflector } from '@nestjs/core';
+import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
-import { join } from 'path';
 import { mkdirSync } from 'fs';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { configureApp } from './bootstrap';
+import { UPLOAD_DIR } from './common/media/media';
 import { WinstonModule } from 'nest-winston';
 import * as winston from 'winston';
 
@@ -32,11 +32,11 @@ async function bootstrap() {
     ],
   });
 
-  const uploadDir = process.env.UPLOAD_DIR || join(process.cwd(), 'uploads');
-  mkdirSync(uploadDir, { recursive: true });
+  mkdirSync(UPLOAD_DIR, { recursive: true, mode: 0o750 });
 
+  // Les médias ne sont plus servis publiquement (/uploads supprimé) : lecture
+  // par URL signée via /api/v1/media (audit F12).
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { logger });
-  app.useStaticAssets(uploadDir, { prefix: '/uploads' });
 
   configureApp(app);
 
