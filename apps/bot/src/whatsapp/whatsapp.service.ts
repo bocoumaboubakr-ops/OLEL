@@ -23,6 +23,8 @@ interface ReportData {
   longitude?: number;
   /** Média reçu avant le choix de la langue : conservé (audit F25) */
   pendingMediaMsgId?: string;
+  /** Communes proposées (numéro → identifiant) */
+  communes?: { id: string; name: string }[];
 }
 
 interface Session {
@@ -117,6 +119,7 @@ export class WhatsappService {
         await this.sendText(from, t(chosen).consentPrompt);
         return;
       }
+      if (!consent.hasCommune) return this.askCommune(from, chosen);
       await this.save(from, { step: 'awaiting_choice', lang: chosen, data: {} });
       await this.sendText(from, t(chosen).menu);
       return;
@@ -135,8 +138,32 @@ export class WhatsappService {
         await this.sendText(from, tr.consentPrompt);
         return;
       }
+      if (!(await this.backend.getConsent(from)).hasCommune) return this.askCommune(from, lang);
       await this.save(from, { step: 'awaiting_choice', lang, data: {} });
       await this.sendText(from, tr.menu);
+      return;
+    }
+
+    if (session.step === 'awaiting_commune') {
+      const choice = parseInt(raw.trim(), 10);
+      const communes = session.data.communes || [];
+      if (raw.trim() === '0') {
+        await this.sendText(from, tr.communeSkipped);
+      } else if (choice >= 1 && choice <= communes.length) {
+        const c = communes[choice - 1];
+        const r = await this.backend.setCitizenZone(from, c.id);
+        await this.sendText(from, r.ok ? tr.communeSaved(c.name) : tr.reportError);
+      } else {
+        await this.sendText(from, tr.invalidNumber(communes.length));
+        return;
+      }
+      await this.save(from, { step: 'awaiting_choice', lang, data: {} });
+      await this.sendText(from, tr.menu);
+      return;
+    }
+
+    if (text === 'commune') {
+      await this.askCommune(from, lang);
       return;
     }
 
@@ -397,6 +424,15 @@ export class WhatsappService {
       await this.sendText(from, tr.reportError);
     }
     await this.save(from, { step: 'awaiting_choice', lang, data: {} });
+  }
+
+  /** Propose la liste des communes (F09). Sans liste disponible, on passe au menu. */
+  private async askCommune(from: string, lang: Lang) {
+    const communes = (await this.backend.listCommunes()).slice(0, 30);
+    if (!communes.length) return this.showMainMenu(from, lang);
+    const list = communes.map((c, i) => `${i + 1}. ${c.name}`).join('\n');
+    await this.save(from, { step: 'awaiting_commune', lang, data: { communes } });
+    await this.sendText(from, t(lang).communePrompt(list));
   }
 
   private async showMainMenu(from: string, lang: Lang) {

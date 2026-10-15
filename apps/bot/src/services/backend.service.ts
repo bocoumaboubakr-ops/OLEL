@@ -49,13 +49,23 @@ export class BackendService {
     await this.http.put(`/bot-relay/sessions/${encodeURIComponent(phone)}`, { state });
   }
 
-  async getConsent(phone: string): Promise<{ known: boolean; optedOut: boolean; whatsappOptIn: boolean }> {
+  async getConsent(phone: string): Promise<{ known: boolean; optedOut: boolean; whatsappOptIn: boolean; hasCommune?: boolean }> {
     const { data } = await this.http.get('/bot-relay/consent', { params: { phone } });
     return data;
   }
 
   async setConsent(phone: string, choice: 'WHATSAPP_OPT_IN' | 'OPT_OUT' | 'OPT_IN_AGAIN', language?: string) {
     await this.http.post('/bot-relay/consent', { phone: phone.startsWith('+') ? phone : `+${phone}`, choice, language });
+  }
+
+  async listCommunes(): Promise<{ id: string; name: string }[]> {
+    const { data } = await this.http.get('/bot-relay/communes');
+    return Array.isArray(data) ? data : [];
+  }
+
+  async setCitizenZone(phone: string, zoneId: string): Promise<{ ok: boolean }> {
+    const { data } = await this.http.post('/bot-relay/citizen-zone', { phone: phone.startsWith('+') ? phone : `+${phone}`, zoneId });
+    return data;
   }
 
   async forwardStatuses(statuses: { providerMessageId: string; status: string; timestamp?: string; error?: string }[]) {

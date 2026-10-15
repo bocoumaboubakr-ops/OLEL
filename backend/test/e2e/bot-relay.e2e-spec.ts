@@ -153,6 +153,21 @@ describe('F22 — « livré » et « lu » uniquement sur confirmation du fourni
   });
 });
 
+describe('F09 — commune d\'abonnement choisie depuis WhatsApp', () => {
+  it('liste des communes (feuilles de l\'arbre), rattachement du citoyen, jamais d\'un opérateur', async () => {
+    const list = await api(ctx, 'GET', '/bot-relay/communes', { headers: bot });
+    expect(list.body.map((z: any) => z.name).sort()).toEqual(['Commune A', 'Commune B', 'Commune C']);
+    const r = await api(ctx, 'POST', '/bot-relay/citizen-zone', { headers: bot, body: { phone: '+221770004444', zoneId: ctx.zones.communeB } });
+    expect(r.body.ok).toBe(true);
+    const u = await ctx.prisma.user.findUnique({ where: { phone: '+221770004444' } });
+    expect(u!.zoneId).toBe(ctx.zones.communeB);
+    expect((await api(ctx, 'GET', '/bot-relay/consent?phone=%2B221770004444', { headers: bot })).body.hasCommune).toBe(true);
+    const op = await createUser(ctx, Role.COORDINATEUR, ctx.zones.communeA);
+    expect((await api(ctx, 'POST', '/bot-relay/citizen-zone', { headers: bot, body: { phone: op.phone, zoneId: ctx.zones.matam } })).body.ok).toBe(false);
+    expect((await ctx.prisma.user.findUnique({ where: { id: op.id } }))!.zoneId).toBe(ctx.zones.communeA);
+  });
+});
+
 describe('F16 — consultation WhatsApp cloisonnée par la zone du citoyen', () => {
   it('le bot ne liste que les alertes concernant la commune du citoyen', async () => {
     const auteur = await createUser(ctx, Role.SENTINELLE, ctx.zones.communeA);

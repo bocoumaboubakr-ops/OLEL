@@ -104,17 +104,7 @@ export class BotRelayService {
    * pour porter le choix, sans autre donnée que le numéro et la langue.
    */
   async setConsent(phoneRaw: string, choice: 'WHATSAPP_OPT_IN' | 'OPT_OUT' | 'OPT_IN_AGAIN', source: string, language?: string) {
-    const phone = normalizePhone(phoneRaw);
-    let user = await this.prisma.user.findUnique({ where: { phone } });
-    if (!user) {
-      const root = await this.prisma.zone.findFirst({ where: { parentId: null }, orderBy: { createdAt: 'asc' }, select: { id: true } });
-      try {
-        user = await this.prisma.user.create({ data: { phone, name: `Citoyen ${phone.slice(-4)}`, role: 'CITOYEN', status: 'ACTIVE', isActive: true, language: language ?? 'fr', zoneId: root?.id, lastWhatsappInboundAt: new Date() } });
-      } catch (e) {
-        if ((e as Prisma.PrismaClientKnownRequestError).code !== 'P2002') throw e;
-        user = await this.prisma.user.findUniqueOrThrow({ where: { phone } });
-      }
-    }
+    const user = await this.ensureCitizen(normalizePhone(phoneRaw), language);
     const now = new Date();
     const data: Prisma.ConsentUncheckedUpdateInput = choice === 'OPT_OUT'
       ? { optedOut: true, optedOutAt: now, optOutSource: source }
@@ -128,10 +118,53 @@ export class BotRelayService {
     return { userId: user.id, choice };
   }
 
+  /**
+   * Communes proposées au citoyen (zones actives sous la région) : il reçoit
+   * les alertes de sa commune et les alertes régionales (audit F09).
+   */
+  async listCommunes() {
+    const root = await this.prisma.zone.findFirst({ where: { parentId: null }, orderBy: { createdAt: 'asc' }, select: { id: true } });
+    if (!root) return [];
+    const all = await this.prisma.zone.findMany({ where: { isActive: true }, select: { id: true, name: true, parentId: true }, orderBy: { name: 'asc' } });
+    const hasChildren = new Set(all.map((z) => z.parentId).filter(Boolean));
+    // Feuilles de l'arbre (communes) ; à défaut, les zones directement sous la région
+    const leaves = all.filter((z) => z.id !== root.id && !hasChildren.has(z.id));
+    return (leaves.length ? leaves : all.filter((z) => z.parentId === root.id)).map((z) => ({ id: z.id, name: z.name }));
+  }
+
+  /** Rattache un citoyen à sa commune (jamais un opérateur : sa zone est son territoire d'autorité). */
+  async setCitizenZone(phoneRaw: string, zoneId: string) {
+    const phone = normalizePhone(phoneRaw);
+    const zone = await this.prisma.zone.findUnique({ where: { id: zoneId }, select: { isActive: true } });
+    if (!zone?.isActive) return { ok: false, reason: 'zone inconnue' };
+    const user = await this.ensureCitizen(phone);
+    if (user.role !== 'CITOYEN') return { ok: false, reason: 'compte opérateur' };
+    await this.prisma.user.update({ where: { id: user.id }, data: { zoneId } });
+    return { ok: true };
+  }
+
+  /** Compte citoyen porteur des choix (numéro et langue seulement), créé au besoin. */
+  private async ensureCitizen(phone: string, language?: string) {
+    const existing = await this.prisma.user.findUnique({ where: { phone } });
+    if (existing) return existing;
+    const root = await this.prisma.zone.findFirst({ where: { parentId: null }, orderBy: { createdAt: 'asc' }, select: { id: true } });
+    try {
+      return await this.prisma.user.create({ data: { phone, name: `Citoyen ${phone.slice(-4)}`, role: 'CITOYEN', status: 'ACTIVE', isActive: true, language: language ?? 'fr', zoneId: root?.id, lastWhatsappInboundAt: new Date() } });
+    } catch (e) {
+      if ((e as Prisma.PrismaClientKnownRequestError).code !== 'P2002') throw e;
+      return this.prisma.user.findUniqueOrThrow({ where: { phone } });
+    }
+  }
+
   async getConsent(phoneRaw: string) {
     const user = await this.prisma.user.findUnique({ where: { phone: normalizePhone(phoneRaw) }, select: { language: true, zoneId: true, consents: { select: { optedOut: true, whatsappOptInAt: true } } } });
     const c = user?.consents[0];
-    return { known: !!user, language: user?.language ?? null, optedOut: !!c?.optedOut, whatsappOptIn: !!c?.whatsappOptInAt && !c?.optedOut };
+    const root = await this.prisma.zone.findFirst({ where: { parentId: null }, orderBy: { createdAt: 'asc' }, select: { id: true } });
+    return {
+      known: !!user, language: user?.language ?? null, optedOut: !!c?.optedOut, whatsappOptIn: !!c?.whatsappOptInAt && !c?.optedOut,
+      /** Commune connue (sinon : rattaché à la région seulement) */
+      hasCommune: !!user?.zoneId && user.zoneId !== root?.id,
+    };
   }
 
   /**

@@ -22,18 +22,38 @@ describe('WhatsappService', () => {
       getActiveAlerts: jest.fn().mockResolvedValue([]),
       createSignalement: jest.fn().mockResolvedValue({ id: 'abcdef12-0000-4000-8000-000000000000' }),
       uploadMedia: jest.fn().mockResolvedValue('/uploads/x.jpg'),
+      listCommunes: jest.fn().mockResolvedValue([{ id: 'z-a', name: 'Commune A' }, { id: 'z-b', name: 'Commune B' }]),
+      setCitizenZone: jest.fn().mockResolvedValue({ ok: true }),
     };
     svc = new WhatsappService(cfg, backend);
     jest.spyOn(svc as any, 'sendText').mockImplementation(async (_to: unknown, text: unknown) => { sent.push(String(text)); });
   });
 
-  it('après le choix de la langue, le consentement explicite est demandé puis enregistré', async () => {
+  it('après le choix de la langue, le consentement explicite est demandé puis enregistré, puis la commune', async () => {
     await say('bonjour');
     await say('1');
     expect(sent.at(-1)).toBe(t('fr').consentPrompt);
     await say('1');
     expect(backend.setConsent).toHaveBeenCalledWith(from, 'WHATSAPP_OPT_IN', 'fr');
-    expect(sent).toContain(t('fr').menu);
+    // Commune d'abonnement (F09) : sans elle, seules les alertes régionales parviennent
+    expect(sent.at(-1)).toContain('Dans quelle commune');
+    expect(sent.at(-1)).toContain('2. Commune B');
+    await say('2');
+    expect(backend.setCitizenZone).toHaveBeenCalledWith(from, 'z-b');
+    expect(sent).toContain(t('fr').communeSaved('Commune B'));
+    expect(sent.at(-1)).toBe(t('fr').menu);
+  });
+
+  it('commune connue : pas de question ; « commune » permet de la changer, « 0 » de passer', async () => {
+    backend.getConsent.mockResolvedValue({ known: true, optedOut: false, whatsappOptIn: true, hasCommune: true });
+    await say('bonjour');
+    await say('1');
+    expect(sent.at(-1)).toBe(t('fr').menu);
+    await say('commune');
+    expect(sent.at(-1)).toContain('Dans quelle commune');
+    await say('0');
+    expect(backend.setCitizenZone).not.toHaveBeenCalled();
+    expect(sent).toContain(t('fr').communeSkipped);
   });
 
   it('STOP désabonne réellement, à toute étape ; ALERTES réabonne', async () => {

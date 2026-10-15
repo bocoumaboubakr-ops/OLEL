@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { ArrayMaxSize, IsArray, IsIn, IsNotEmptyObject, IsObject, IsOptional, IsString, Matches, MaxLength, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsIn, IsNotEmptyObject, IsObject, IsOptional, IsString, IsUUID, Matches, MaxLength, ValidateNested } from 'class-validator';
 import { InboundStatus } from '@prisma/client';
 
 export class InboundDto {
@@ -34,4 +34,9 @@ export class ProviderStatusDto {
 export class ProviderStatusesDto {
   @IsArray() @ArrayMaxSize(500) @ValidateNested({ each: true }) @Type(() => ProviderStatusDto)
   statuses: ProviderStatusDto[];
+}
+
+export class CitizenZoneDto {
+  @Matches(/^\+?\d{8,15}$/) phone: string;
+  @IsUUID() zoneId: string;
 }

@@ -4,7 +4,7 @@ import { SkipThrottle } from '@nestjs/throttler';
 import { BotApiKeyGuard } from '../common/guards/bot-api-key.guard';
 import { ProviderCallbackGuard } from '../common/guards/provider-callback.guard';
 import { BotRelayService } from './bot-relay.service';
-import { ConsentDto, InboundDto, InboundStatusDto, ProviderStatusesDto, SessionDto } from './bot-relay.dto';
+import { CitizenZoneDto, ConsentDto, InboundDto, InboundStatusDto, ProviderStatusesDto, SessionDto } from './bot-relay.dto';
 
 /** Relais du bot WhatsApp (service-à-service, clé API) — audit F22/F24/F25. */
 @ApiExcludeController()
@@ -51,6 +51,17 @@ export class BotRelayController {
   @HttpCode(200)
   setConsent(@Body() dto: ConsentDto) {
     return this.relay.setConsent(dto.phone, dto.choice, 'whatsapp', dto.language);
+  }
+
+  @Get('communes')
+  communes() {
+    return this.relay.listCommunes();
+  }
+
+  @Post('citizen-zone')
+  @HttpCode(200)
+  setCitizenZone(@Body() dto: CitizenZoneDto) {
+    return this.relay.setCitizenZone(dto.phone, dto.zoneId);
   }
 
   /** Statuts WhatsApp (sent/delivered/read/failed) relayés depuis le webhook Meta. */

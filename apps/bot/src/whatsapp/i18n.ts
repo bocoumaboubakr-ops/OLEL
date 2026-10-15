@@ -57,6 +57,10 @@ type Dict = {
   optedIn: string;
   /** Consultation impossible : ne jamais laisser croire qu'il n'y a pas d'alerte (F16) */
   alertsUnavailable: string;
+  // ── Commune d'abonnement (audit F09) ──
+  communePrompt: (list: string) => string;
+  communeSaved: (name: string) => string;
+  communeSkipped: string;
 };
 
 /** Messages de consentement/désabonnement (français ; traductions à faire valider — D5). */
@@ -67,6 +71,9 @@ const CONSENT_FR = {
   optedOut: '🔕 Vous êtes désabonné : OLEL ne vous enverra plus d\'alertes. Écrivez *ALERTES* pour vous réabonner.',
   optedIn: '🔔 Vous êtes de nouveau abonné aux alertes OLEL. Écrivez *STOP* pour arrêter.',
   alertsUnavailable: '⚠️ Consultation des alertes indisponible pour le moment. Cela ne veut PAS dire qu\'il n\'y a pas d\'alerte : écoutez la radio et les autorités locales. Réessayez plus tard.',
+  communePrompt: (list: string) => `📍 *Dans quelle commune habitez-vous ?*\nVous recevrez les alertes de votre commune et celles de toute la région.\n\n${list}\n\n0️⃣ Passer (alertes régionales seulement)`,
+  communeSaved: (name: string) => `✅ Commune enregistrée : *${name}*. Écrivez *commune* pour la changer.`,
+  communeSkipped: '👍 Sans commune, vous ne recevrez que les alertes concernant toute la région. Écrivez *commune* pour la choisir plus tard.',
 };
 
 const fr: Dict = {
