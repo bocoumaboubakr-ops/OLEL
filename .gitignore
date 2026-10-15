@@ -20,6 +20,8 @@ build/
 out/
 *.tsbuildinfo
 .turbo/
+# Généré par Next.js à chaque build/dev (références de types de routes)
+next-env.d.ts
 
 # ── Prisma ───────────────────────────────────────────────────
 # Le client généré ne doit pas être committé
@@ -49,3 +51,13 @@ Thumbs.db
 *.local
 .cache/
 tmp/
+.claude/
+
+# Redis dump (artefact de test local)
+dump.rdb
+
+# Jeton de collecte Prometheus (copie de METRICS_TOKEN)
+monitoring/prometheus/metrics.token
+
+# Rapports de répétition du déploiement (scripts/rehearse-deploy.sh)
+rehearsal-*.txt

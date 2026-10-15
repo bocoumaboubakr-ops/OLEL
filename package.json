@@ -2,7 +2,7 @@
   "name": "olel-monorepo",
   "version": "1.0.0",
   "private": true,
-  "description": "OLEL – Plateforme d'alerte précoce multi-risques, projet STOP INONDATION (Matam–Gorgol)",
+  "description": "OLEL – Plateforme d'alerte précoce multi-risques, Région de Matam (Sénégal)",
   "workspaces": [
     "packages/*",
     "apps/*",
@@ -17,7 +17,8 @@
     "dev:dashboard": "turbo run dev --filter=@olel/dashboard",
     "dev:mobile": "turbo run dev --filter=@olel/mobile",
     "dev:backend": "turbo run dev --filter=@olel/backend",
-    "dev:bot": "turbo run dev --filter=@olel/bot"
+    "dev:bot": "turbo run dev --filter=@olel/bot",
+    "i18n:review": "node -r ./backend/node_modules/ts-node/register/transpile-only scripts/i18n/export-review-sheet.ts"
   },
   "devDependencies": {
     "turbo": "^2.0.0",
@@ -29,5 +30,19 @@
     "node": ">=20.0.0",
     "pnpm": ">=9.0.0"
   },
-  "packageManager": "pnpm@9.1.0"
+  "packageManager": "pnpm@9.1.0",
+  "pnpm": {
+    "overrides": {
+      "proxy-addr": "^2.0.8",
+      "body-parser@1": "^1.20.6",
+      "qs@6": "^6.16.0",
+      "form-data@4": "^4.0.6",
+      "engine.io": "^6.6.11",
+      "socket.io-parser": "^4.2.7",
+      "ws@8": "^8.22.0",
+      "multer": "^2.4.0",
+      "lodash": "^4.18.1",
+      "js-yaml@4": "^4.3.2"
+    }
+  }
 }

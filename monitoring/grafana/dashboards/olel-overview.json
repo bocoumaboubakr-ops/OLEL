@@ -1,0 +1,59 @@
+{
+  "title": "OLEL – Vue d'ensemble",
+  "description": "Plateforme d'Alerte Précoce Multi-Risques – Matam",
+  "tags": ["olel", "matam", "alerts"],
+  "timezone": "Africa/Dakar",
+  "refresh": "30s",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Statut des services",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
+      "targets": [{ "expr": "up{job='olel-backend'}", "legendFormat": "Backend" }],
+      "options": { "colorMode": "background", "graphMode": "none" },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [{ "type": "value", "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } } }]
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Requêtes/min",
+      "type": "graph",
+      "gridPos": { "x": 6, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "rate(http_requests_total[1m]) * 60", "legendFormat": "{{method}} {{route}}" }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Taux d'erreur",
+      "type": "stat",
+      "gridPos": { "x": 18, "y": 0, "w": 6, "h": 4 },
+      "targets": [{ "expr": "rate(http_requests_total{status=~'5..'}[5m]) / rate(http_requests_total[5m]) * 100", "legendFormat": "Erreurs %" }]
+    },
+    {
+      "id": 4,
+      "title": "Connexions DB actives",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 4, "w": 6, "h": 4 },
+      "targets": [{ "expr": "pg_stat_activity_count{job='postgres'}", "legendFormat": "Connexions" }]
+    },
+    {
+      "id": 5,
+      "title": "Mémoire Backend (MB)",
+      "type": "graph",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "targets": [{ "expr": "process_resident_memory_bytes{job='olel-backend'} / 1024 / 1024", "legendFormat": "RAM MB" }]
+    },
+    {
+      "id": 6,
+      "title": "Bull Queue – Jobs en attente",
+      "type": "stat",
+      "gridPos": { "x": 12, "y": 8, "w": 6, "h": 4 },
+      "targets": [{ "expr": "bull_waiting_count{queue='notifications'}", "legendFormat": "En attente" }]
+    }
+  ]
+}
