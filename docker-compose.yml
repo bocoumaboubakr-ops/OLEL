@@ -90,6 +90,7 @@ services:
       # Secret des rappels Africa's Talking (?key=) — obligatoire en production
       AT_CALLBACK_SECRET:   ${AT_CALLBACK_SECRET:-}
       METRICS_TOKEN:        ${METRICS_TOKEN:-}
+      PILOT_RECIPIENT_ALLOWLIST: ${PILOT_RECIPIENT_ALLOWLIST:-}
       # Un seul saut de proxy (Nginx) : adresse client fiable pour la limitation de débit
       TRUST_PROXY_HOPS:     1
       ALLOWED_ORIGINS:      ${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:3001}

@@ -49,6 +49,8 @@ export function useAlerts() {
       timer = setTimeout(fetchAlerts, 1000);
     };
     socket.on('alert:changed', scheduleRefetch);
+    // Radios partenaires : seul le flux public leur parvient
+    socket.on('alert:public', scheduleRefetch);
     // Session révoquée ou expirée : le serveur coupe la connexion ; le
     // rechargement renverra 401 et redirigera vers la connexion.
     socket.on('disconnect', (reason) => {

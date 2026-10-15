@@ -1,9 +1,10 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Controller, ForbiddenException, Get, Query, UseGuards } from '@nestjs/common';
 import { SkipThrottle } from '@nestjs/throttler';
 import { ApiTags, ApiHeader, ApiOperation } from '@nestjs/swagger';
 import { BotApiKeyGuard } from '../common/guards/bot-api-key.guard';
 import { AlertsService } from './alerts.service';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { PILOT_CONSULTATION_CLOSED, pilotAudienceAllowed } from '../common/pilot/pilot-mode';
 
 /**
  * Accès bot (clé API interne) aux alertes actives — utilisé par le menu
@@ -24,6 +25,11 @@ export class AlertsBotController {
     // Même définition que le mobile, l'USSD et les statistiques (audit F16) ;
     // cloisonnée par la zone du citoyen quand il est connu.
     const normalized = phone ? (phone.startsWith('+') ? phone : `+${phone.trim()}`) : undefined;
+    // Mode pilote : consultation fermée hors liste autorisée (et non « aucune
+    // alerte », qui serait une fausse assurance).
+    if (!pilotAudienceAllowed(normalized)) {
+      throw new ForbiddenException({ statusCode: 403, code: PILOT_CONSULTATION_CLOSED, message: 'Service en phase d\'essai : consultation non ouverte' });
+    }
     const user = normalized ? await this.prisma.user.findUnique({ where: { phone: normalized }, select: { zoneId: true } }) : null;
     return this.alerts.publicActiveFor(user?.zoneId ?? null, 5);
   }

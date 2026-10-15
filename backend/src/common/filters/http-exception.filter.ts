@@ -26,6 +26,8 @@ export class HttpExceptionFilter implements ExceptionFilter {
     let message: string | string[] = 'Erreur interne du serveur';
     // Contrôles de santé (Terminus) : le détail par composant est conservé (audit F33)
     let checks: unknown;
+    // Code machine facultatif (ex. PILOT_CONSULTATION_CLOSED), lu par le bot
+    let code: string | undefined;
 
     if (exception instanceof HttpException) {
       status = exception.getStatus();
@@ -34,6 +36,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
         typeof exceptionResponse === 'object' && 'message' in (exceptionResponse as object)
           ? (exceptionResponse as any).message
           : exception.message;
+      if (typeof exceptionResponse === 'object' && typeof (exceptionResponse as any)?.code === 'string') code = (exceptionResponse as any).code;
       if (typeof exceptionResponse === 'object' && (exceptionResponse as any)?.status === 'error' && 'details' in (exceptionResponse as object)) {
         checks = exceptionResponse;
       }
@@ -60,6 +63,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     response.status(status).json({
       statusCode: status,
       message,
+      ...(code ? { code } : {}),
       ...(checks ? { checks } : {}),
       timestamp: new Date().toISOString(),
       path: request.url,

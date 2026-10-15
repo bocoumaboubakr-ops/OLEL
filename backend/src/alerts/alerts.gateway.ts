@@ -11,6 +11,7 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { TerritoryService } from '../common/territory/territory.service';
 import { TERRITORY_EXEMPT } from '../users/user-policy';
 import { DIFFUSED_STATUSES } from './alert-policy';
+import { pilotAudienceAllowed } from '../common/pilot/pilot-mode';
 
 /** Revalidation périodique des connexions (suspension, rôle, expiration). */
 const REVALIDATE_MS = 60_000;
@@ -22,7 +23,9 @@ const REVALIDATE_MS = 60_000;
  *   session non révoquée, statut, tokenVersion, MFA selon le rôle).
  * - Aucun abonnement libre : le serveur place chaque socket dans UNE salle
  *   déterminée par son compte (`ops:<zone>` pour un opérateur, `pub:<zone>`
- *   pour un citoyen). Le message client « join:zone » est refusé.
+ *   pour un citoyen, `radio:<zone>` pour une radio partenaire). Le message
+ *   client « join:zone » est refusé. En mode pilote, seuls les numéros
+ *   autorisés rejoignent `pub:` et `radio:`.
  * - Événement interne `alert:changed` (résumé minimal, sans description,
  *   média, coordonnées ni identité du signaleur) envoyé uniquement aux
  *   opérateurs dont le territoire contient la zone de l'alerte.
@@ -93,8 +96,13 @@ export class AlertsGateway implements OnGatewayConnection, OnGatewayInit, OnModu
       return;
     }
     if (TERRITORY_EXEMPT.includes(user.role)) client.join('ops:all');
-    else if (user.role === Role.CITOYEN) { if (user.zoneId) client.join(`pub:${user.zoneId}`); }
-    else if (user.zoneId) {
+    else if (user.role === Role.CITOYEN) {
+      if (user.zoneId && pilotAudienceAllowed(user.phone)) client.join(`pub:${user.zoneId}`);
+    } else if (user.role === Role.RADIO_COMMUNAUTAIRE) {
+      // Radio partenaire : alertes diffusées de son territoire seulement (jamais
+      // le flux interne), et rien en mode pilote hors liste autorisée.
+      if (user.zoneId && pilotAudienceAllowed(user.phone)) client.join(`radio:${user.zoneId}`);
+    } else if (user.zoneId) {
       client.join(`ops:${user.zoneId}`);
       client.join(`pub:${user.zoneId}`);
     }
@@ -146,7 +154,9 @@ export class AlertsGateway implements OnGatewayConnection, OnGatewayInit, OnModu
       const primary = alert.broadcasts[0];
       const targets = primary?.targetZoneIds?.length ? primary.targetZoneIds : [alert.zoneId];
       const pubRooms = (await this.territory.subtreeOfMany(targets)).map((z) => `pub:${z}`);
-      this.server.to(pubRooms).emit('alert:public', {
+      // Radios : même périmètre que leur lecture (alertes de leur territoire)
+      const radioRooms = opsRooms.map((r) => r.replace(/^ops:/, 'radio:'));
+      this.server.to([...pubRooms, ...radioRooms]).emit('alert:public', {
         id: alert.id, title: alert.title, type: alert.type, alertLevel: alert.alertLevel,
         zone: { name: alert.zone?.name }, broadcastAt: alert.broadcastAt, certainty: primary?.certainty ?? 'CONFIRMED',
         retracted: !!alert.retractedAt,

@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { SignalementsService } from '../signalements/signalements.service';
 import { AlertsService } from '../alerts/alerts.service';
+import { pilotAudienceAllowed } from '../common/pilot/pilot-mode';
 
 const USSD_TYPES = [
   { menu: '1. Inondation',           value: 'INONDATION' },
@@ -87,6 +88,9 @@ export class UssdService {
 
   /** Consultation : distingue « aucune alerte » et « consultation indisponible » (F16). */
   private async activeAlerts(phone: string): Promise<string> {
+    if (!pilotAudienceAllowed(phone)) {
+      return 'END Service OLEL en phase d\'essai : la consultation des alertes n\'est pas encore ouverte.\nEn cas de danger, suivez les consignes des autorites locales.';
+    }
     try {
       const user = await this.prisma.user.findUnique({ where: { phone }, select: { zoneId: true } });
       const list = await this.alerts.publicActiveFor(user?.zoneId, 3);

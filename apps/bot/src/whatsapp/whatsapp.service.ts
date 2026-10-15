@@ -201,6 +201,8 @@ export class WhatsappService {
         const alerts = await this.backend.getActiveAlerts(from);
         if (alerts === null) {
           await this.sendText(from, tr.alertsUnavailable);
+        } else if (alerts === 'pilot') {
+          await this.sendText(from, tr.alertsPilot);
         } else if (!alerts.length) {
           await this.sendText(from, tr.alertsNone);
         } else {

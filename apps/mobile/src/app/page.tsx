@@ -117,6 +117,8 @@ export default function MobilePage() {
   const [alertsLoading, setAlertsLoading] = useState(true);
   // « Consultation indisponible » distinct de « aucune alerte » (audit F16)
   const [alertsError, setAlertsError] = useState(false);
+  // Mode pilote : consultation pas encore ouverte à ce numéro (≠ aucune alerte)
+  const [pilotClosed, setPilotClosed] = useState(false);
   const [sosOpen, setSosOpen] = useState(false);
   const [reportTheme, setReportTheme] = useState<Theme | null>(null);
   const [reportOption, setReportOption] = useState<RiskOption | null>(null);
@@ -141,6 +143,7 @@ export default function MobilePage() {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       setAlerts(data.alerts || []);
+      setPilotClosed(data.consultation === 'pilot_closed');
       setAlertsError(false);
     } catch { setAlertsError(true); } finally { setAlertsLoading(false); }
   }, []);
@@ -227,10 +230,10 @@ export default function MobilePage() {
           <>
             {inTraining && <TrainingBanner onOpen={() => setTab('formations')} />}
             <PendingReports items={queue.items} onRetry={queue.flush} onRemove={queue.remove} />
-            <HomeScreen zoneStatus={zoneStatus} activeCount={active.length} unavailable={alertsError} zoneName={user.zone?.name} onReport={() => setTab('report')} onAlerts={() => setTab('alerts')} onMap={() => setTab('map')} isSentinel={isSentinel} canReport={!inTraining} />
+            <HomeScreen zoneStatus={zoneStatus} activeCount={active.length} unavailable={alertsError} pilotClosed={pilotClosed} zoneName={user.zone?.name} onReport={() => setTab('report')} onAlerts={() => setTab('alerts')} onMap={() => setTab('map')} isSentinel={isSentinel} canReport={!inTraining} />
           </>
         )}
-        {tab === 'alerts' && <AlertsScreen alerts={active} myReports={myReports} loading={alertsLoading} unavailable={alertsError} onRefresh={fetchAlerts} />}
+        {tab === 'alerts' && <AlertsScreen alerts={active} myReports={myReports} loading={alertsLoading} unavailable={alertsError} pilotClosed={pilotClosed} onRefresh={fetchAlerts} />}
         {tab === 'report' && (
           <ReportScreen
             step={reportStep}
@@ -441,12 +444,17 @@ function MobileLoginScreen({
 }
 
 // ── HomeScreen ────────────────────────────────────────────────────────────────
-function HomeScreen({ zoneStatus, activeCount, unavailable, zoneName, onReport, onAlerts, onMap, isSentinel, canReport }: {
-  zoneStatus: typeof SEV_ZONE[0]; activeCount: number; unavailable: boolean; zoneName?: string;
+/** Mode pilote : la liste est vide parce que le service n'est pas ouvert, pas parce qu'il n'y a pas de danger. */
+const PILOT_NOTICE = 'La consultation des alertes OLEL n\'est pas encore ouverte au public. En cas de danger, suivez les consignes des autorités locales et écoutez la radio.';
+
+function HomeScreen({ zoneStatus, activeCount, unavailable, pilotClosed, zoneName, onReport, onAlerts, onMap, isSentinel, canReport }: {
+  zoneStatus: typeof SEV_ZONE[0]; activeCount: number; unavailable: boolean; pilotClosed: boolean; zoneName?: string;
   onReport: () => void; onAlerts: () => void; onMap: () => void; isSentinel: boolean; canReport: boolean;
 }) {
   if (unavailable) {
     zoneStatus = { label: 'Consultation indisponible', color: '#92400E', bg: '#FFFBEB' } as typeof SEV_ZONE[0];
+  } else if (pilotClosed) {
+    zoneStatus = { label: 'Service en phase d\'essai', color: '#1E3A8A', bg: '#EFF6FF' } as typeof SEV_ZONE[0];
   }
   return (
     <div style={{ display: 'flex', flexDirection: 'column', padding: '0 0 24px' }}>
@@ -461,6 +469,10 @@ function HomeScreen({ zoneStatus, activeCount, unavailable, zoneName, onReport, 
         {unavailable ? (
           <div style={{ fontSize: '0.78rem', color: zoneStatus.color, marginTop: 4 }}>
             Impossible de vérifier les alertes en ce moment. Cela ne veut pas dire qu&apos;il n&apos;y en a pas.
+          </div>
+        ) : pilotClosed ? (
+          <div style={{ fontSize: '0.78rem', color: zoneStatus.color, marginTop: 4 }}>
+            {PILOT_NOTICE}
           </div>
         ) : activeCount > 0 && (
           <div style={{ fontSize: '0.78rem', color: zoneStatus.color, opacity: 0.75, marginTop: 4 }}>
@@ -488,7 +500,7 @@ function HomeScreen({ zoneStatus, activeCount, unavailable, zoneName, onReport, 
 
       {/* Cartes secondaires : flat, sobre */}
       <div style={{ padding: '8px 20px 0', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-        <InfoCard label="Alertes actives" value={unavailable ? '?' : String(activeCount)} sub={unavailable ? 'indisponible' : 'en cours'} onClick={onAlerts} />
+        <InfoCard label="Alertes actives" value={unavailable ? '?' : pilotClosed ? '—' : String(activeCount)} sub={unavailable ? 'indisponible' : pilotClosed ? 'non ouvert' : 'en cours'} onClick={onAlerts} />
         {!isSentinel && <InfoCard label="Carte" value={'📍'} sub="Région Matam" onClick={onMap} />}
       </div>
     </div>
@@ -851,7 +863,7 @@ function ReportSuccess({ outcome, onDone }: { outcome: SendOutcome | null; onDon
 }
 
 // ── AlertsScreen ──────────────────────────────────────────────────────────────
-function AlertsScreen({ alerts, myReports, loading, unavailable, onRefresh }: { alerts: MobileAlert[]; myReports: MobileAlert[]; loading: boolean; unavailable: boolean; onRefresh: () => void }) {
+function AlertsScreen({ alerts, myReports, loading, unavailable, pilotClosed, onRefresh }: { alerts: MobileAlert[]; myReports: MobileAlert[]; loading: boolean; unavailable: boolean; pilotClosed: boolean; onRefresh: () => void }) {
   if (loading) return <div style={{ textAlign: 'center', padding: 56, color: '#94A3B8', fontSize: '0.9rem' }}>Chargement…</div>;
   if (unavailable) {
     return (
@@ -884,7 +896,12 @@ function AlertsScreen({ alerts, myReports, loading, unavailable, onRefresh }: { 
           ))}
         </div>
       )}
-      {!alerts.length ? (
+      {pilotClosed ? (
+        <div role="status" style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 12, padding: 16, color: '#1E3A8A' }}>
+          <div style={{ fontWeight: 600, marginBottom: 4 }}>Service en phase d&apos;essai</div>
+          <div style={{ fontSize: '0.84rem' }}>{PILOT_NOTICE}</div>
+        </div>
+      ) : !alerts.length ? (
         <div style={{ textAlign: 'center', padding: '64px 20px', color: '#64748B' }}>
           <p style={{ margin: 0, fontSize: '0.92rem' }}>Aucune alerte active dans votre zone.</p>
           <p style={{ margin: '6px 0 0', fontSize: '0.78rem', color: '#94A3B8' }}>Tirez vers le bas pour actualiser</p>

@@ -25,6 +25,7 @@ import { FlagsService } from '../flags/flags.service';
 import { buildFrozenPayload, buildTemplateCalls, Certainty } from '../common/i18n/alert-messages';
 import { TERRITORY_EXEMPT } from '../users/user-policy';
 import { randomUUID } from 'crypto';
+import { pilotAudienceAllowed } from '../common/pilot/pilot-mode';
 
 /** Canaux acceptés pour une diffusion : ceux réellement mis en œuvre (audit F26). */
 export const AVAILABLE_CHANNELS = ['app', 'whatsapp', 'sms'];
@@ -33,7 +34,7 @@ export const AVAILABLE_CHANNELS = ['app', 'whatsapp', 'sms'];
 export const FLAG_PREALERT = 'prealert_red';
 export const FLAG_AUTO_ESCALATION = 'auto_escalation_red';
 
-type OperatorCtx = { id: string; role: Role; zoneId?: string | null };
+type OperatorCtx = { id: string; role: Role; zoneId?: string | null; phone?: string | null };
 export type ReaderCtx = OperatorCtx;
 
 @Injectable()
@@ -166,10 +167,13 @@ export class AlertsService {
    *  - radio : alertes diffusées de son territoire ;
    *  - citoyen : ses propres signalements + alertes publiques en vigueur
    *    concernant sa zone (même définition que USSD/WhatsApp).
+   * En mode pilote, citoyens et radios hors liste autorisée ne voient aucune
+   * alerte diffusée (le citoyen garde l'accès à ses propres signalements).
    */
   private async readScope(user: ReaderCtx): Promise<Prisma.AlertWhereInput> {
     if (TERRITORY_EXEMPT.includes(user.role)) return {};
     if (user.role === Role.CITOYEN) {
+      if (!pilotAudienceAllowed(user.phone)) return { createdById: user.id };
       const zones = await this.publicZonesFor(user.zoneId);
       return {
         OR: [
@@ -183,7 +187,10 @@ export class AlertsService {
     }
     if (!user.zoneId) return { id: { in: [] } };
     const territory = await this.territory.subtree(user.zoneId);
-    if (user.role === Role.RADIO_COMMUNAUTAIRE) return { zoneId: { in: territory }, status: { in: PUBLIC_ACTIVE_STATUSES } };
+    if (user.role === Role.RADIO_COMMUNAUTAIRE) {
+      if (!pilotAudienceAllowed(user.phone)) return { id: { in: [] } };
+      return { zoneId: { in: territory }, status: { in: PUBLIC_ACTIVE_STATUSES } };
+    }
     return { zoneId: { in: territory } };
   }
 
@@ -278,7 +285,10 @@ export class AlertsService {
       }),
       this.prisma.alert.count({ where: scoped }),
     ]);
-    return { alerts: this.isOperator(user) ? alerts : alerts.map((a) => publicView(a, user)), total, page, limit };
+    // « pilot_closed » : liste vide parce que le service est en essai, et non
+    // parce qu'il n'y a pas d'alerte (l'application l'affiche ainsi).
+    const consultation = this.isOperator(user) || pilotAudienceAllowed(user.phone) ? 'open' : 'pilot_closed';
+    return { alerts: this.isOperator(user) ? alerts : alerts.map((a) => publicView(a, user)), total, page, limit, consultation };
   }
 
   /**

@@ -73,12 +73,18 @@ export class BackendService {
   }
 
   // ── Consultation et signalements ─────────────────────────────────────────
-  /** Alertes en vigueur pour la zone du citoyen ; null = consultation impossible (≠ aucune alerte, F16). */
-  async getActiveAlerts(phone?: string): Promise<any[] | null> {
+  /**
+   * Alertes en vigueur pour la zone du citoyen ; null = consultation impossible
+   * (≠ aucune alerte, F16) ; 'pilot' = service en phase d'essai, consultation
+   * non ouverte à ce numéro.
+   */
+  async getActiveAlerts(phone?: string): Promise<any[] | null | 'pilot'> {
     try {
       const { data } = await this.http.get('/alerts-bot/active', { params: phone ? { phone } : {} });
       return Array.isArray(data) ? data : null;
     } catch (e) {
+      const res = (e as { response?: { status?: number; data?: { code?: string } } }).response;
+      if (res?.status === 403 && res.data?.code === 'PILOT_CONSULTATION_CLOSED') return 'pilot';
       this.logger.error(`Consultation des alertes indisponible : ${(e as Error).message}`);
       return null;
     }

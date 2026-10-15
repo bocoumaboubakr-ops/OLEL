@@ -83,6 +83,14 @@ describe('WhatsappService', () => {
     expect(backend.getActiveAlerts).toHaveBeenCalledWith(from);
   });
 
+  it('mode pilote : consultation « non ouverte », ni « aucune alerte » ni « indisponible »', async () => {
+    session = { step: 'awaiting_choice', lang: 'fr', data: {} };
+    backend.getActiveAlerts.mockResolvedValueOnce('pilot');
+    await say('2');
+    expect(sent.at(-1)).toBe(t('fr').alertsPilot);
+    expect(sent.at(-1)).not.toBe(t('fr').alertsNone);
+  });
+
   it('signalement complet : identifiant du message transmis (dédoublonnage), confirmation sans promesse', async () => {
     session = { step: 'report_theme', lang: 'fr', data: {} };
     await say('1');           // thématique

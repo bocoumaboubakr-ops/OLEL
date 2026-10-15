@@ -5,6 +5,10 @@
  * ayant donné leur accord). La règle est appliquée par le processeur de
  * diffusion, côté serveur : aucune action d'interface ne peut la lever.
  *
+ * La même liste borne la CONSULTATION : en mode pilote, seuls ces numéros
+ * voient les alertes diffusées (application, USSD, bot, temps réel, radios
+ * partenaires). Sinon une alerte d'essai serait visible du public.
+ *
  * Format : numéros E.164 séparés par des virgules ou des espaces.
  * Variable absente ou vide = fonctionnement normal (aucune restriction).
  */
@@ -24,3 +28,13 @@ export function pilotModeInfo() {
   const list = pilotAllowlist();
   return { pilotMode: !!list, allowlistSize: list?.size ?? 0 };
 }
+
+/** Vrai si ce numéro peut voir les alertes diffusées (toujours vrai hors mode pilote). */
+export function pilotAudienceAllowed(phone?: string | null): boolean {
+  const list = pilotAllowlist();
+  if (!list) return true;
+  return !!phone && list.has(normalizeE164(phone));
+}
+
+/** Code renvoyé aux canaux de consultation fermés pendant le pilote. */
+export const PILOT_CONSULTATION_CLOSED = 'PILOT_CONSULTATION_CLOSED';
