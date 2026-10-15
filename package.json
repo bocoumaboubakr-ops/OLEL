@@ -17,7 +17,8 @@
     "dev:dashboard": "turbo run dev --filter=@olel/dashboard",
     "dev:mobile": "turbo run dev --filter=@olel/mobile",
     "dev:backend": "turbo run dev --filter=@olel/backend",
-    "dev:bot": "turbo run dev --filter=@olel/bot"
+    "dev:bot": "turbo run dev --filter=@olel/bot",
+    "i18n:review": "node -r ./backend/node_modules/ts-node/register/transpile-only scripts/i18n/export-review-sheet.ts"
   },
   "devDependencies": {
     "turbo": "^2.0.0",

@@ -1,0 +1,347 @@
+﻿"Domaine";"Clé";"Français (référence)";"Pulaar (actuel)";"Wolof (actuel)";"Soninké (actuel)";"Pulaar (validé)";"Wolof (validé)";"Soninké (validé)";"Statut";"Note";"Commentaire du relecteur"
+"Alerte diffusée";"Niveau BLEU";"INFORMATION";"KABARU";"XIBAAR";"XIBAARE";"";"";"";"traduit — à valider";"";""
+"Alerte diffusée";"Niveau JAUNE";"VIGILANCE";"REENTAARE";"MOYTABAL";"KORINTE";"";"";"";"traduit — à valider";"";""
+"Alerte diffusée";"Niveau ORANGE";"PRE-ALERTE";"REENTAARE MAWNDE";"ARTU";"XIBAARE BELLE";"";"";"";"traduit — à valider";"";""
+"Alerte diffusée";"Niveau ROUGE";"URGENCE";"HEÑORDE";"JAMONO BU TANG";"TANPINTE";"";"";"";"traduit — à valider";"";""
+"Alerte diffusée";"Niveau ROUGE_FONCE";"CRISE MAJEURE";"MUSIIBA MAWDO";"MUSIBA BU MAG";"MUSIIBA BELLE";"";"";"";"traduit — à valider";"";""
+"Alerte diffusée";"Mention UNCONFIRMED_AUTO";"NON CONFIRMÉE PAR L'AUTORITÉ";"LAAMU TEEŊTINAAKI";"NJIITU YI WÓORALUÑU KO";"SAXURUYEN NA A WÓORAL";"";"";"";"traduit — à valider";"Mention de certitude en tête de message";""
+"Alerte diffusée";"Mention EMERGENCY_BYPASS";"DIFFUSION D'URGENCE — VÉRIFICATION EN COURS";"NELDUGOL HEÑORDE — ƳEEWGOL NO WAƊA";"YÓNNEE CI JAMONO BU TÀNG — SEET GI NGI CI KAW";"TANPINTE NELLI — MANGINƝE TI A DI";"";"";"";"traduit — à valider";"Mention de certitude en tête de message";""
+"Alerte diffusée";"Mention CORRECTION";"RECTIFICATIF — remplace le message précédent";"RECTIFICATIF — remplace le message précédent";"RECTIFICATIF — remplace le message précédent";"RECTIFICATIF — remplace le message précédent";"";"";"";"repli français (ff, wo, snk)";"Mention de certitude en tête de message";""
+"Alerte diffusée";"Mention RETRACTION";"ALERTE ANNULÉE";"ALERTE ANNULÉE";"ALERTE ANNULÉE";"ALERTE ANNULÉE";"";"";"";"repli français (ff, wo, snk)";"Mention de certitude en tête de message";""
+"Alerte diffusée";"Mention PREALERT";"PRÉ-ALERTE — INFORMATION NON CONFIRMÉE";"REENTAARE ADANNDE — KABARU TEEŊTINAAKI";"ARTU BU JIITU — XIBAAR BU ÑU WÓORALUL";"XIBAARE FOLLE — A NA WÓORAL";"";"";"";"traduit — à valider";"Mention de certitude en tête de message";""
+"Alerte diffusée";"Mention EXERCICE (mode pilote)";"EXERCICE";"EXERCICE";"EXERCICE";"EXERCICE";"";"";"";"repli français (ff, wo, snk)";"En tête et en fin de chaque message diffusé pendant le pilote";""
+"Alerte diffusée";"Mot « Zone »";"Zone";"Nokku";"Goxu bi";"Jamaane";"";"";"";"traduit — à valider";"";""
+"Alerte diffusée";"Consigne finale";"Suivez les consignes des autorités locales.";"Ɗoftee yamirooje laamu nokku on.";"Toppleen ndigalu njiitu gox bi.";"Ti kanmu yittan saxuruyen wujje.";"";"";"";"traduit — à valider";"";""
+"Bot WhatsApp";"chooseLang";"🌍 Choisissez votre langue / Suɓo ɗemngal / Tànnal sa làkk :
+
+1️⃣ Français
+2️⃣ Pulaar
+3️⃣ Wolof
+4️⃣ Soninké";"🌍 Suɓo ɗemngal / Choisissez votre langue :
+
+1️⃣ Farayse
+2️⃣ Pulaar
+3️⃣ Wolof
+4️⃣ Sooninke";"🌍 Tànnal sa làkk / Choisissez votre langue :
+
+1️⃣ Faraas
+2️⃣ Pulaar
+3️⃣ Wolof
+4️⃣ Sooninke";"🌍 Tànnal sa làkk / Choisissez :
+
+1️⃣ Faransi
+2️⃣ Pulaar
+3️⃣ Wolof
+4️⃣ Sooninke";"";"";"";"traduit — à valider";"";""
+"Bot WhatsApp";"menu";"🚨 *OLEL – Alerte Précoce*
+_Région de Matam_
+
+1️⃣ Signaler une situation
+2️⃣ Consulter les alertes
+3️⃣ Mon profil
+
+Répondez avec le numéro, ou *langue* pour changer de langue.";"🚨 *OLEL – Reentaare*
+_Diiwaan Matam_
+
+1️⃣ Hollu bone
+2️⃣ Ƴeew reentaareeji
+3️⃣ Konngol am
+
+Jaabo e llimol, walla winndu *ɗemngal* ngam waylude ɗemngal.";"🚨 *OLEL – Artu*
+_Diiwaanu Matam_
+
+1️⃣ Yégle benn mbir
+2️⃣ Seet artu yi
+3️⃣ Sama profil
+
+Tontu ak limu bi, walla bind *làkk* ngir soppi làkk.";"🚨 *OLEL – Xibaare*
+_Matam jamaane_
+
+1️⃣ Xibaare tana
+2️⃣ Xibaarini ñan ŋa
+3️⃣ N profil
+
+Jaabi nimero ŋa, walla safa *làkk* an làkk falle.";"";"";"";"traduit — à valider";"";""
+"Bot WhatsApp";"reportThemePrompt";"📋 *Quelle thématique concerne votre signalement ?*";"📋 *Mboɗo bone on jeyaa ?*";"📋 *Ban xeetu musiba ngeen yégle ?*";"📋 *Tana sifa fi ŋa xibaare ?*";"";"";"";"traduit — à valider";"";""
+"Bot WhatsApp";"reportOptionPrompt";"📋 *{1}* — Quel type précis ?";"📋 *{1}* — Sifaa hol ?";"📋 *{1}* — Lu ko mooy nelaw ?";"📋 *{1}* — Sifa hol ŋa ?";"";"";"";"traduit — à valider";"{1}, {2}… = valeurs insérées automatiquement";""
+"Bot WhatsApp";"describePrompt";"{1} sélectionné.
+
+Décrivez la situation (lieu, ampleur, personnes touchées).
+
+💡 Vous pouvez aussi *envoyer un message vocal* dans votre langue.";"{1} suɓaama.
+
+Sifo ko heɓii (nokku, mawnde, yimɓe nanngaaɓe).
+
+💡 Aɗa waawi *neldude konngol sawtuyaŋkol* e ɗemngal maa.";"{1} tànnees na.
+
+Wax la xew (bérab, lu mu tollu, ñi mu jàpp).
+
+💡 Man ngaa *yónnee bataaxal buy baat* ci sa làkk.";"{1} tànnu.
+
+Xibaare ke (jamaane, a gabe, sere ku nan).
+
+💡 An ŋa *audio nelli* an làkk di.";"";"";"";"traduit — à valider";"{1}, {2}… = valeurs insérées automatiquement";""
+"Bot WhatsApp";"photoPrompt";"📷 Si vous pouvez, *envoyez une photo* du lieu (facultatif).
+
+Sinon tapez *passer* pour continuer.";"📷 So aɗa waawi, *nelu nataal* nokku (jiidi).
+
+Walla winndu *passer* ngam jokkude.";"📷 Su manee, *yónnee ab nataal* bu bérab bi (du jëfandiku ci bépp wàll).
+
+Walla bind *passer* ngir jokk.";"📷 An ŋa wuto, *nelli nataal* jamaane ŋa (na dëne).
+
+Walla safa *passer* a tuga.";"";"";"";"traduit — à valider";"";""
+"Bot WhatsApp";"photoSkipped";"👍 OK, on continue sans photo.";"👍 Eyyo, en jokkii ko aldaa e nataal.";"👍 Baaxna, nu jokk te du am nataal.";"👍 Tuga, n bani nataal a yibo.";"";"";"";"traduit — à valider";"";""
+"Bot WhatsApp";"severityPrompt";"Gravité :
+1. 🟢 Vigilance
+2. 🟡 Alerte
+3. 🔴 Urgence (danger immédiat)
+
+Répondez 1, 2 ou 3.";"Mawnde bone:
+1. 🟢 Reentaare
+2. 🟡 Tonngol
+3. 🔴 Heñorde (bone jooni)
+
+Jaabo 1, 2 walla 3.";"Tolluwaayu musiba:
+1. 🟢 Moytabal
+2. 🟡 Artu
+3. 🔴 Jamono bu tàng (musiba léegi)
+
+Tontu 1, 2 walla 3.";"Tana gabe:
+1. 🟢 Korinte
+2. 🟡 Xibaare
+3. 🔴 Tanpinte (tana yiga)
+
+Jaabi 1, 2 walla 3.";"";"";"";"traduit — à valider";"";""
+"Bot WhatsApp";"reportSaved";"✅ *Signalement reçu par OLEL*
+Type : {1}
+Gravité : {2}
+Réf : {3}
+
+Un opérateur va l'examiner. OLEL ne remplace pas les secours : en cas de danger immédiat, contactez-les directement.
+
+Tapez *menu* pour recommencer.";"✅ *Bone on winndaama!*
+Sifaa : {1}
+Mawnde : {2}
+Réf : {3}
+
+A jaaraama.
+
+Winndu *menu* ngam fuɗɗaade.";"✅ *Yégle bi nataal na!*
+Xeet : {1}
+Tolluwaay : {2}
+Réf : {3}
+
+Jërëjëf.
+
+Bind *menu* ngir tàmbali.";"✅ *Xibaare safani!*
+Sifa : {1}
+Gabe : {2}
+Réf : {3}
+
+I ni jaara.
+
+Safa *menu* a tuga.";"";"";"";"traduit — à valider";"{1}, {2}… = valeurs insérées automatiquement";""
+"Bot WhatsApp";"reportError";"❌ Erreur lors de l'enregistrement. Réessayez.
+Tapez *menu*.";"❌ Juumre waɗii. Eto goɗngol.
+Winndu *menu*.";"❌ Njuumte am na. Jéemaat.
+Bind *menu*.";"❌ Filli wuto. Tagara koota.
+Safa *menu*.";"";"";"";"traduit — à valider";"";""
+"Bot WhatsApp";"alertsNone";"✅ Aucune alerte active dans votre zone.
+
+Tapez *menu* pour revenir.";"✅ Alaa reentaare e nokku maa.
+
+Winndu *menu*.";"✅ Amul artu ci sa gox.
+
+Bind *menu*.";"✅ Xibaare nta n jamaane di.
+
+Safa *menu*.";"";"";"";"traduit — à valider";"";""
+"Bot WhatsApp";"alertsHeader";"🚨 *Alertes actives ({1}) :*";"🚨 *Reentaareeji ({1}) :*";"🚨 *Artu yi ({1}) :*";"🚨 *Xibaarini ({1}) :*";"";"";"";"traduit — à valider";"{1}, {2}… = valeurs insérées automatiquement";""
+"Bot WhatsApp";"profile";"ℹ️ *Votre compte OLEL*
+Numéro : {1}
+
+Tapez *langue* pour changer de langue, *menu* pour revenir.";"ℹ️ *Konngol OLEL maa*
+Nimero : {1}
+
+Winndu *ɗemngal* ngam waylude, *menu* ngam ruttaade.";"ℹ️ *Sa kont OLEL*
+Nimero : {1}
+
+Bind *làkk* ngir soppi, *menu* ngir dellu.";"ℹ️ *N OLEL kont*
+Nimero : {1}
+
+Safa *làkk* an falle, *menu* a kompe.";"";"";"";"traduit — à valider";"{1}, {2}… = valeurs insérées automatiquement";""
+"Bot WhatsApp";"invalidOption";"❓ Option non reconnue. Répondez *1*, *2* ou *3*, ou tapez *menu*.";"❓ Suɓngo ngalaa. Jaabo *1*, *2* walla *3*, walla winndu *menu*.";"❓ Tann gi baaxul. Tontu *1*, *2* walla *3*, walla bind *menu*.";"❓ Tann nta ñiŋe. Jaabi *1*, *2* walla *3*, walla safa *menu*.";"";"";"";"traduit — à valider";"";""
+"Bot WhatsApp";"invalidNumber";"Numéro invalide. Répondez de 1 à {1}.";"Limol ngalaa. Jaabo gila 1 haa {1}.";"Limu bi baaxul. Tontu 1 ba {1}.";"Nimero nta ñiŋe. Jaabi 1 ke {1}.";"";"";"";"traduit — à valider";"{1}, {2}… = valeurs insérées automatiquement";""
+"Bot WhatsApp";"invalidSeverity";"Répondez 1, 2 ou 3.";"Jaabo 1, 2 walla 3.";"Tontu 1, 2 walla 3.";"Jaabi 1, 2 walla 3.";"";"";"";"traduit — à valider";"";""
+"Bot WhatsApp";"sevLabels";"🟢 Vigilance,🟡 Alerte,🔴 Urgence";"🟢 Reentaare,🟡 Tonngol,🔴 Heñorde";"🟢 Moytabal,🟡 Artu,🔴 Jamono bu tàng";"🟢 Korinte,🟡 Xibaare,🔴 Tanpinte";"";"";"";"traduit — à valider";"";""
+"Bot WhatsApp";"audioPrompt";"🎙️ Message vocal reçu. Décrivez aussi brièvement par écrit si possible, ou tapez *ok* pour valider.";"🎙️ Konngol sawtuyaŋkol heɓaama. Winndu seeɗa kadi so aɗa waawi, walla winndu *ok*.";"🎙️ Bataaxalu baat bi jot na. Bindal tuuti itam su manee, walla bind *ok*.";"🎙️ Audio safani. Safa doroni an ŋa wuto, walla safa *ok*.";"";"";"";"traduit — à valider";"";""
+"Bot WhatsApp";"audioReceived";"🎙️ Votre message vocal a bien été reçu et sera écouté par un agent.";"🎙️ Konngol maa sawtuyaŋkol heɓaama, gardiiɗo maa heɗoo ngol.";"🎙️ Sa bataaxalu baat jot na, ab agent dina ko déglu.";"🎙️ I audio safani, agent ke a yittan.";"";"";"";"traduit — à valider";"";""
+"Bot WhatsApp";"consentPrompt";"📩 *Recevoir les alertes OLEL sur WhatsApp ?*
+OLEL vous écrira seulement pour des alertes officielles de votre zone et le suivi de vos signalements.
+
+1️⃣ Oui
+2️⃣ Non
+
+Vous pourrez arrêter à tout moment en écrivant *STOP*.";"📩 *Recevoir les alertes OLEL sur WhatsApp ?*
+OLEL vous écrira seulement pour des alertes officielles de votre zone et le suivi de vos signalements.
+
+1️⃣ Oui
+2️⃣ Non
+
+Vous pourrez arrêter à tout moment en écrivant *STOP*.";"📩 *Recevoir les alertes OLEL sur WhatsApp ?*
+OLEL vous écrira seulement pour des alertes officielles de votre zone et le suivi de vos signalements.
+
+1️⃣ Oui
+2️⃣ Non
+
+Vous pourrez arrêter à tout moment en écrivant *STOP*.";"📩 *Recevoir les alertes OLEL sur WhatsApp ?*
+OLEL vous écrira seulement pour des alertes officielles de votre zone et le suivi de vos signalements.
+
+1️⃣ Oui
+2️⃣ Non
+
+Vous pourrez arrêter à tout moment en écrivant *STOP*.";"";"";"";"repli français (ff, wo, snk)";"";""
+"Bot WhatsApp";"consentSaved";"✅ C'est noté : vous recevrez les alertes OLEL sur WhatsApp. Écrivez *STOP* pour arrêter.";"✅ C'est noté : vous recevrez les alertes OLEL sur WhatsApp. Écrivez *STOP* pour arrêter.";"✅ C'est noté : vous recevrez les alertes OLEL sur WhatsApp. Écrivez *STOP* pour arrêter.";"✅ C'est noté : vous recevrez les alertes OLEL sur WhatsApp. Écrivez *STOP* pour arrêter.";"";"";"";"repli français (ff, wo, snk)";"";""
+"Bot WhatsApp";"consentDeclined";"👍 C'est noté : pas d'alertes OLEL sur WhatsApp. Vous pouvez toujours signaler et consulter. Écrivez *ALERTES* pour changer d'avis.";"👍 C'est noté : pas d'alertes OLEL sur WhatsApp. Vous pouvez toujours signaler et consulter. Écrivez *ALERTES* pour changer d'avis.";"👍 C'est noté : pas d'alertes OLEL sur WhatsApp. Vous pouvez toujours signaler et consulter. Écrivez *ALERTES* pour changer d'avis.";"👍 C'est noté : pas d'alertes OLEL sur WhatsApp. Vous pouvez toujours signaler et consulter. Écrivez *ALERTES* pour changer d'avis.";"";"";"";"repli français (ff, wo, snk)";"";""
+"Bot WhatsApp";"optedOut";"🔕 Vous êtes désabonné : OLEL ne vous enverra plus d'alertes. Écrivez *ALERTES* pour vous réabonner.";"🔕 Vous êtes désabonné : OLEL ne vous enverra plus d'alertes. Écrivez *ALERTES* pour vous réabonner.";"🔕 Vous êtes désabonné : OLEL ne vous enverra plus d'alertes. Écrivez *ALERTES* pour vous réabonner.";"🔕 Vous êtes désabonné : OLEL ne vous enverra plus d'alertes. Écrivez *ALERTES* pour vous réabonner.";"";"";"";"repli français (ff, wo, snk)";"";""
+"Bot WhatsApp";"optedIn";"🔔 Vous êtes de nouveau abonné aux alertes OLEL. Écrivez *STOP* pour arrêter.";"🔔 Vous êtes de nouveau abonné aux alertes OLEL. Écrivez *STOP* pour arrêter.";"🔔 Vous êtes de nouveau abonné aux alertes OLEL. Écrivez *STOP* pour arrêter.";"🔔 Vous êtes de nouveau abonné aux alertes OLEL. Écrivez *STOP* pour arrêter.";"";"";"";"repli français (ff, wo, snk)";"";""
+"Bot WhatsApp";"alertsUnavailable";"⚠️ Consultation des alertes indisponible pour le moment. Cela ne veut PAS dire qu'il n'y a pas d'alerte : écoutez la radio et les autorités locales. Réessayez plus tard.";"⚠️ Consultation des alertes indisponible pour le moment. Cela ne veut PAS dire qu'il n'y a pas d'alerte : écoutez la radio et les autorités locales. Réessayez plus tard.";"⚠️ Consultation des alertes indisponible pour le moment. Cela ne veut PAS dire qu'il n'y a pas d'alerte : écoutez la radio et les autorités locales. Réessayez plus tard.";"⚠️ Consultation des alertes indisponible pour le moment. Cela ne veut PAS dire qu'il n'y a pas d'alerte : écoutez la radio et les autorités locales. Réessayez plus tard.";"";"";"";"repli français (ff, wo, snk)";"";""
+"Bot WhatsApp";"alertsPilot";"🧪 OLEL est en phase d'essai : la consultation des alertes n'est pas encore ouverte au public. En cas de danger, suivez les consignes des autorités locales et écoutez la radio.";"🧪 OLEL est en phase d'essai : la consultation des alertes n'est pas encore ouverte au public. En cas de danger, suivez les consignes des autorités locales et écoutez la radio.";"🧪 OLEL est en phase d'essai : la consultation des alertes n'est pas encore ouverte au public. En cas de danger, suivez les consignes des autorités locales et écoutez la radio.";"🧪 OLEL est en phase d'essai : la consultation des alertes n'est pas encore ouverte au public. En cas de danger, suivez les consignes des autorités locales et écoutez la radio.";"";"";"";"repli français (ff, wo, snk)";"";""
+"Bot WhatsApp";"communePrompt";"📍 *Dans quelle commune habitez-vous ?*
+Vous recevrez les alertes de votre commune et celles de toute la région.
+
+{1}
+
+0️⃣ Passer (alertes régionales seulement)";"📍 *Dans quelle commune habitez-vous ?*
+Vous recevrez les alertes de votre commune et celles de toute la région.
+
+{1}
+
+0️⃣ Passer (alertes régionales seulement)";"📍 *Dans quelle commune habitez-vous ?*
+Vous recevrez les alertes de votre commune et celles de toute la région.
+
+{1}
+
+0️⃣ Passer (alertes régionales seulement)";"📍 *Dans quelle commune habitez-vous ?*
+Vous recevrez les alertes de votre commune et celles de toute la région.
+
+{1}
+
+0️⃣ Passer (alertes régionales seulement)";"";"";"";"repli français (ff, wo, snk)";"{1}, {2}… = valeurs insérées automatiquement";""
+"Bot WhatsApp";"communeSaved";"✅ Commune enregistrée : *{1}*. Écrivez *commune* pour la changer.";"✅ Commune enregistrée : *{1}*. Écrivez *commune* pour la changer.";"✅ Commune enregistrée : *{1}*. Écrivez *commune* pour la changer.";"✅ Commune enregistrée : *{1}*. Écrivez *commune* pour la changer.";"";"";"";"repli français (ff, wo, snk)";"{1}, {2}… = valeurs insérées automatiquement";""
+"Bot WhatsApp";"communeSkipped";"👍 Sans commune, vous ne recevrez que les alertes concernant toute la région. Écrivez *commune* pour la choisir plus tard.";"👍 Sans commune, vous ne recevrez que les alertes concernant toute la région. Écrivez *commune* pour la choisir plus tard.";"👍 Sans commune, vous ne recevrez que les alertes concernant toute la région. Écrivez *commune* pour la choisir plus tard.";"👍 Sans commune, vous ne recevrez que les alertes concernant toute la région. Écrivez *commune* pour la choisir plus tard.";"";"";"";"repli français (ff, wo, snk)";"";""
+"Bot — types de risque";"INONDATION";"🌊 Inondation";"🌊 Ilam";"🌊 Mbëkkte";"🌊 Jiyen";"";"";"";"traduit — à valider";"";""
+"Bot — types de risque";"SECHERESSE";"☀️ Sécheresse";"☀️ Yoorande";"☀️ Naqar";"☀️ Bange";"";"";"";"traduit — à valider";"";""
+"Bot — types de risque";"INCENDIE";"🔥 Incendie";"🔥 Jayngol";"🔥 Safara";"🔥 Yinba";"";"";"";"traduit — à valider";"";""
+"Bot — types de risque";"TEMPETE";"🌪️ Tempête";"🌪️ Henndu mawndu";"🌪️ Ngelaw lu mag";"🌪️ Fooñe";"";"";"";"traduit — à valider";"";""
+"Bot — types de risque";"EPIDEMIE";"🦠 Épidémie";"🦠 Nyawu";"🦠 Feebar";"🦠 Bagannde";"";"";"";"traduit — à valider";"";""
+"Bot — types de risque";"LOCUSTES";"🦗 Criquets";"🦗 Njuuti";"🦗 Njéeréer";"🦗 Tonbo";"";"";"";"traduit — à valider";"";""
+"Bot — types de risque";"MOUVEMENT_DE_TERRAIN";"⛰️ Glissement";"⛰️ Yiltagol leydi";"⛰️ Suuf si daanu";"⛰️ Ñiiñe";"";"";"";"traduit — à valider";"";""
+"Bot — types de risque";"AUTRE";"⚠️ Autre danger";"⚠️ Bone goɗɗo";"⚠️ Yeneen musiba";"⚠️ Tana doroni";"";"";"";"traduit — à valider";"";""
+"Bot — thématiques";"CLIMATIQUE";"Risques climatiques";"Bone weeyo";"Musiba asaman";"Jamaane tana";"";"";"";"traduit — à valider";"";""
+"Bot — sous-types";"CLIMATIQUE / INONDATION";"Inondation";"Ilam";"Mbëkkte";"Jiyen";"";"";"";"traduit — à valider";"";""
+"Bot — sous-types";"CLIMATIQUE / SECHERESSE";"Sécheresse";"Yoorande";"Naqar";"Bange";"";"";"";"traduit — à valider";"";""
+"Bot — sous-types";"CLIMATIQUE / TEMPETE";"Tempête / vent fort";"Henndu mawndu";"Ngelaw lu mag";"Fooñe";"";"";"";"traduit — à valider";"";""
+"Bot — thématiques";"SECURITE_CIVILE";"Sécurité civile";"Kisal yimɓe";"Kaaraange askan";"Sere kisi";"";"";"";"traduit — à valider";"";""
+"Bot — sous-types";"SECURITE_CIVILE / INCENDIE";"Incendie";"Jayngol";"Safara";"Yinba";"";"";"";"traduit — à valider";"";""
+"Bot — sous-types";"SECURITE_CIVILE / MOUVEMENT_DE_TERRAIN";"Glissement de terrain";"Yiltagol leydi";"Suuf si daanu";"Ñiiñe";"";"";"";"traduit — à valider";"";""
+"Bot — sous-types";"SECURITE_CIVILE / ACCIDENT_INDUSTRIEL";"Accident industriel/chimique";"Aksidan ndema";"Aksidaŋ usine";"Usine tana";"";"";"";"traduit — à valider";"";""
+"Bot — thématiques";"SANTE";"Santé communautaire";"Cellal jamaa";"Wér-gi-yaram";"Tannan";"";"";"";"traduit — à valider";"";""
+"Bot — sous-types";"SANTE / EPIDEMIE";"Épidémie/maladie";"Nyawu";"Feebar";"Bagannde";"";"";"";"traduit — à valider";"";""
+"Bot — sous-types";"SANTE / SANTE_AUTRE";"Autre problème de santé";"Caɗeele cellal goɗɗo";"Yeneen feebar";"Bagannde doroni";"";"";"";"traduit — à valider";"";""
+"Bot — thématiques";"AGRICULTURE";"Agriculture";"Demal";"Mbey";"Sɔnkɔ";"";"";"";"traduit — à valider";"";""
+"Bot — sous-types";"AGRICULTURE / LOCUSTES";"Criquets / nuisibles";"Njuuti";"Njéeréer";"Tonbo";"";"";"";"traduit — à valider";"";""
+"Bot — sous-types";"AGRICULTURE / AGRI_AUTRE";"Autre problème agricole";"Caɗeele demal goɗɗo";"Yeneen mbir mbey";"Sɔnkɔ tana doroni";"";"";"";"traduit — à valider";"";""
+"Bot — thématiques";"ELEVAGE";"Élevage";"Durngo";"Sàmm";"Naxani";"";"";"";"traduit — à valider";"";""
+"Bot — sous-types";"ELEVAGE / ELEVAGE_MALADIE";"Maladie/mortalité du bétail";"Nyawu/maayde jawdi";"Feebar walla deeg jur";"Naxani bagannde walla faatu";"";"";"";"traduit — à valider";"";""
+"Bot — sous-types";"ELEVAGE / ELEVAGE_AUTRE";"Autre problème d'élevage";"Caɗeele durngo goɗɗo";"Yeneen mbir sàmm";"Naxani tana doroni";"";"";"";"traduit — à valider";"";""
+"Bot — thématiques";"INFRASTRUCTURES";"Infrastructures locales";"Pinal nokku";"Mbaaxal réew";"Jamaane raxen";"";"";"";"traduit — à valider";"";""
+"Bot — sous-types";"INFRASTRUCTURES / INFRA_RESEAU";"Coupure eau/électricité";"Taƴugol ndiyam/kuuraa";"Dog ndox/lekkat";"Jiyen/danba xaadi";"";"";"";"traduit — à valider";"";""
+"Bot — sous-types";"INFRASTRUCTURES / INFRA_ROUTE";"Route/pont endommagé";"Laawol/jenngol bonɗo";"Yoon walla pon dafa yàqu";"Kille walla pon yeren";"";"";"";"traduit — à valider";"";""
+"Bot — sous-types";"INFRASTRUCTURES / INFRA_AUTRE";"Autre dégradation";"Bone goɗɗo";"Yeneen yàq";"Yere doroni";"";"";"";"traduit — à valider";"";""
+"Modèles WhatsApp";"welcome_multi — corps";"Bienvenue sur OLEL, le service d'alerte précoce de la région de Matam. Répondez avec un message pour commencer.";"Bienvenue e OLEL, golle reentaare bone diiwaan Matam. Jaabo e binndol ngam fuɗɗaade.";"Dalal jàmm ci OLEL, sistemu artu mu jëkk ci diiwaanu Matam. Tontu ak benn bataaxal ngir tàmbali.";"An salaama OLEL na, xibaare tana golle Matam jamaane. Jaabi binndol ke a tuga.";"";"";"";"traduit — à valider";"Texte soumis à Meta : toute correction exige une nouvelle approbation";""
+"Modèles WhatsApp";"signal_confirm — corps";"Votre signalement de *{{1}}* à *{{2}}* a été reçu (réf. {{3}}). Une sentinelle locale va vérifier sur place. Merci pour votre vigilance.";"Bone maa *{{1}}* e *{{2}}* heɓaama (refer. {{3}}). Sentinelle ɓallinte ƴeewat. A jaaraama.";"Sa yégle *{{1}}* ci *{{2}}* jot na (réf. {{3}}). Ab sentinelle dina seet ci bérab bi. Jërëjëf.";"An xibaare *{{1}}* na *{{2}}* di safani (refer. {{3}}). Sentinelle ke a yibo. I ni jaara.";"";"";"";"traduit — à valider";"Texte soumis à Meta : toute correction exige une nouvelle approbation";""
+"Modèles WhatsApp";"alert_level_3 — corps";"*{{1}}* dans votre zone : *{{2}}*.
+
+{{3}}";"*{{1}}* e nokku maa : *{{2}}*.
+
+{{3}}";"*{{1}}* ci sa gox : *{{2}}*.
+
+{{3}}";"*{{1}}* na *{{2}}* di.
+
+{{3}}";"";"";"";"traduit — à valider";"Texte soumis à Meta : toute correction exige une nouvelle approbation";""
+"Modèles WhatsApp";"alert_level_3 — en-tête";"🚨 URGENCE OLEL";"🚨 HEÑORDE OLEL";"🚨 MUSIBA OLEL";"🚨 TANPINTE OLEL";"";"";"";"traduit — à valider";"";""
+"Modèles WhatsApp";"alert_level_2 — corps";"Vigilance *{{1}}* dans votre zone : *{{2}}*. Restez attentif et suivez les consignes locales.";"Reentaare *{{1}}* e nokku maa : *{{2}}*. Heedu, jokku jamirooje nokku.";"Moytabal *{{1}}* ci sa gox : *{{2}}*. Topp jamiroo yi gox bi.";"Korinte *{{1}}* na *{{2}}* di. Yittan, an jamirooje raxen.";"";"";"";"traduit — à valider";"Texte soumis à Meta : toute correction exige une nouvelle approbation";""
+"Modèles WhatsApp";"alert_level_2 — en-tête";"⚠️ VIGILANCE OLEL";"⚠️ REENTAARE OLEL";"⚠️ MOYTABAL OLEL";"⚠️ KORINTE OLEL";"";"";"";"traduit — à valider";"";""
+"Modèles WhatsApp";"bulletin_weekly — corps";"Bonjour, voici le bulletin de la semaine pour *{{2}}* : météo, santé, services. Une note vocale détaillée suit.";"Mballeen, ɗum ko konngol yontere e *{{2}}* : weeyo, cellal, golle. Konngol sawtuyaŋkol jokkan.";"Asalaa maalekum, bataaxalu ayubés ngir *{{2}}* : asaman, wér-gi-yaram, ndimbal. Baat dina toftu.";"An salaama, xibaare kafane *{{2}}* na : jamaane tana, tannan, golle. Audio jokki.";"";"";"";"traduit — à valider";"Texte soumis à Meta : toute correction exige une nouvelle approbation";""
+"Modèles WhatsApp";"bulletin_weekly — en-tête";"Bulletin OLEL · {{1}}";"Konngol OLEL · {{1}}";"Bataaxalu OLEL · {{1}}";"Xibaare OLEL · {{1}}";"";"";"";"traduit — à valider";"";""
+"Modèles WhatsApp";"vaccination_reminder — corps";"Rappel : campagne de vaccination le *{{1}}* à *{{2}}*. Apportez le carnet de santé. Présence gratuite.";"Anndinngo : vaksinasiyoŋ e *{{1}}* e *{{2}}*. Addu deftere cellal. Mi araani.";"Fàttali : campagne vaksin ci *{{1}}* ci *{{2}}*. Indil sa kayitu wér. Du fey dara.";"Anniyaani : vaksen kafane *{{1}}* na *{{2}}* di. Adda tannan kitabe. Nta safa.";"";"";"";"traduit — à valider";"Texte soumis à Meta : toute correction exige une nouvelle approbation";""
+"Modèles WhatsApp";"vaccination_reminder — en-tête";"Santé communautaire";"Cellal jamaa";"Wér-gi-yaram askan";"Tannan jamaa";"";"";"";"traduit — à valider";"";""
+"Modèles WhatsApp";"feedback_security — corps";"Suite à l'alerte récente dans votre zone, êtes-vous en sécurité ? Votre réponse aide les sentinelles à organiser les secours.";"Caggal reentaare seeɗa e nokku maa, hara aɗa woni e kisal ? Jaabaago maa wallat sentinelles topgol balle.";"Ginnaaw artu bi xew ci sa gox, ndax nga ngi ci kaaraange ? Sa tontu dina dimbali sentinelles yi.";"Xibaare ke yibo an jamaane di kaayan, an kisi na ? Jaabi balla sentinelles ke labenoxo.";"";"";"";"traduit — à valider";"Texte soumis à Meta : toute correction exige une nouvelle approbation";""
+"Modèles WhatsApp";"sentinelle_assigned — corps";"La sentinelle *{{1}}* a été désignée pour vérifier votre signalement (réf. {{2}}). Elle vous contactera si besoin.";"Sentinelle *{{1}}* suɓaama ngam ƴeewde bone maa (refer. {{2}}). O hollat ma so haaju woodi.";"Sentinelle *{{1}}* tànnees na ngir seet sa yégle (réf. {{2}}). Dina la jokk soo soxlaa.";"Sentinelle *{{1}}* tànnu an xibaare yibo na (refer. {{2}}). A xibara so a tana di.";"";"";"";"traduit — à valider";"Texte soumis à Meta : toute correction exige une nouvelle approbation";""
+"Application mobile";"appTagline";"Alerte précoce multi-risques · Matam";"Reentaare bonɗi keewɗi · Matam";"Artu musiba yu bari · Matam";"Tana xibaare · Matam";"";"";"";"traduit — à valider";"";""
+"Application mobile";"chooseLang";"Choisissez votre langue";"Suɓo ɗemngal maa";"Tànnal sa làkk";"Tànnal sa làkk";"";"";"";"traduit — à valider";"";""
+"Application mobile";"loginCitizen";"📱 Citoyen — Connexion par SMS";"📱 Ɓesngu — Naatugol e SMS";"📱 Jëfandikukat — Dugg ak SMS";"📱 Jamaanen — SMS naxa";"";"";"";"traduit — à valider";"";""
+"Application mobile";"loginOperator";"🔒 Opérateur — Mot de passe";"🔒 Gollooɗo — Finnde";"🔒 Liggéeykat — Baatu-jàll";"🔒 Golliŋo — Baatu";"";"";"";"traduit — à valider";"";""
+"Application mobile";"phone";"Numéro de téléphone";"Nimero telefon";"Nimero telefon";"Telefon nimero";"";"";"";"traduit — à valider";"";""
+"Application mobile";"password";"Mot de passe";"Finnde";"Baatu-jàll";"Baatu";"";"";"";"traduit — à valider";"";""
+"Application mobile";"receiveCode";"Recevoir un code SMS →";"Heɓ kode SMS →";"Jot kode SMS →";"Kode SMS heɲa →";"";"";"";"traduit — à valider";"";""
+"Application mobile";"enterCode";"Entrez votre code";"Naatnu kode maa";"Dugalal sa kode";"Kode safa";"";"";"";"traduit — à valider";"";""
+"Application mobile";"codeSent";"Code envoyé. Valable 10 minutes.";"Kode neldaama. Newtoo hojomaaji 10.";"Kode bi yónnees na. Mën 10 simili.";"Kode neldani. Simili 10.";"";"";"";"traduit — à valider";"";""
+"Application mobile";"validate";"Valider →";"Teeŋtin →";"Wóoral →";"Wóoral →";"";"";"";"traduit — à valider";"";""
+"Application mobile";"resendCode";"Renvoyer le code";"Neldu kode kadi";"Yónneeyaat kode bi";"Kode neldi koota";"";"";"";"traduit — à valider";"";""
+"Application mobile";"back";"Retour";"Rutto";"Dellu";"Kompe";"";"";"";"traduit — à valider";"";""
+"Application mobile";"statusRegion";"Statut — Région Matam";"Ngonka — Diiwaan Matam";"Naka la — Diiwaanu Matam";"Ngonka — Matam jamaane";"";"";"";"traduit — à valider";"";""
+"Application mobile";"noAlert";"Aucune alerte en cours";"Alaa reentaare";"Amul artu";"Xibaare nta";"";"";"";"traduit — à valider";"";""
+"Application mobile";"vigilanceZone";"Vigilance dans votre zone";"Reentaare e nokku maa";"Moytabal ci sa gox";"Korinte n jamaane";"";"";"";"traduit — à valider";"";""
+"Application mobile";"alertZone";"ALERTE dans votre zone";"REENTAARE e nokku maa";"ARTU ci sa gox";"XIBAARE n jamaane";"";"";"";"traduit — à valider";"";""
+"Application mobile";"urgenceZone";"URGENCE — Danger immédiat";"HEÑORDE — Bone jooni";"JAMONO BU TÀNG — Musiba léegi";"TANPINTE — Tana yiga";"";"";"";"traduit — à valider";"";""
+"Application mobile";"reportRisk";"SIGNALER";"HOLLU";"YÉGLE";"XIBAARE";"";"";"";"traduit — à valider";"";""
+"Application mobile";"ofRisk";"UN RISQUE";"BONE";"MUSIBA";"TANA";"";"";"";"traduit — à valider";"";""
+"Application mobile";"whichRisk";"Quel type de risque ?";"Sifaa bone honɗo?";"Ban xeetu musiba?";"Tana sifa be?";"";"";"";"traduit — à valider";"";""
+"Application mobile";"step1";"Étape 1 / 2";"Tappere 1 / 2";"Tëgg 1 / 2";"Tappe 1 / 2";"";"";"";"traduit — à valider";"";""
+"Application mobile";"step2";"Étape 2 / 2";"Tappere 2 / 2";"Tëgg 2 / 2";"Tappe 2 / 2";"";"";"";"traduit — à valider";"";""
+"Application mobile";"confirmReport";"Confirmer le signalement";"Teeŋtin bone on";"Wóoral yégle bi";"Xibaare wóoral";"";"";"";"traduit — à valider";"";""
+"Application mobile";"details";"Précisions";"Ɓeydooji";"Leeral";"Doroni";"";"";"";"traduit — à valider";"";""
+"Application mobile";"optional";"(facultatif)";"(so a yiɗii)";"(soo ko bëggee)";"(an ŋa ñiŋe)";"";"";"";"traduit — à valider";"";""
+"Application mobile";"describe";"Décrivez ce que vous observez…";"Sifo ko njiyɗaa…";"Waxal la ngay gis…";"Xibaare an ŋa ña…";"";"";"";"traduit — à valider";"";""
+"Application mobile";"gpsAuto";"📍 Votre position GPS sera envoyée automatiquement.";"📍 Nokku maa GPS neldete e jaajol.";"📍 Sa bérab GPS dees na ko yónnee ci saa si.";"📍 An GPS nelldi a yere.";"";"";"";"traduit — à valider";"";""
+"Application mobile";"sendReport";"🚨 Envoyer le signalement";"🚨 Neldu bone on";"🚨 Yónnee yégle bi";"🚨 Xibaare nelli";"";"";"";"traduit — à valider";"";""
+"Application mobile";"sending";"Envoi…";"Neldagol…";"Yónnee…";"Nelldi…";"";"";"";"traduit — à valider";"";""
+"Application mobile";"reportSent";"Signalement envoyé !";"Bone on neldaama!";"Yégle bi yónnees na!";"Xibaare neldani!";"";"";"";"traduit — à valider";"";""
+"Application mobile";"reportSentBody";"Votre signalement a été transmis aux autorités.";"Bone maa neldaama laamu.";"Sa yégle yónnees na autorités yi.";"An xibaare neldani saxuruyen.";"";"";"";"traduit — à valider";"";""
+"Application mobile";"seeAlerts";"Voir les alertes →";"Ƴeew reentaareeji →";"Seet artu yi →";"Xibaarini ña →";"";"";"";"traduit — à valider";"";""
+"Application mobile";"alerts";"Alertes";"Reentaare";"Artu";"Xibaare";"";"";"";"traduit — à valider";"";""
+"Application mobile";"home";"Accueil";"Hoore";"Kër";"Kompe";"";"";"";"traduit — à valider";"";""
+"Application mobile";"report";"Signaler";"Hollu";"Yégle";"Xibaare";"";"";"";"traduit — à valider";"";""
+"Application mobile";"profile";"Profil";"Konngol";"Profil";"Profil";"";"";"";"repli français (wo, snk)";"";""
+"Application mobile";"map";"Carte";"Karte";"Kart";"Karte";"";"";"";"traduit — à valider";"";""
+"Application mobile";"logout";"Se déconnecter";"Yaltu";"Génn";"Yanqa";"";"";"";"traduit — à valider";"";""
+"Application mobile";"language";"Langue";"Ɗemngal";"Làkk";"Làkk";"";"";"";"traduit — à valider";"";""
+"Application mobile";"sos";"SOS";"SOS";"SOS";"SOS";"";"";"";"repli français (ff, wo, snk)";"";""
+"Application mobile";"activeAlerts";"Alertes actives";"Reentaareeji";"Artu yi";"Xibaarini";"";"";"";"traduit — à valider";"";""
+"Application mobile";"recordAudio";"🎙️ Enregistrer un message vocal";"🎙️ Hisno konngol sawtuyaŋkol";"🎙️ Enregistre benn baat";"🎙️ Audio safa";"";"";"";"traduit — à valider";"";""
+"Application mobile";"audioHint";"Parlez dans votre langue. Un agent écoutera votre message.";"Haalu e ɗemngal maa. Gardiiɗo heɗoo konngol maa.";"Waxal ci sa làkk. Ab agent dina déglu sa baat.";"Safa an làkk di. Agent ke a yittan.";"";"";"";"traduit — à valider";"";""
+"Application mobile";"sendAudio";"Envoyer le vocal";"Neldu sawtu";"Yónnee baat bi";"Audio nelli";"";"";"";"traduit — à valider";"";""
+"Application mobile";"audioRecorded";"Vocal enregistré";"Sawtu hisnaama";"Baat bi enregistrees na";"Audio safani";"";"";"";"traduit — à valider";"";""
+"Français seulement";"USSD — écran 1";"Bienvenue sur OLEL / Alerte Precoce - Matam / / 1. Signaler une situation / 2. Alertes en vigueur / 3. Mon profil / / 0. Quitter";"";"";"";"";"";"";"repli français (ff, wo, snk)";"Canal en français seulement : pas encore traduit";""
+"Français seulement";"USSD — écran 2";"Merci d'utiliser OLEL. Restez vigilant.";"";"";"";"";"";"";"repli français (ff, wo, snk)";"Canal en français seulement : pas encore traduit";""
+"Français seulement";"USSD — écran 3";"Option non reconnue. Composez a nouveau pour recommencer.";"";"";"";"";"";"";"repli français (ff, wo, snk)";"Canal en français seulement : pas encore traduit";""
+"Français seulement";"USSD — écran 4";"Type de risque : / {…}";"";"";"";"";"";"";"repli français (ff, wo, snk)";"Canal en français seulement : pas encore traduit";""
+"Français seulement";"USSD — écran 5";"Choix invalide. Rien n'a ete enregistre. / Composez a nouveau pour recommencer.";"";"";"";"";"";"";"repli français (ff, wo, snk)";"Canal en français seulement : pas encore traduit";""
+"Français seulement";"USSD — écran 6";"Decrivez brievement la situation / (lieu, ampleur) :";"";"";"";"";"";"";"repli français (ff, wo, snk)";"Canal en français seulement : pas encore traduit";""
+"Français seulement";"USSD — écran 7";"Niveau de gravite : / 1. Vigilance / 2. Alerte / 3. Urgence";"";"";"";"";"";"";"repli français (ff, wo, snk)";"Canal en français seulement : pas encore traduit";""
+"Français seulement";"USSD — écran 8";"Choix invalide. Rien n'a ete enregistre. / Composez a nouveau pour recommencer.";"";"";"";"";"";"";"repli français (ff, wo, snk)";"Canal en français seulement : pas encore traduit";""
+"Français seulement";"USSD — écran 9";"Signalement recu par OLEL. / Ref: {…} / Il sera examine par un operateur. / OLEL ne remplace pas les secours : en cas de danger immediat, contactez-les.";"";"";"";"";"";"";"repli français (ff, wo, snk)";"Canal en français seulement : pas encore traduit";""
+"Français seulement";"USSD — écran 10";"ECHEC : votre signalement n'a PAS ete recu. / Reessayez plus tard. En cas de danger immediat, contactez directement les secours.";"";"";"";"";"";"";"repli français (ff, wo, snk)";"Canal en français seulement : pas encore traduit";""
+"Français seulement";"USSD — écran 11";"Service OLEL en phase d'essai : la consultation des alertes n'est pas encore ouverte. / En cas de danger, suivez les consignes des autorites locales.";"";"";"";"";"";"";"repli français (ff, wo, snk)";"Canal en français seulement : pas encore traduit";""
+"Français seulement";"USSD — écran 12";"Aucune alerte en vigueur pour votre zone actuellement.";"";"";"";"";"";"";"repli français (ff, wo, snk)";"Canal en français seulement : pas encore traduit";""
+"Français seulement";"USSD — écran 13";"Alertes en vigueur ({…}) :";"";"";"";"";"";"";"repli français (ff, wo, snk)";"Canal en français seulement : pas encore traduit";""
+"Français seulement";"USSD — écran 14";"Consultation indisponible pour le moment. / Cela ne veut PAS dire qu'il n'y a pas d'alerte. Reessayez plus tard.";"";"";"";"";"";"";"repli français (ff, wo, snk)";"Canal en français seulement : pas encore traduit";""
+"Français seulement";"USSD — écran 15";"Votre numero : {…} / Zone : {…} / Pour toute modification, contactez votre mairie.";"";"";"";"";"";"";"repli français (ff, wo, snk)";"Canal en français seulement : pas encore traduit";""
+"Français seulement";"USSD — écran 16";"Profil indisponible pour le moment. Reessayez plus tard.";"";"";"";"";"";"";"repli français (ff, wo, snk)";"Canal en français seulement : pas encore traduit";""
+"Français seulement";"SVI — message 1";"Merci. Au revoir.";"";"";"";"";"";"";"repli français (ff, wo, snk)";"Canal en français seulement : pas encore traduit";""
+"Français seulement";"SVI — message 2";"Votre signalement est reçu par OLEL. Un opérateur va l'examiner et pourra vous rappeler. OLEL ne remplace pas les secours : en cas de danger immédiat, contactez-les directement. Au revoir.";"";"";"";"";"";"";"repli français (ff, wo, snk)";"Canal en français seulement : pas encore traduit";""
+"Français seulement";"SVI — message 3";"Votre signalement n'a pas pu être enregistré. Veuillez réessayer plus tard ou contacter directement les secours. Au revoir.";"";"";"";"";"";"";"repli français (ff, wo, snk)";"Canal en français seulement : pas encore traduit";""
+"Français seulement";"SVI — message 4";"Bienvenue sur le service vocal OLEL. Pour signaler une situation dangereuse, appuyez sur 2 puis dièse. Pour quitter, appuyez sur 1 puis dièse.";"";"";"";"";"";"";"repli français (ff, wo, snk)";"Canal en français seulement : pas encore traduit";""
+"Français seulement";"SVI — message 5";"Aucun choix reçu. Au revoir.";"";"";"";"";"";"";"repli français (ff, wo, snk)";"Canal en français seulement : pas encore traduit";""
+"Français seulement";"Alerte diffusée — texte de retrait par défaut";"L'alerte « {…} » est annulée. Les consignes précédentes ne s'appliquent plus.";"";"";"";"";"";"";"repli français (ff, wo, snk)";"Texte par défaut du retrait d'alerte : à traduire";""

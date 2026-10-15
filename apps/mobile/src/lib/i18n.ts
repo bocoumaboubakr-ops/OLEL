@@ -150,6 +150,8 @@ const snk: Record<Key, string> = {
 };
 
 const DICT: Record<Lang, Record<Key, string>> = { fr, ff, wo, snk };
+/** Exposé pour la feuille de relecture des traductions (D5). */
+export const MOBILE_DICT = DICT;
 
 export function translate(lang: Lang, key: Key): string {
   return (DICT[lang] && DICT[lang][key]) || DICT.fr[key] || key;

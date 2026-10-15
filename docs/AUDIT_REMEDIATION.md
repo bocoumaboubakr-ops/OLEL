@@ -10,7 +10,9 @@
 - **Preuve avant/après.** `scripts/verify/before-after-probes.js` rejoue les mêmes requêtes contre `cfd68a5` et contre la version corrigée. **7/7 défauts reproduits sur la version auditée, 7/7 refusés** par la version corrigée (§ 4.3).
 - **Règle suivie.** Toutes les règles sont appliquées côté serveur ; les interfaces ne font qu'afficher ce que le serveur autorise.
 
-Commits (19, lisibles un par un) : `git log --oneline cfd68a5..claude/laughing-hawking-4olx5k`.
+Commits (lisibles un par un) : `git log --oneline cfd68a5..claude/laughing-hawking-4olx5k`.
+
+**Suite du 15/10/2026 — préparation du pilote** (§ 12) : mode pilote verrouillé côté serveur (envoi **et** consultation), mention « EXERCICE » automatique, rectificatif et retrait d'alerte (D11), suivi des remises dans le tableau de bord, répétition non destructive du déploiement sur une copie des données réelles, feuille de relecture des traductions, [registre des décisions](DECISIONS_PILOTE.md) et [guide de mise en service](MISE_EN_SERVICE_PILOTE.md).
 
 ## 2. Synthèse
 
@@ -146,9 +148,10 @@ Légende du classement : **confirmé** · **confirmé, élargi** (défauts suppl
 | Installation figée | `pnpm install --frozen-lockfile` | OK |
 | Lint (6 tâches) | `pnpm lint` | 6/6, 0 erreur |
 | Types (6 tâches) | `pnpm type-check` | 6/6 |
-| Backend unitaires | `cd backend && pnpm test` | **58/58** (7 suites) |
-| Backend e2e | `cd backend && pnpm test:e2e --forceExit` | **104/104** (8 suites) : auth-sessions 18, diffusion-chain 22, realtime 8, channels-confirmations 12, media 8, scoping-coherence 18, bot-relay 13, supervision 5 |
-| Bot | `cd apps/bot && pnpm test` | **15/15** |
+| Backend unitaires | `cd backend && pnpm test` | **61/61** (8 suites) |
+| Backend e2e | `cd backend && pnpm test:e2e --forceExit` | **120/120** (10 suites) : auth-sessions 18, diffusion-chain 22, realtime 8, channels-confirmations 12, media 8, scoping-coherence 18, bot-relay 13, supervision 5, pilot-ops 8, pilot-consultation 8 |
+| Bot | `cd apps/bot && pnpm test` | **16/16** |
+| Répétition sur copie (production simulée `cfd68a5`, données fictives) | `scripts/rehearse-deploy.sh` | **17/17**, base de production inchangée |
 | Mobile hors ligne (navigateur réel) | `scripts/verify/mobile-offline-flow.js` | **14/14** |
 | Déploiement Compose représentatif | `scripts/verify/deployment-check.sh` | **23/23** |
 | Sauvegarde / restauration | `scripts/verify/backup-restore-drill.sh` | **10/10** |
@@ -189,7 +192,7 @@ Environnement : PostgreSQL 16 et Redis 7 locaux (`scripts/test-services.sh`), Ch
 
 - **Aucun fournisseur réel** n'a été contacté : WhatsApp, SMS, USSD et SVI sont simulés en test et non configurés dans le déploiement de validation. Aucune livraison réelle, aucun modèle Meta, aucun rappel Africa's Talking n'est éprouvé.
 - Le déploiement représentatif est un Compose local (sans Nginx/TLS ni Certbot réels) ; le pare-feu du VPS n'a pas été inspecté.
-- Les migrations ont été appliquées sur des bases neuves et sur des données fictives, **pas sur une copie de la base de production** (à faire avant déploiement, § 7.1).
+- Les migrations ont été appliquées sur des bases neuves et sur une production simulée (données fictives), **pas encore sur une copie de la base de production réelle** : `scripts/rehearse-deploy.sh` est prêt pour cela (étape 1 du [guide](MISE_EN_SERVICE_PILOTE.md)), il faut un accès au serveur.
 - Les e2e utilisent `--forceExit` (connexions Bull/ioredis non fermées à la fin du processus).
 - Contraintes du bac à sable contournées sans affaiblir les contrôles : dépôt Alpine bloqué (les images n'en dépendent plus), proxy TLS (certificat passé en secret de build facultatif), limite Docker Hub (image Redis tirée d'un miroir pour l'essai local uniquement).
 - Le build Next télécharge les polices Google au moment du build (un échec transitoire observé).
@@ -205,6 +208,7 @@ Environnement : PostgreSQL 16 et Redis 7 locaux (`scripts/test-services.sh`), Ch
 | `20261014160000_location_provenance_subtype` | provenance de position, sous-type | aucun |
 | `20261015090000_bot_relay_consent` | consentement, désabonnement, fenêtre WhatsApp, messages entrants, sessions du bot | **aucun citoyen existant n'a de consentement WhatsApp enregistré** : après déploiement, aucune alerte WhatsApp ne lui parvient tant qu'il n'a pas donné son accord (repli SMS si configuré) — voir D7 |
 | `20261015120000_bot_account_least_privilege` | compte technique « BOT OLEL » ADMIN → CITOYEN | réversible : `UPDATE users SET role='ADMIN' WHERE name='BOT OLEL'` |
+| `20261015160000_alert_correction_retraction` | types de diffusion RECTIFICATIF et RETRAIT, numéro d'ordre des diffusions, colonnes de retrait sur les alertes | aucun : l'unicité `(alerte, type)` devient `(alerte, type, numéro)` avec numéro = 0 pour l'existant (plusieurs rectificatifs possibles) |
 
 Dérive préexistante non modifiée (constatée par `prisma migrate diff`) : quelques clés étrangères, valeurs par défaut et l'index `zones_code_idx` diffèrent entre schéma et migrations depuis avant ces travaux ; à traiter séparément, après décision.
 
@@ -223,6 +227,7 @@ Dérive préexistante non modifiée (constatée par `prisma migrate diff`) : que
 | `TRUST_PROXY_HOPS` | proxys de confiance | 1 (Nginx) |
 | `EMERGENCY_NUMBERS` | numéros d'urgence du mobile (JSON) | seulement après confirmation officielle |
 | `GRAFANA_PASSWORD` | profil monitoring | obligatoire si le profil est utilisé |
+| `PILOT_RECIPIENT_ALLOWLIST` | **mode pilote** : seuls ces numéros (E.164, séparés par des virgules) reçoivent les diffusions et peuvent consulter les alertes ; mention « EXERCICE » sur chaque message | étapes 2 et 3 du pilote ; vide = fonctionnement normal, seulement après décision écrite |
 
 **Indicateurs** (tous désactivés par défaut) : `prealert_red`, `auto_escalation_red`, `whatsapp_templates` (à activer seulement après approbation Meta), `ivr`.
 
@@ -238,7 +243,7 @@ Dérive préexistante non modifiée (constatée par `prisma migrate diff`) : que
 
 ### 7.1 Déploiement
 
-1. **Répétition sur une copie** : restaurer la dernière sauvegarde de production dans une base de répétition (`scripts/restore.sh … --db-url …/olel_repetition`), y appliquer les migrations (`DATABASE_URL=… npx prisma migrate deploy` dans `backend/`), vérifier comptages et parcours principaux.
+1. **Répétition sur une copie** : `sudo scripts/rehearse-deploy.sh` depuis un clone séparé sur le serveur (copie de la base dans `olel_repetition`, migrations, contrôles de comptage et d'invariants, démarrage de la nouvelle version sans fournisseur ; production seulement lue). Détail : [guide de mise en service, étape 1](MISE_EN_SERVICE_PILOTE.md).
 2. **Préparer l'environnement** : compléter `.env` avec les variables du § 6 (`scripts/generate-secrets.sh`), créer `monitoring/prometheus/metrics.token`, conserver les secrets hors serveur.
 3. **Construire et étiqueter** : `docker compose -f docker-compose.yml -f docker-compose.prod.yml build` ; étiqueter les images actuelles en `:rollback` avant remplacement.
 4. **Annoncer** une fenêtre de maintenance et la reconnexion obligatoire.
@@ -280,7 +285,7 @@ Aucun canal ne doit être annoncé comme opérationnel avant un essai complet su
 
 ## 8. Décisions de gouvernance nécessaires
 
-Ces points n'ont **pas** été tranchés silencieusement : le code applique un défaut prudent, signalé ci-dessous.
+Ces points n'ont **pas** été tranchés silencieusement : le code applique un défaut prudent, signalé ci-dessous. Version à signer, avec l'étape que chaque décision bloque : [DECISIONS_PILOTE.md](DECISIONS_PILOTE.md) (ajouts : D15 état actuel du service, D16 mention « EXERCICE »).
 
 | # | Décision | Défaut appliqué | Recommandation |
 |---|---|---|---|
@@ -294,7 +299,7 @@ Ces points n'ont **pas** été tranchés silencieusement : le code applique un d
 | D8 | Modèles WhatsApp et statut du porteur (entité gouvernementale → Solution Provider) | modèles alert_level_2/3 × 4 langues, indicateur désactivé | arbitrer le texte (le modèle ORANGE ne porte pas de consigne), qualifier le montage avec Meta |
 | D9 | Perte de données maximale et délai de reprise | sauvegarde toutes les 6 h proposée | RPO 6 h, RTO 4 h ; destination hors serveur et garde de la clé |
 | D10 | Les comptes ADMIN/SUPER_ADMIN peuvent-ils valider et diffuser ? | oui (rang supérieur) | séparer administration technique et autorité opérationnelle |
-| D11 | Retrait d'une fausse alerte et diffusion d'un rectificatif | seule la clôture existe | définir le circuit puis le développer avant le pilote |
+| D11 | Retrait d'une fausse alerte et diffusion d'un rectificatif | **développé** : rectificatif et retrait (motif ≥ 20 caractères) aux mêmes destinataires, réservés à l'autorité de diffusion du niveau de l'alerte ; retrait interrompant un envoi en cours | confirmer l'autorité ; prévenir l'autorité supérieure du retrait d'une ROUGE |
 | D12 | Permanence (nuit, week-end), suppléance, contact humain si un canal échoue | non modélisé | désigner une astreinte et la relier aux alertes Prometheus |
 | D13 | Numéros d'urgence affichés | 18 et 17 seulement | confirmation officielle (BNSP, SAMU, Protection civile de Matam) |
 | D14 | Structure exploitante, comptes fournisseurs, réponse aux demandes sur les données | — | à désigner par écrit |
@@ -312,7 +317,7 @@ Ces points n'ont **pas** été tranchés silencieusement : le code applique un d
 1. Meta : vérification de l'entreprise, qualification du porteur, soumission des modèles (texte corrigé), abonnement aux statuts, numéros de test.
 2. Africa's Talking : compte de production, identifiant d'expéditeur, URL de rappel avec `?key=`, code USSD.
 3. Confirmation officielle des numéros d'urgence.
-4. Relecture des traductions par des locuteurs natifs.
+4. Relecture des traductions par des locuteurs natifs : [feuille de relecture](traductions/relecture-traductions.csv) (150 textes, dont 37 seulement en français) et [mode d'emploi](traductions/LISEZMOI.md).
 5. Destination de sauvegarde hors serveur (rclone) et garde de la phrase de chiffrement.
 6. Vérification du pare-feu du VPS (seuls 80/443 et SSH ouverts).
 7. Démarches auprès de la CDP et désignation du responsable de traitement.
@@ -330,8 +335,25 @@ Ce qui empêche encore d'ouvrir le pilote à des citoyens :
 
 1. **Canaux non éprouvés** : aucun message réel n'a été envoyé ; sans modèles Meta approuvés, WhatsApp ne peut joindre que les citoyens ayant écrit dans les 24 h ; le SMS dépend du compte de production. Un essai complet sur des numéros de test est indispensable.
 2. **Consentement** : après migration, aucun citoyen existant n'a de consentement WhatsApp ; le recueil doit être organisé (D7, D8).
-3. **Gouvernance** : D1, D2, D4, D10, D11 et D12 doivent être écrites et approuvées ; en particulier, aucun circuit de rectificatif n'existe.
-4. **Langues** : les messages en pulaar, wolof et soninké ne sont pas validés ; les nouveaux messages n'existent qu'en français.
-5. **Exploitation** : copie hors serveur des sauvegardes, astreinte reliée aux alertes, répétition des migrations sur une copie de la base réelle.
+3. **Gouvernance** : D1, D2, D4, D10, D11, D12, D14 et D15 doivent être écrites et approuvées. Le circuit de rectificatif et de retrait est désormais développé (D11) ; reste à confirmer l'autorité qui le déclenche.
+4. **Langues** : les messages en pulaar, wolof et soninké ne sont pas validés ; 37 textes n'existent qu'en français. La feuille de relecture est prête.
+5. **Exploitation** : copie hors serveur des sauvegardes, astreinte reliée aux alertes, répétition des migrations sur une copie de la base réelle (script prêt, accès au serveur nécessaire).
 
 **Recommandation** : procéder par étapes — (1) répétition du déploiement sur une copie des données ; (2) pilote interne avec opérateurs et sentinelles réels sur numéros de l'équipe, sans diffusion aux citoyens ; (3) exercice de bout en bout avec un groupe restreint de citoyens volontaires ayant donné leur accord, sur une commune, une fois les points 1 à 4 levés ; (4) élargissement progressif. Je ne recommande pas d'annoncer publiquement le service ni d'ouvrir l'inscription générale avant l'étape 3.
+
+## 12. Préparation du pilote (15/10/2026)
+
+| Élément | État | Preuve |
+|---|---|---|
+| Mode pilote — envoi | seuls les numéros de `PILOT_RECIPIENT_ALLOWLIST` reçoivent ; les autres sont tracés « hors liste autorisée » | pilot-ops |
+| Mode pilote — consultation | application, USSD, bot, temps réel et radios réservés aux mêmes numéros ; « phase d'essai » affiché, jamais « aucune alerte » | pilot-consultation (8) |
+| Mention « EXERCICE » | automatique en tête et en fin de chaque message diffusé en mode pilote, figée dans le texte envoyé | alert-messages.spec (3), pilot-ops |
+| Radios partenaires | ne reçoivent plus le flux interne des alertes non diffusées (défaut trouvé en préparant le pilote) | pilot-consultation |
+| Rectificatif et retrait (D11) | développés, tracés, visibles dans le tableau de bord ; un retrait interrompt un envoi en cours | pilot-ops |
+| Suivi des remises | par envoi et par destinataire (numéros masqués), cloisonné par territoire | pilot-ops |
+| État du système | `GET /system/info`, bandeau du tableau de bord, santé `diffusion`, métrique `olel_pilot_mode` | pilot-ops, supervision |
+| Répétition sur copie | `scripts/rehearse-deploy.sh` : 17/17 sur production simulée | rapport `rehearsal-*.txt` |
+| Traductions | feuille générée depuis le code (`pnpm i18n:review`) | `docs/traductions/` |
+| Décisions et procédure | [DECISIONS_PILOTE.md](DECISIONS_PILOTE.md), [MISE_EN_SERVICE_PILOTE.md](MISE_EN_SERVICE_PILOTE.md) | — |
+
+**Non fait, car hors de ma portée ou soumis à votre accord** : exécution de la répétition sur le serveur réel (aucun accès), déploiement, tout envoi réel, relecture des traductions, démarches Meta / Africa's Talking / CDP, signature des décisions.
