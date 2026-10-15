@@ -2,7 +2,7 @@ import { Controller, Get, Post, Body, Param, Query, UseGuards } from '@nestjs/co
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { AlertsService } from './alerts.service';
 import { CreateAlertDto } from './dto/create-alert.dto';
-import { ValidateAlertDto, CloseAlertDto, BroadcastAlertDto, EmergencyBypassDto, BypassReviewDto } from './dto/validate-alert.dto';
+import { ValidateAlertDto, CloseAlertDto, BroadcastAlertDto, EmergencyBypassDto, BypassReviewDto, CorrectionDto, RetractionDto } from './dto/validate-alert.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -34,6 +34,13 @@ export class AlertsController {
     return this.alerts.getBroadcasts(user, alertId);
   }
 
+  @Get('broadcasts/:broadcastId/deliveries')
+  @Roles(Role.SENTINELLE, Role.COORDINATEUR, Role.MAIRIE, Role.PREFECTURE, Role.GOUVERNORAT, Role.PROTECTION_CIVILE, Role.SUPERVISEUR_REGIONAL, Role.HYDRO_METEO, Role.ADMIN, Role.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Remises d\'une diffusion (numéros masqués)' })
+  deliveries(@Param('broadcastId') broadcastId: string, @CurrentUser() user: Reader, @Query('page') page?: number, @Query('limit') limit?: number) {
+    return this.alerts.deliveriesOf(broadcastId, user, page, limit);
+  }
+
   @Get()
   @ApiOperation({ summary: 'Liste des alertes (cloisonnée : territoire, ou alertes publiques pour un citoyen)' })
   findAll(
@@ -53,6 +60,12 @@ export class AlertsController {
   @ApiOperation({ summary: 'Détail (cloisonné) avec les actions autorisées pour l\'appelant' })
   findOne(@Param('id') id: string, @CurrentUser() user: Reader) {
     return this.alerts.findOneFor(id, user);
+  }
+
+  @Get(':id/broadcasts')
+  @ApiOperation({ summary: 'Diffusions de l\'alerte et suivi par canal (envoyé, livré, lu, échec)' })
+  broadcastsOf(@Param('id') id: string, @CurrentUser() user: Reader) {
+    return this.alerts.broadcastsOf(id, user);
   }
 
   @Get(':id/history')
@@ -123,6 +136,20 @@ export class AlertsController {
   @ApiOperation({ summary: "Revue a posteriori d'une diffusion d'urgence (autre personne que l'auteur)" })
   reviewBypass(@Param('id') id: string, @Body() body: BypassReviewDto, @CurrentUser() user: { id: string; role: Role; zoneId?: string | null }) {
     return this.alerts.reviewBypass(id, user, body.note);
+  }
+
+  @Post(':id/correction')
+  @Roles(Role.MAIRIE, Role.PREFECTURE, Role.GOUVERNORAT, Role.PROTECTION_CIVILE, Role.SUPERVISEUR_REGIONAL, Role.ADMIN, Role.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Rectificatif d\'une alerte diffusée (mêmes zones et canaux, mention RECTIFICATIF)' })
+  correction(@Param('id') id: string, @Body() dto: CorrectionDto, @CurrentUser() user: Reader) {
+    return this.alerts.correction(id, user, dto);
+  }
+
+  @Post(':id/retract')
+  @Roles(Role.MAIRIE, Role.PREFECTURE, Role.GOUVERNORAT, Role.PROTECTION_CIVILE, Role.SUPERVISEUR_REGIONAL, Role.ADMIN, Role.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Retrait d\'une alerte diffusée (fausse alerte) : message ALERTE ANNULÉE, motif tracé' })
+  retract(@Param('id') id: string, @Body() dto: RetractionDto, @CurrentUser() user: Reader) {
+    return this.alerts.retract(id, user, dto);
   }
 
   @Post(':id/close')

@@ -16,7 +16,7 @@ import {
 import {
   AlertFacts, refuseAdvance, refuseBroadcast, refuseBypass, autoEscalationEligible,
   prealertEligible, routingLevel, TERMINAL_STATUSES, DIFFUSED_STATUSES, PUBLIC_ACTIVE_STATUSES,
-  MIN_BYPASS_JUSTIFICATION,
+  MIN_BYPASS_JUSTIFICATION, refuseCorrection, refuseRetraction, MIN_RETRACTION_REASON,
 } from './alert-policy';
 import { AuditService } from '../audit/audit.service';
 import { TerritoryService } from '../common/territory/territory.service';
@@ -123,6 +123,7 @@ export class AlertsService {
     alert: { id: string; title: string; description: string; type: string; alertLevel: AlertLevel; zoneId: string };
     authorId: string; kind: BroadcastKind; certainty: BroadcastCertainty;
     level?: AlertLevel; approvedText?: string; targetZoneIds?: string[]; channels: string[]; idempotencyKey?: string;
+    sequence?: number;
   }) {
     const targets = p.targetZoneIds?.length ? p.targetZoneIds : [p.alert.zoneId];
     const zones = await tx.zone.findMany({ where: { id: { in: targets } }, select: { id: true, name: true } });
@@ -138,7 +139,7 @@ export class AlertsService {
     try {
       return await tx.broadcast.create({
         data: {
-          alertId: p.alert.id, authorId: p.authorId, kind: p.kind, certainty: p.certainty, alertLevel: level,
+          alertId: p.alert.id, authorId: p.authorId, kind: p.kind, certainty: p.certainty, alertLevel: level, sequence: p.sequence ?? 0,
           message: payload.fr, payload: payload as unknown as Prisma.InputJsonObject, targetZoneIds: targets, channels: p.channels,
           idempotencyKey: p.idempotencyKey || randomUUID(),
         },
@@ -374,6 +375,9 @@ export class AlertsService {
       close: r(!canClose(user.role) ? 'Rôle insuffisant pour clôturer' : alert.status !== AlertStatus.BROADCAST ? 'Seule une alerte diffusée peut être clôturée' : null),
       medicalClearance: r(!alert.requiresMedicalReview ? 'Aucune revue médicale en attente'
         : (user.role !== Role.PROTECTION_CIVILE && !TERRITORY_EXEMPT.includes(user.role)) ? 'Réservé à la Protection Civile (décision D1)' : null),
+      correction: r(refuseCorrection(facts, user)),
+      retract: r(refuseRetraction(facts, user, 'x'.repeat(MIN_RETRACTION_REASON))),
+      minRetractionReason: MIN_RETRACTION_REASON,
       reviewBypass: r(!alert.emergencyBypass || alert.bypassReviewedAt ? 'Aucune diffusion d\'urgence à revoir'
         : !hasLevel(user.role, Role.PREFECTURE) ? 'Revue réservée à PREFECTURE ou supérieur'
         : alert.bypassById === user.id ? 'La revue doit être faite par une autre personne' : null),
@@ -715,6 +719,67 @@ export class AlertsService {
     return { alert: await this.findOne(alertId), broadcast: broadcastRecord };
   }
 
+  /**
+   * Rectificatif d'une alerte diffusée (D11) : nouveau message approuvé, envoyé
+   * aux mêmes zones et par les mêmes canaux que la diffusion principale,
+   * marqué « RECTIFICATIF — remplace le message précédent ».
+   */
+  async correction(alertId: string, user: OperatorCtx, dto: { message: string; channels?: string[]; idempotencyKey?: string }) {
+    if (dto.idempotencyKey) {
+      const replay = await this.prisma.broadcast.findUnique({ where: { idempotencyKey: dto.idempotencyKey } });
+      if (replay) return { alert: await this.findOne(alertId), broadcast: replay, replayed: true };
+    }
+    const { alert, facts } = await this.loadFacts(alertId);
+    await this.assertTerritory(user, alert.zoneId);
+    this.deny(refuseCorrection(facts, user), user, alertId, 'alert.correction');
+    if (!dto.message?.trim()) throw new BadRequestException('Texte du rectificatif obligatoire');
+    const primary = await this.prisma.broadcast.findFirst({ where: { alertId, kind: BroadcastKind.PRIMARY }, orderBy: { createdAt: 'asc' } });
+    const targets = primary?.targetZoneIds?.length ? primary.targetZoneIds : [alert.zoneId];
+    const channels = await this.resolveChannels(dto.channels?.length ? dto.channels : primary?.channels, alert.alertLevel);
+    let record: any;
+    await this.prisma.$transaction(async (tx) => {
+      const sequence = (await tx.broadcast.count({ where: { alertId, kind: BroadcastKind.CORRECTION } })) + 1;
+      record = await this.createIntent(tx, {
+        alert, authorId: user.id, kind: BroadcastKind.CORRECTION, certainty: BroadcastCertainty.CORRECTION,
+        approvedText: dto.message, targetZoneIds: targets, channels, idempotencyKey: dto.idempotencyKey, sequence,
+      });
+      await tx.auditLog.create({ data: { userId: user.id, action: 'alert.correction', resource: 'alert', resourceId: alertId, details: { broadcastId: record.id, sequence, channels, targetZoneIds: targets } } });
+    });
+    await this.afterCommit([record.id], alert);
+    return { alert: await this.findOne(alertId), broadcast: record };
+  }
+
+  /**
+   * Retrait d'une alerte diffusée (fausse alerte, D11) : l'alerte passe
+   * CANCELLED (elle disparaît des alertes en vigueur), un message « ALERTE
+   * ANNULÉE » part vers les mêmes destinataires, motif tracé.
+   */
+  async retract(alertId: string, user: OperatorCtx, dto: { reason: string; message?: string }) {
+    const { alert, facts } = await this.loadFacts(alertId);
+    await this.assertTerritory(user, alert.zoneId);
+    this.deny(refuseRetraction(facts, user, dto.reason), user, alertId, 'alert.retract');
+    const primary = await this.prisma.broadcast.findFirst({ where: { alertId, kind: BroadcastKind.PRIMARY }, orderBy: { createdAt: 'asc' } });
+    const targets = primary?.targetZoneIds?.length ? primary.targetZoneIds : [alert.zoneId];
+    const channels = await this.resolveChannels(primary?.channels, alert.alertLevel);
+    // Texte par défaut sans traduction automatique (relecture D5)
+    const text = dto.message?.trim() || `L'alerte « ${alert.title} » est annulée. Les consignes précédentes ne s'appliquent plus.`;
+    let record: any;
+    await this.prisma.$transaction(async (tx) => {
+      const { count } = await tx.alert.updateMany({
+        where: { id: alertId, status: { in: DIFFUSED_STATUSES }, retractedAt: null },
+        data: { status: AlertStatus.CANCELLED, retractedAt: new Date(), retractedById: user.id, retractionReason: dto.reason.trim(), closedAt: new Date(), closureReason: `Retrait : ${dto.reason.trim()}` },
+      });
+      if (count !== 1) throw new ConflictException('L\'alerte a été modifiée entre-temps — rechargez avant de décider');
+      record = await this.createIntent(tx, {
+        alert, authorId: user.id, kind: BroadcastKind.RETRACTION, certainty: BroadcastCertainty.RETRACTION,
+        approvedText: text, targetZoneIds: targets, channels,
+      });
+      await tx.auditLog.create({ data: { userId: user.id, action: 'alert.retract', resource: 'alert', resourceId: alertId, details: { reason: dto.reason.trim(), broadcastId: record.id } } });
+    });
+    await this.afterCommit([record.id], alert);
+    return { alert: await this.findOne(alertId), broadcast: record };
+  }
+
   async close(alertId: string, user: OperatorCtx, reason: string) {
     const { alert } = await this.loadFacts(alertId);
     await this.assertTerritory(user, alert.zoneId);
@@ -809,6 +874,55 @@ export class AlertsService {
       id: a.id, title: a.title, alertLevel: a.alertLevel, status: a.status, type: a.type,
       zone: a.zone ? { name: a.zone.name } : null, broadcastAt: a.broadcastAt, createdAt: a.createdAt,
     }));
+  }
+
+  /**
+   * Diffusions d'une alerte avec leur suivi par canal (envoyé ≠ livré ≠ lu ≠
+   * échec) — opérateurs du territoire seulement.
+   */
+  async broadcastsOf(alertId: string, user: ReaderCtx) {
+    await this.assertReadable(alertId, user, true);
+    const rows = await this.prisma.broadcast.findMany({
+      where: { alertId }, orderBy: [{ createdAt: 'asc' }],
+      include: { author: { select: { name: true, role: true } } },
+    });
+    const groups = rows.length ? await this.prisma.broadcastDelivery.groupBy({
+      by: ['broadcastId', 'channel', 'status'], where: { broadcastId: { in: rows.map((b) => b.id) } }, _count: true,
+    }) : [];
+    return rows.map((b) => {
+      const byChannel: Record<string, Record<string, number>> = {};
+      for (const g of groups.filter((x) => x.broadcastId === b.id)) {
+        (byChannel[g.channel] ??= {})[g.status] = g._count;
+      }
+      return {
+        id: b.id, kind: b.kind, certainty: b.certainty, sequence: b.sequence, status: b.status,
+        message: b.message, channels: b.channels, targetZoneIds: b.targetZoneIds,
+        totalRecipients: b.totalRecipients, sentCount: b.sentCount, deliveredCount: b.deliveredCount,
+        failedCount: b.failedCount, simulatedCount: b.simulatedCount, lastError: b.lastError,
+        createdAt: b.createdAt, completedAt: b.completedAt, author: b.author, byChannel,
+      };
+    });
+  }
+
+  /** Remises d'une diffusion, numéros masqués (minimisation). */
+  async deliveriesOf(broadcastId: string, user: ReaderCtx, page = 1, limit = 50) {
+    const b = await this.prisma.broadcast.findUnique({ where: { id: broadcastId }, select: { alertId: true } });
+    if (!b) throw new NotFoundException('Diffusion introuvable');
+    await this.assertReadable(b.alertId, user, true);
+    const take = Math.min(200, Math.max(1, Number(limit) || 50));
+    const skip = (Math.max(1, Number(page) || 1) - 1) * take;
+    const [rows, total] = await Promise.all([
+      this.prisma.broadcastDelivery.findMany({ where: { broadcastId }, orderBy: [{ recipient: 'asc' }, { channel: 'asc' }], skip, take }),
+      this.prisma.broadcastDelivery.count({ where: { broadcastId } }),
+    ]);
+    const mask = (p: string) => (p.length > 8 ? `${p.slice(0, 6)}****${p.slice(-2)}` : '****');
+    return {
+      total,
+      items: rows.map((d) => ({
+        recipient: mask(d.recipient), channel: d.channel, lang: d.lang, status: d.status, error: d.error,
+        attempts: d.attempts, updatedAt: d.updatedAt, deliveredAt: d.deliveredAt, readAt: d.readAt,
+      })),
+    };
   }
 
   async getBroadcasts(user: ReaderCtx, alertId?: string) {

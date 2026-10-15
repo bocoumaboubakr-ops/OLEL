@@ -6,6 +6,7 @@ import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { Queue } from 'bull';
 import { BroadcastStatus, InboundStatus } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { pilotModeInfo } from '../common/pilot/pilot-mode';
 
 /** Au-delà, une intention de diffusion non remise à la file signale une panne. */
 const PENDING_BROADCAST_MAX_AGE_MS = 5 * 60_000;
@@ -89,7 +90,7 @@ export class HealthController {
   private async providers(): Promise<HealthIndicatorResult> {
     const whatsapp = !!(process.env.WHATSAPP_TOKEN && process.env.WHATSAPP_PHONE_ID);
     const sms = !!(process.env.AFRICAS_TALKING_KEY && process.env.AFRICAS_TALKING_KEY !== 'sandbox');
-    const details = { whatsapp: whatsapp ? 'configuré' : 'non configuré', sms: sms ? 'configuré' : 'non configuré' };
+    const details = { whatsapp: whatsapp ? 'configuré' : 'non configuré', sms: sms ? 'configuré' : 'non configuré', ...pilotModeInfo() };
     if (process.env.NODE_ENV === 'production' && !whatsapp && !sms) {
       throw new HealthCheckError('Aucun canal de diffusion configuré', { providers: { status: 'down', ...details } });
     }

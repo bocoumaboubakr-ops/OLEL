@@ -12,6 +12,7 @@ import { SendResult } from './channels/send-result';
 import { FlagsService } from '../flags/flags.service';
 import { normalizeLang } from '../common/i18n/alert-messages';
 import { DISPATCH_ATTEMPTS } from './broadcast-dispatcher.service';
+import { normalizeE164, pilotAllowlist } from '../common/pilot/pilot-mode';
 
 export const OPERATOR_ROLES: Role[] = [
   Role.SENTINELLE, Role.COORDINATEUR, Role.MAIRIE, Role.HYDRO_METEO,
@@ -44,6 +45,8 @@ interface Recipient {
 /** Fenêtre de service client WhatsApp (politique Meta). */
 const WHATSAPP_WINDOW_MS = 24 * 3600 * 1000;
 export const FLAG_WHATSAPP_TEMPLATES = 'whatsapp_templates';
+/** Fréquence de revérification de l'état de l'alerte pendant l'envoi. */
+const RECHECK_EVERY = 20;
 type Outcome = 'reached' | 'unreached' | 'ineligible';
 type TemplateCall = { name: string; language: string; params: string[] };
 
@@ -101,7 +104,17 @@ export class NotificationsProcessor {
     const recipients = await this.resolveRecipients(b.kind, b.alert.zoneId, b.targetZoneIds);
     let unreached = 0;
     let ineligible = 0;
-    for (const r of recipients) {
+    for (const [i, r] of recipients.entries()) {
+      // Alerte retirée ou rejetée pendant l'envoi : on arrête net (D11, F03)
+      if (i > 0 && i % RECHECK_EVERY === 0) {
+        const current = await this.prisma.alert.findUnique({ where: { id: b.alertId }, select: { status: true } });
+        const reason = current ? this.cancelReason(b.kind, current.status) : 'Alerte supprimée';
+        if (reason) {
+          await this.recount(b.id, recipients.length);
+          await this.finalize(b.id, BroadcastStatus.CANCELLED, `${reason} — interrompue après ${i} destinataire(s)`);
+          return;
+        }
+      }
       const outcome = await this.deliverTo(b.id, r, channels, enabled, payload, templatesOn);
       if (outcome === 'unreached') unreached++;
       if (outcome === 'ineligible') ineligible++; // aucun canal autorisé : pas de reprise inutile
@@ -119,7 +132,7 @@ export class NotificationsProcessor {
       : reachedCount === 0 ? BroadcastStatus.FAILED : BroadcastStatus.PARTIAL;
     const reasons = [
       unreached ? `${unreached} destinataire(s) non atteint(s) après ${DISPATCH_ATTEMPTS} tentatives` : '',
-      ineligible ? `${ineligible} destinataire(s) sans canal autorisé (consentement WhatsApp absent ou hors fenêtre 24 h sans modèle, pas de SMS)` : '',
+      ineligible ? `${ineligible} destinataire(s) sans canal autorisé (mode pilote, consentement WhatsApp absent ou hors fenêtre 24 h sans modèle, pas de SMS)` : '',
     ].filter(Boolean).join(' ; ');
     await this.finalize(b.id, status, reasons || null);
     this.logger.log(`Diffusion ${b.id} [${b.kind}] : ${recipients.length} destinataires, ${unreached} non atteints → ${status}`);
@@ -139,6 +152,11 @@ export class NotificationsProcessor {
 
   private cancelReason(kind: BroadcastKind, status: AlertStatus): string | null {
     if (kind === BroadcastKind.INTERNAL) return null;
+    // Retrait : l'alerte est justement annulée ; rectificatif : seulement tant qu'elle est en vigueur
+    if (kind === BroadcastKind.RETRACTION) return status === AlertStatus.CANCELLED ? null : `Retrait sans objet (${status})`;
+    if (kind === BroadcastKind.CORRECTION) {
+      return status === AlertStatus.BROADCAST || status === AlertStatus.BROADCASTING ? null : `Rectificatif sans objet : alerte ${status}`;
+    }
     const terminal: AlertStatus[] = [AlertStatus.REJECTED, AlertStatus.CANCELLED, AlertStatus.CLOSED, AlertStatus.RESOLVED];
     if (terminal.includes(status)) return `Alerte ${status} avant exécution — diffusion annulée`;
     if (kind === BroadcastKind.PRIMARY && status !== AlertStatus.BROADCAST && status !== AlertStatus.BROADCASTING) {
@@ -200,6 +218,14 @@ export class NotificationsProcessor {
     if (already) return 'reached';
 
     const lang = normalizeLang(r.language);
+    // Mode pilote : seuls les numéros de la liste peuvent recevoir (verrou serveur)
+    const allow = pilotAllowlist();
+    if (allow && !allow.has(normalizeE164(r.phone))) {
+      for (const channel of channels) {
+        await this.upsertDelivery(broadcastId, r, channel, lang, { status: DeliveryStatus.SKIPPED, error: 'Mode pilote : destinataire hors liste autorisée' });
+      }
+      return 'ineligible';
+    }
     const text = (payload[lang] ?? payload.fr) as string;
     const template = (payload.templates as Record<string, TemplateCall> | undefined)?.[lang];
     let attempted = false;

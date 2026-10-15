@@ -278,6 +278,10 @@ model Alert {
   bypassReviewedAt    DateTime?
   bypassReviewedById  String?
   bypassReviewNote    String?
+  /// Retrait d'une alerte diffusée (fausse alerte) — audit, décision D11
+  retractedAt         DateTime?
+  retractedById       String?
+  retractionReason    String?
   verifiedAt          DateTime?
   citizensNotifiedAt  DateTime?
   @@index([zoneId, createdAt(sort: Desc)])
@@ -600,6 +604,8 @@ enum BroadcastKind {
   INTERNAL   // notification des opérateurs d'un nouveau signalement
   PREALERT   // pré-alerte citoyenne avant confirmation (si activée)
   PRIMARY    // diffusion publique principale
+  CORRECTION // rectificatif d'une alerte diffusée (D11)
+  RETRACTION // retrait d'une alerte diffusée : fausse alerte (D11)
 }
 
 /// Niveau de certitude affiché dans le message (audit F04, F05).
@@ -609,6 +615,8 @@ enum BroadcastCertainty {
   EMERGENCY_BYPASS
   PREALERT
   INTERNAL
+  CORRECTION
+  RETRACTION
 }
 
 enum BroadcastStatus {
@@ -668,7 +676,10 @@ model Broadcast {
 
   deliveries       BroadcastDelivery[]
 
-  @@unique([alertId, kind])
+  /// Rang d'une diffusion de même nature (rectificatifs successifs) ; 0 sinon
+  sequence         Int      @default(0)
+
+  @@unique([alertId, kind, sequence])
   @@index([alertId])
   @@index([authorId])
   @@index([status])

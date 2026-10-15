@@ -142,13 +142,14 @@ export class AlertsGateway implements OnGatewayConnection, OnGatewayInit, OnModu
     const opsRooms = (await this.territory.ancestorsInclusive(alert.zoneId)).map((z) => `ops:${z}`);
     this.server.to([...opsRooms, 'ops:all']).emit('alert:changed', summary);
 
-    if (DIFFUSED_STATUSES.includes(alert.status)) {
+    if (DIFFUSED_STATUSES.includes(alert.status) || alert.retractedAt) {
       const primary = alert.broadcasts[0];
       const targets = primary?.targetZoneIds?.length ? primary.targetZoneIds : [alert.zoneId];
       const pubRooms = (await this.territory.subtreeOfMany(targets)).map((z) => `pub:${z}`);
       this.server.to(pubRooms).emit('alert:public', {
         id: alert.id, title: alert.title, type: alert.type, alertLevel: alert.alertLevel,
         zone: { name: alert.zone?.name }, broadcastAt: alert.broadcastAt, certainty: primary?.certainty ?? 'CONFIRMED',
+        retracted: !!alert.retractedAt,
       });
     }
   }

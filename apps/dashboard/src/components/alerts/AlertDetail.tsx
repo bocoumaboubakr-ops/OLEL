@@ -25,6 +25,7 @@ type Decision = { allowed: boolean; reason?: string };
 interface Actions {
   validate: Decision; reject: Decision; broadcast: Decision; emergencyBypass: Decision;
   close: Decision; medicalClearance: Decision; reviewBypass: Decision;
+  correction: Decision; retract: Decision; minRetractionReason: number;
   requiresFieldProof: boolean;
   onValidate: { nextStep: string; diffuses: boolean } | null;
   minBypassJustification: number;
@@ -45,6 +46,7 @@ export function AlertDetail({ alert: summary, currentUser, onClose, onRefetch }:
   const [reason, setReason] = useState('');
   const [broadcastMsg, setBroadcastMsg] = useState('');
   const [reviewNote, setReviewNote] = useState('');
+  const [correctionMsg, setCorrectionMsg] = useState('');
 
   const loadDetail = async () => {
     try {
@@ -54,7 +56,12 @@ export function AlertDetail({ alert: summary, currentUser, onClose, onRefetch }:
       setDetailError(e.response?.status === 404 ? 'Alerte hors de votre périmètre ou supprimée' : 'Détail indisponible — actions désactivées');
     }
   };
-  useEffect(() => { setAlert(summary); loadDetail(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [summary.id]);
+  // Recharge le détail quand on change d'alerte (et seulement alors)
+  useEffect(() => {
+    setAlert(summary);
+    loadDetail();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [summary.id]);
 
   const actions: Actions | undefined = alert.actions;
   const meta = TYPE_META[alert.type] || TYPE_META.AUTRE;
@@ -94,8 +101,24 @@ export function AlertDetail({ alert: summary, currentUser, onClose, onRefetch }:
   const medicalClearance = () => run(() => axios.post(`${API}/alerts/${alert.id}/medical-clearance`, {}, { headers: authHeader() }), false);
   const reviewBypass = () => run(() => axios.post(`${API}/alerts/${alert.id}/bypass-review`, { note: reviewNote }, { headers: authHeader() }), false);
 
+  const correction = () => run(async () => {
+    if (correctionMsg.trim().length < 10) throw new Error('Texte du rectificatif : 10 caractères minimum (texte exact envoyé)');
+    if (!window.confirm('Envoyer ce RECTIFICATIF à tous les destinataires de l\'alerte ?')) return;
+    await axios.post(`${API}/alerts/${alert.id}/correction`, { message: correctionMsg.trim(), idempotencyKey: `${alert.id}:corr:${crypto.randomUUID()}` }, { headers: authHeader() });
+  }, false);
+
+  const retract = () => run(async () => {
+    const min = actions?.minRetractionReason ?? 20;
+    const reason = window.prompt(`RETRAIT DE L'ALERTE (fausse alerte)\n\nL'alerte sera annulée et un message « ALERTE ANNULÉE » partira vers tous ses destinataires.\n\nMotif (tracé, ≥ ${min} caractères) :`);
+    if (!reason || reason.trim().length < min) throw new Error(`Motif trop court (≥ ${min} caractères)`);
+    const message = window.prompt('Message aux destinataires (laisser vide pour le texte par défaut : « L\'alerte … est annulée. Les consignes précédentes ne s\'appliquent plus. ») :') ?? '';
+    if (!window.confirm('Confirmer le RETRAIT de cette alerte ?')) return;
+    await axios.post(`${API}/alerts/${alert.id}/retract`, { reason: reason.trim(), message: message.trim() || undefined }, { headers: authHeader() });
+  });
+
   const anyAction = !!actions && (actions.validate.allowed || actions.reject.allowed || actions.broadcast.allowed
-    || actions.emergencyBypass.allowed || actions.close.allowed || actions.medicalClearance.allowed || actions.reviewBypass.allowed);
+    || actions.emergencyBypass.allowed || actions.close.allowed || actions.medicalClearance.allowed || actions.reviewBypass.allowed
+    || actions.correction?.allowed || actions.retract?.allowed);
 
   const currentStepIdx = WORKFLOW_STEPS.indexOf(step as any);
 
@@ -191,6 +214,8 @@ export function AlertDetail({ alert: summary, currentUser, onClose, onRefetch }:
           </div>
           {alert.closureReason && <div style={{ marginTop: 10, fontSize: '0.82rem', color: '#475569', fontStyle: 'italic' }}>Bilan : {alert.closureReason}</div>}
         </Section>
+
+        {actions && <DiffusionsSection alertId={alert.id} refreshKey={alert.updatedAt} />}
 
         <RecoupementSection alertId={alert.id} alertType={alert.type} />
 
@@ -302,6 +327,26 @@ export function AlertDetail({ alert: summary, currentUser, onClose, onRefetch }:
               </button>
             )}
 
+            {actions.correction?.allowed && (
+              <>
+                <textarea
+                  value={correctionMsg} onChange={(e) => setCorrectionMsg(e.target.value)}
+                  placeholder="Rectificatif (texte exact envoyé aux mêmes destinataires, mention RECTIFICATIF)…" rows={2}
+                  style={{ ...inputS, resize: 'vertical', marginTop: 12 }}
+                />
+                <button disabled={loading} onClick={correction} style={{ ...btn('#1D4ED8'), width: '100%', marginTop: 8 }}>
+                  Diffuser un rectificatif
+                </button>
+              </>
+            )}
+
+            {actions.retract?.allowed && (
+              <button disabled={loading} onClick={retract}
+                style={{ ...btn('white'), color: '#B91C1C', border: '1px solid #FECACA', width: '100%', marginTop: 8 }}>
+                Retirer l&apos;alerte (fausse alerte)
+              </button>
+            )}
+
             {actions.close.allowed && (
               <>
                 <input value={reason} onChange={(e) => setReason(e.target.value)}
@@ -335,6 +380,71 @@ function Section({ title, children }: { title: string; children: React.ReactNode
       <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>{title}</div>
       {children}
     </div>
+  );
+}
+
+// ── DiffusionsSection ───────────────────────────────────────────────────────
+// Suivi réel des diffusions : « envoyé » (accepté par le fournisseur) n'est
+// pas « livré » (confirmé par le fournisseur) ni « lu ».
+const KIND_LABEL: Record<string, string> = {
+  PRIMARY: 'Diffusion', CORRECTION: 'Rectificatif', RETRACTION: 'Retrait', PREALERT: 'Pré-alerte', INTERNAL: 'Notification opérateurs',
+};
+const DELIVERY_LABEL: Record<string, string> = {
+  SENT: 'envoyé', DELIVERED: 'livré', READ: 'lu', FAILED: 'échec', SKIPPED: 'non éligible', SIMULATED: 'simulé', QUEUED: 'en cours',
+};
+
+function DiffusionsSection({ alertId, refreshKey }: { alertId: string; refreshKey?: string }) {
+  const [rows, setRows] = useState<any[] | null>(null);
+  const [error, setError] = useState('');
+  const [open, setOpen] = useState<string | null>(null);
+  const [items, setItems] = useState<any[]>([]);
+  useEffect(() => {
+    axios.get(`${API}/alerts/${alertId}/broadcasts`, { headers: authHeader() })
+      .then(({ data }) => { setRows(data); setError(''); })
+      .catch(() => setError('Suivi des diffusions indisponible'));
+  }, [alertId, refreshKey]);
+  const toggle = async (id: string) => {
+    if (open === id) { setOpen(null); return; }
+    setOpen(id);
+    try { const { data } = await axios.get(`${API}/alerts/broadcasts/${id}/deliveries?limit=100`, { headers: authHeader() }); setItems(data.items); }
+    catch { setItems([]); }
+  };
+  if (error) return <Section title="Diffusions"><div style={{ fontSize: '0.8rem', color: '#991B1B' }}>{error}</div></Section>;
+  const visible = (rows || []).filter((b) => b.kind !== 'INTERNAL');
+  if (!rows || !visible.length) return null;
+  return (
+    <Section title="Diffusions et remises">
+      {visible.map((b) => (
+        <div key={b.id} style={{ border: '1px solid #F1F5F9', borderRadius: 8, padding: '8px 10px', marginBottom: 8, fontSize: '0.78rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+            <strong style={{ color: '#0F172A' }}>{KIND_LABEL[b.kind] || b.kind}{b.sequence ? ` n° ${b.sequence}` : ''}</strong>
+            <span style={{ color: b.status === 'DONE' ? '#15803D' : b.status === 'FAILED' ? '#B91C1C' : '#92400E', fontWeight: 600 }}>{b.status}</span>
+          </div>
+          <div style={{ color: '#64748B', marginTop: 2 }}>
+            {new Date(b.createdAt).toLocaleString('fr-FR')} · {b.author?.name || '—'} · {b.totalRecipients} destinataire(s)
+          </div>
+          {Object.entries(b.byChannel as Record<string, Record<string, number>>).map(([ch, st]) => (
+            <div key={ch} style={{ color: '#475569', marginTop: 2 }}>
+              {ch} : {Object.entries(st).map(([k, n]) => `${n} ${DELIVERY_LABEL[k] || k}`).join(' · ')}
+            </div>
+          ))}
+          {b.lastError && <div style={{ color: '#B91C1C', marginTop: 2 }}>{b.lastError}</div>}
+          <button onClick={() => toggle(b.id)} style={{ background: 'none', border: 'none', color: '#1D4ED8', cursor: 'pointer', padding: 0, marginTop: 4, fontSize: '0.76rem' }}>
+            {open === b.id ? 'Masquer le détail' : 'Détail par destinataire'}
+          </button>
+          {open === b.id && (
+            <div style={{ marginTop: 6, maxHeight: 180, overflowY: 'auto' }}>
+              {items.map((d, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: 6, color: '#475569' }}>
+                  <span style={{ fontFamily: 'ui-monospace, Menlo, monospace' }}>{d.recipient} · {d.channel}</span>
+                  <span title={d.error || ''}>{DELIVERY_LABEL[d.status] || d.status}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+    </Section>
   );
 }
 

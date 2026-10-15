@@ -4,6 +4,7 @@ import { Queue } from 'bull';
 import { AlertStatus, BroadcastStatus, InboundStatus, SignalementStatus } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { MetricsService } from './metrics.service';
+import { pilotModeInfo } from '../common/pilot/pilot-mode';
 
 const age = (d?: Date | null) => (d ? Math.max(0, (Date.now() - d.getTime()) / 1000) : 0);
 
@@ -65,6 +66,9 @@ export class OperationalMetricsService implements OnModuleInit {
     });
     m.gauge('olel_bypass_unreviewed', 'Diffusions d\'urgence sans revue a posteriori', [], async (g) => {
       g.set(await this.prisma.alert.count({ where: { emergencyBypass: true, bypassReviewedAt: null } }));
+    });
+    m.gauge('olel_pilot_mode', 'Mode pilote actif (diffusion limitée à une liste de numéros)', [], async (g) => {
+      g.set(pilotModeInfo().pilotMode ? 1 : 0);
     });
     m.gauge('olel_channel_configured', 'Canal configuré avec des identifiants fournisseur (1) ou non (0)', ['channel'], async (g) => {
       g.set({ channel: 'whatsapp' }, process.env.WHATSAPP_TOKEN && process.env.WHATSAPP_PHONE_ID ? 1 : 0);

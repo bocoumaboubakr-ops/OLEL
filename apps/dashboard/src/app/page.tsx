@@ -7,6 +7,7 @@ import { AlertDetail } from '@/components/alerts/AlertDetail';
 import { useAlerts } from '@/hooks/useAlerts';
 import { useAuth } from '@/hooks/useAuth';
 import { StatsBar } from '@/components/layout/StatsBar';
+import { SystemBanner } from '@/components/layout/SystemBanner';
 import { CreateAlertModal } from '@/components/alerts/CreateAlertModal';
 import { ACTIVE_STATUSES } from '@/components/alerts/AlertsFeed';
 import { canCreate as canCreateRole, ROLE_LABELS, ROLE_LEVEL } from '@/lib/governance';
@@ -81,6 +82,8 @@ export default function DashboardPage() {
           </button>
         </div>
       </header>
+
+      <SystemBanner />
 
       {/* Stats bar */}
       <StatsBar alerts={alerts} />

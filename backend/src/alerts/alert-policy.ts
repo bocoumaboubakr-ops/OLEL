@@ -142,3 +142,28 @@ export function prealertEligible(a: AlertFacts): boolean {
     && needsConfirmation(a.alertLevel)
     && !a.requiresMedicalReview;
 }
+
+// ── Rectificatif et retrait d'une alerte diffusée (décision D11) ─────────────
+/**
+ * Défaut prudent, à confirmer (D11) : la même autorité que celle requise pour
+ * diffuser ce niveau. Un retrait exige un motif substantiel, tracé.
+ */
+export const MIN_RETRACTION_REASON = 20;
+
+function diffusionAuthority(a: AlertFacts, actor: Actor, what: string): string | null {
+  if (!DIFFUSED_STATUSES.includes(a.status)) return `Seule une alerte diffusée peut faire l'objet d'un ${what}`;
+  const minRole = LEVEL_CONFIG[a.alertLevel].minBroadcastRole;
+  if (!hasLevel(actor.role, minRole)) return `${what[0].toUpperCase()}${what.slice(1)} d'une alerte ${a.alertLevel} réservé à ${minRole} ou supérieur`;
+  return null;
+}
+
+export function refuseCorrection(a: AlertFacts, actor: Actor): string | null {
+  return diffusionAuthority(a, actor, 'rectificatif');
+}
+
+export function refuseRetraction(a: AlertFacts, actor: Actor, reason?: string): string | null {
+  const r = diffusionAuthority(a, actor, 'retrait');
+  if (r) return r;
+  if (!reason || reason.trim().length < MIN_RETRACTION_REASON) return `Motif du retrait d'au moins ${MIN_RETRACTION_REASON} caractères obligatoire`;
+  return null;
+}

@@ -1,4 +1,4 @@
-import { IsArray, IsEnum, IsInt, IsNumber, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
+import { IsArray, IsEnum, IsInt, IsNumber, IsOptional, IsString, IsUUID, Max, MaxLength, Min, MinLength } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { AlertLevel, LocationSource, ValidationAction } from '@prisma/client';
 import { IsOlelMedia } from '../../common/media/olel-media.decorator';
@@ -118,4 +118,38 @@ export class BypassReviewDto {
   @IsString()
   @MaxLength(1000)
   note: string;
+}
+
+/** Rectificatif d'une alerte diffusée (texte exact envoyé, sans traduction automatique). */
+export class CorrectionDto {
+  @ApiProperty({ minLength: 10 })
+  @IsString()
+  @MinLength(10)
+  @MaxLength(1000)
+  message: string;
+
+  @ApiPropertyOptional({ type: [String], description: 'Canaux (défaut : ceux de la diffusion principale)' })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  channels?: string[];
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  idempotencyKey?: string;
+}
+
+/** Retrait d'une alerte diffusée (fausse alerte) : motif tracé, message facultatif. */
+export class RetractionDto {
+  @ApiProperty({ minLength: 20, description: 'Motif (interne, tracé dans l\'audit)' })
+  @IsString()
+  @MaxLength(1000)
+  reason: string;
+
+  @ApiPropertyOptional({ description: 'Message aux destinataires (défaut : « L\'alerte … est annulée »)' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  message?: string;
 }

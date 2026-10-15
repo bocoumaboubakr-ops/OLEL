@@ -76,7 +76,7 @@ export function operatorMessage(type: string, title: string, zoneName: string): 
 // décision, puis stocké dans Broadcast.payload. Le processeur l'envoie tel
 // quel : aucune reconstruction ultérieure depuis le titre ou la description.
 
-export type Certainty = 'CONFIRMED' | 'UNCONFIRMED_AUTO' | 'EMERGENCY_BYPASS' | 'PREALERT' | 'INTERNAL';
+export type Certainty = 'CONFIRMED' | 'UNCONFIRMED_AUTO' | 'EMERGENCY_BYPASS' | 'PREALERT' | 'INTERNAL' | 'CORRECTION' | 'RETRACTION';
 
 /**
  * Mention du niveau de certitude, en tête de message.
@@ -97,6 +97,19 @@ const CERTAINTY_TAG: Record<Certainty, Record<Lang, string>> = {
     ff: 'NELDUGOL HEÑORDE — ƳEEWGOL NO WAƊA',
     wo: 'YÓNNEE CI JAMONO BU TÀNG — SEET GI NGI CI KAW',
     snk: 'TANPINTE NELLI — MANGINƝE TI A DI',
+  },
+  // Rectificatif et retrait (D11) — À TRADUIRE par des locuteurs (D5) : repli en français
+  CORRECTION: {
+    fr: 'RECTIFICATIF — remplace le message précédent',
+    ff: 'RECTIFICATIF — remplace le message précédent',
+    wo: 'RECTIFICATIF — remplace le message précédent',
+    snk: 'RECTIFICATIF — remplace le message précédent',
+  },
+  RETRACTION: {
+    fr: 'ALERTE ANNULÉE',
+    ff: 'ALERTE ANNULÉE',
+    wo: 'ALERTE ANNULÉE',
+    snk: 'ALERTE ANNULÉE',
   },
   PREALERT: {
     fr: 'PRÉ-ALERTE — INFORMATION NON CONFIRMÉE',
@@ -126,7 +139,10 @@ export function buildFrozenPayload(i: FrozenPayloadInput): Record<Lang, string> 
       continue;
     }
     const tag = CERTAINTY_TAG[i.certainty][lang];
-    const header = `[OLEL] ${levelPrefix(i.level, lang)}${tag ? ` — ${tag}` : ''}`;
+    // Un retrait n'affiche pas le niveau de danger : seule l'annulation compte
+    const header = i.certainty === 'RETRACTION'
+      ? `[OLEL] ${tag}`
+      : `[OLEL] ${levelPrefix(i.level, lang)}${tag ? ` — ${tag}` : ''}`;
     const body = i.approvedText?.trim() || `${i.title}\n${i.description}`;
     out[lang] = `${header}\n${body}\n${ZONE_WORD[lang]} : ${i.zoneNames.join(', ')}\n${FOLLOW_INSTRUCTIONS[lang]}`;
   }
@@ -148,7 +164,8 @@ const templateParam = (s: string) => s.replace(/\s*\n+\s*/g, ' — ').replace(/\
  */
 export function buildTemplateCalls(i: FrozenPayloadInput): Record<Lang, TemplateCall> | null {
   if (i.certainty === 'INTERNAL') return null;
-  const severe = i.level === 'ROUGE' || i.level === 'ROUGE_FONCE';
+  // Retrait : pas de consigne, le titre porte « ALERTE ANNULÉE »
+  const severe = (i.level === 'ROUGE' || i.level === 'ROUGE_FONCE') && i.certainty !== 'RETRACTION';
   const out = {} as Record<Lang, TemplateCall>;
   for (const lang of SUPPORTED_LANGS) {
     const tag = CERTAINTY_TAG[i.certainty][lang];
