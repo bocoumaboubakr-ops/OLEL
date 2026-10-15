@@ -24,6 +24,8 @@ export class HttpExceptionFilter implements ExceptionFilter {
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let message: string | string[] = 'Erreur interne du serveur';
+    // Contrôles de santé (Terminus) : le détail par composant est conservé (audit F33)
+    let checks: unknown;
 
     if (exception instanceof HttpException) {
       status = exception.getStatus();
@@ -32,6 +34,9 @@ export class HttpExceptionFilter implements ExceptionFilter {
         typeof exceptionResponse === 'object' && 'message' in (exceptionResponse as object)
           ? (exceptionResponse as any).message
           : exception.message;
+      if (typeof exceptionResponse === 'object' && (exceptionResponse as any)?.status === 'error' && 'details' in (exceptionResponse as object)) {
+        checks = exceptionResponse;
+      }
     } else if (exception instanceof PrismaClientKnownRequestError) {
       if (exception.code === 'P2002') {
         status = HttpStatus.CONFLICT;
@@ -55,6 +60,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     response.status(status).json({
       statusCode: status,
       message,
+      ...(checks ? { checks } : {}),
       timestamp: new Date().toISOString(),
       path: request.url,
     });

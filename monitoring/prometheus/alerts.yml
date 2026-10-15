@@ -20,7 +20,7 @@ groups:
           description: "La base de données est inaccessible."
 
       - alert: HighErrorRate
-        expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.1
+        expr: sum(rate(olel_http_requests_total{status=~"5.."}[5m])) / clamp_min(sum(rate(olel_http_requests_total[5m])), 1) > 0.1
         for: 2m
         labels:
           severity: warning
@@ -29,7 +29,7 @@ groups:
           description: "Plus de 10% des requêtes retournent des erreurs 5xx."
 
       - alert: HighMemoryUsage
-        expr: process_resident_memory_bytes{job="olel-backend"} > 512 * 1024 * 1024
+        expr: olel_process_resident_memory_bytes{job="olel-backend"} > 512 * 1024 * 1024
         for: 5m
         labels:
           severity: warning
@@ -45,3 +45,50 @@ groups:
         annotations:
           summary: "Espace disque faible"
           description: "Moins de 15% d'espace disque disponible."
+
+  # ── Chaîne d'alerte (audit F33) : ce qui exige une intervention humaine ──
+  - name: olel_chaine_alerte
+    rules:
+      - alert: SignalementNonTraite
+        expr: olel_signalement_pending_oldest_age_seconds > 1800
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Signalement citoyen en attente depuis plus de 30 min"
+          description: "Vérifier la permanence opérateurs (âge : {{ $value | humanizeDuration }})."
+      - alert: DiffusionBloquee
+        expr: olel_broadcast_open_oldest_age_seconds > 300
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "Une diffusion décidée n'est pas partie depuis plus de 5 min"
+          description: "File de diffusion bloquée ou Redis indisponible : consulter /api/v1/health/diffusion."
+      - alert: RedisIndisponible
+        expr: olel_queue_jobs{state="redis_up"} == 0
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "Redis (file de diffusion) injoignable"
+      - alert: DiffusionsEnEchec
+        expr: increase(olel_broadcast_finished_24h{status=~"FAILED|PARTIAL"}[1h]) > 0
+        labels: { severity: warning }
+        annotations:
+          summary: "Diffusion terminée en échec ou partielle dans l'heure"
+      - alert: MessagesEntrantsNonTraites
+        expr: olel_inbound_unprocessed > 0
+        for: 15m
+        labels: { severity: warning }
+        annotations:
+          summary: "Messages WhatsApp reçus mais non traités depuis 15 min"
+      - alert: BypassNonRevu
+        expr: olel_bypass_unreviewed > 0
+        for: 24h
+        labels: { severity: warning }
+        annotations:
+          summary: "Diffusion d'urgence sans revue a posteriori depuis plus de 24 h"
+      - alert: AucunCanalConfigure
+        expr: max(olel_channel_configured) == 0
+        for: 10m
+        labels: { severity: critical }
+        annotations:
+          summary: "Aucun canal de diffusion configuré (WhatsApp ni SMS)"

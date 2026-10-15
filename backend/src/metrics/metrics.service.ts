@@ -1,70 +1,46 @@
 import { Injectable } from '@nestjs/common';
+import { Counter, Gauge, Histogram, Registry, collectDefaultMetrics } from 'prom-client';
 
-interface Counter { [key: string]: number }
-
+/**
+ * Métriques Prometheus (audit F33) produites par prom-client — plus de
+ * texte assemblé à la main. Les indicateurs opérationnels (chaîne d'alerte)
+ * sont enregistrés par OperationalMetricsService sur ce même registre.
+ */
 @Injectable()
 export class MetricsService {
-  private counters: Counter = {};
-  private histograms: Record<string, number[]> = {};
-  private readonly startTime = Date.now();
+  readonly registry = new Registry();
 
+  private readonly httpRequests = new Counter({
+    name: 'olel_http_requests_total', help: 'Requêtes HTTP traitées', labelNames: ['method', 'status'] as const, registers: [this.registry],
+  });
+
+  private readonly httpDuration = new Histogram({
+    name: 'olel_http_request_duration_seconds', help: 'Durée des requêtes HTTP',
+    labelNames: ['method'] as const, buckets: [0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10], registers: [this.registry],
+  });
+
+  constructor() {
+    collectDefaultMetrics({ register: this.registry, prefix: 'olel_' });
+  }
+
+  /** Compatibilité avec l'intercepteur HTTP existant. */
   inc(name: string, labels: Record<string, string> = {}, value = 1) {
-    const key = this.key(name, labels);
-    this.counters[key] = (this.counters[key] || 0) + value;
+    if (name === 'http_requests_total') this.httpRequests.inc({ method: labels.method ?? '', status: labels.status ?? '' }, value);
   }
 
   observe(name: string, value: number, labels: Record<string, string> = {}) {
-    const key = this.key(name, labels);
-    if (!this.histograms[key]) this.histograms[key] = [];
-    this.histograms[key].push(value);
-    // Keep only last 1000 observations per key
-    if (this.histograms[key].length > 1000) this.histograms[key].shift();
+    if (name === 'http_request_duration_ms') this.httpDuration.observe({ method: labels.method ?? '' }, value / 1000);
   }
 
-  toPrometheusText(): string {
-    const lines: string[] = [];
-    const uptimeSeconds = Math.floor((Date.now() - this.startTime) / 1000);
-
-    lines.push('# HELP olel_uptime_seconds Uptime du backend en secondes');
-    lines.push('# TYPE olel_uptime_seconds gauge');
-    lines.push(`olel_uptime_seconds ${uptimeSeconds}`);
-
-    lines.push('# HELP process_memory_rss_bytes Mémoire RSS du process');
-    lines.push('# TYPE process_memory_rss_bytes gauge');
-    lines.push(`process_memory_rss_bytes ${process.memoryUsage().rss}`);
-
-    lines.push('# HELP process_heap_used_bytes Heap utilisée');
-    lines.push('# TYPE process_heap_used_bytes gauge');
-    lines.push(`process_heap_used_bytes ${process.memoryUsage().heapUsed}`);
-
-    for (const [key, value] of Object.entries(this.counters)) {
-      const [name, labelStr] = key.split('{');
-      lines.push(`${name}{${labelStr} ${value}`);
-    }
-
-    for (const [key, values] of Object.entries(this.histograms)) {
-      if (!values.length) continue;
-      const [name, labelStr] = key.split('{');
-      const sorted = [...values].sort((a, b) => a - b);
-      const sum = values.reduce((a, b) => a + b, 0);
-      const avg = sum / values.length;
-      const p50 = sorted[Math.floor(sorted.length * 0.5)];
-      const p95 = sorted[Math.floor(sorted.length * 0.95)];
-      const p99 = sorted[Math.floor(sorted.length * 0.99)];
-      const lblBase = labelStr ? `{${labelStr}` : '{';
-      lines.push(`${name}_avg${lblBase}le="avg"} ${avg.toFixed(2)}`);
-      lines.push(`${name}_p50${lblBase}le="0.5"} ${p50}`);
-      lines.push(`${name}_p95${lblBase}le="0.95"} ${p95}`);
-      lines.push(`${name}_p99${lblBase}le="0.99"} ${p99}`);
-      lines.push(`${name}_count${lblBase}} ${values.length}`);
-      lines.push(`${name}_sum${lblBase}} ${sum.toFixed(2)}`);
-    }
-
-    return lines.join('\n') + '\n';
+  gauge(name: string, help: string, labelNames: string[], collect: (g: Gauge<string>) => Promise<void>) {
+    return new Gauge({ name, help, labelNames, registers: [this.registry], async collect() { await collect(this); } });
   }
 
-  private key(name: string, labels: Record<string, string>): string {
-    const labelStr = Object.entries(labels).map(([k, v]) => `${k}="${v}"`).join(',');
-    return labelStr ? `${name}{${labelStr}}` : `${name}{}`;
+  toPrometheusText(): Promise<string> {
+    return this.registry.metrics();
+  }
+
+  get contentType() {
+    return this.registry.contentType;
   }
 }
