@@ -35,6 +35,7 @@ export class LoggingInterceptor implements NestInterceptor {
         const status = err.status || 500;
         this.logger.error(`${method} ${safeUrl} ${status} ${duration}ms — ${err.message}`);
         this.metrics?.inc('http_requests_total', { method, status: String(status) });
+        this.metrics?.observe('http_request_duration_ms', duration, { method });
         return throwError(() => err);
       }),
     );

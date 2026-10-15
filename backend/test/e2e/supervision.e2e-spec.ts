@@ -4,7 +4,7 @@
  * lignes d'histogramme mal formées, aucun indicateur de la chaîne d'alerte.
  */
 import { Role } from '@prisma/client';
-import { Ctx, bootApp, createUser, resetDb, seedZones } from './harness';
+import { Ctx, TEST_ENV, bootApp, createUser, resetDb, seedZones } from './harness';
 import { makeAlert } from './alert-fixtures';
 
 let ctx: Ctx;
@@ -22,7 +22,8 @@ describe('F33 — métriques Prometheus', () => {
     const citoyen = await createUser(ctx, Role.CITOYEN, ctx.zones.communeA);
     const s = await ctx.prisma.signalement.create({ data: { userId: citoyen.id, type: 'INONDATION', text: 'eau', channel: 'whatsapp' } });
     await ctx.prisma.$executeRaw`UPDATE signalements SET "createdAt" = now() - interval '2 hours' WHERE id = ${s.id}`;
-    await get('/health/live'); // une requête HTTP comptée (les refus de garde ne passent pas par l'intercepteur)
+    // Une requête HTTP comptée (les refus de garde ne passent pas par l'intercepteur)
+    await get('/alerts-bot/active', { 'x-bot-api-key': TEST_ENV.BOT_API_KEY });
     const r = await get('/metrics');
     expect(r.status).toBe(200);
     const text = await r.text();
