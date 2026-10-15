@@ -120,7 +120,8 @@ async function main() {
   await prisma.user.upsert({
     where: { phone: botPhone },
     update: {},
-    create: { phone: botPhone, name: 'BOT OLEL', role: 'ADMIN', isActive: true, zoneId: matam.id },
+    // Compte technique d'attribution des signalements anonymes : rôle minimal, sans mot de passe
+    create: { phone: botPhone, name: 'BOT OLEL', role: 'CITOYEN', isActive: true, zoneId: matam.id },
   });
 
   // ── Feature flags ──────────────────────────────────────────────────────────

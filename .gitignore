@@ -55,3 +55,6 @@ tmp/
 
 # Redis dump (artefact de test local)
 dump.rdb
+
+# Jeton de collecte Prometheus (copie de METRICS_TOKEN)
+monitoring/prometheus/metrics.token

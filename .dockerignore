@@ -1,0 +1,15 @@
+# Contexte de construction = racine du monorepo (audit F28) : rien de local,
+# rien de secret, aucun artefact de build dans les images.
+**/node_modules
+**/.next
+**/dist
+**/coverage
+**/*.tsbuildinfo
+**/.env
+**/.env.*
+!**/.env.example
+.git
+uploads
+backups
+logs
+**/next-env.d.ts

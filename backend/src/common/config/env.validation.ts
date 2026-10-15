@@ -43,6 +43,10 @@ class EnvironmentVariables {
 export function validateEnv(config: Record<string, unknown>): EnvironmentVariables {
   // Garde-fous de production non contournables (audit F11, F22)
   if (config['NODE_ENV'] === 'production') {
+    // Redis porte la file de diffusion : jamais sans authentification en production (F32)
+    if (!config['REDIS_PASSWORD']) {
+      throw new Error('[EnvValidation] REDIS_PASSWORD est obligatoire en production');
+    }
     if (String(config['RETURN_OTP_DEV_CODE'] ?? '').toLowerCase() === 'true') {
       throw new Error('[EnvValidation] RETURN_OTP_DEV_CODE=true est interdit en production (exposerait les codes OTP)');
     }

@@ -1,7 +1,18 @@
 # ── OLEL – Stack complète ────────────────────────────────────────────────────
 # Démarrage : docker compose up -d
-# Reset DB   : docker compose down -v && docker compose up -d
 # Zone cible : Région de Matam (Sénégal)
+#
+# Périmètre réseau (audit F32) : aucun service interne n'est publié sur
+# l'interface publique de l'hôte. Les ports sont liés à 127.0.0.1 (accès
+# local / tunnel SSH) ; seul Nginx (docker-compose.prod.yml) expose 80/443.
+# Les images se construisent depuis la RACINE (lockfile unique — audit F28).
+
+x-logging: &logging
+  # Journaux sur la sortie standard, rotation par Docker (audit F30)
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
 
 services:
 
@@ -14,8 +25,9 @@ services:
       POSTGRES_DB:       olel
       POSTGRES_USER:     olel
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-olel_dev_pwd}
+    logging: *logging
     ports:
-      - "5434:5432"
+      - "127.0.0.1:5434:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -29,8 +41,13 @@ services:
     image: redis:7-alpine
     container_name: olel-redis
     restart: unless-stopped
+    # Authentification et persistance AOF (file de diffusion) — audit F32
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:-olel_dev_redis}", "--appendonly", "yes"]
+    environment:
+      REDISCLI_AUTH: ${REDIS_PASSWORD:-olel_dev_redis}
+    logging: *logging
     ports:
-      - "6380:6379"
+      - "127.0.0.1:6380:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -41,8 +58,8 @@ services:
   # ── Backend NestJS ──────────────────────────────────────────────────────────
   backend:
     build:
-      context:    ./backend
-      dockerfile: Dockerfile
+      context:    .
+      dockerfile: backend/Dockerfile
     container_name: olel-backend
     restart: unless-stopped
     depends_on:
@@ -54,6 +71,7 @@ services:
       DATABASE_URL:         postgresql://olel:${POSTGRES_PASSWORD:-olel_dev_pwd}@postgres:5432/olel
       REDIS_HOST:           redis
       REDIS_PORT:           6379
+      REDIS_PASSWORD:       ${REDIS_PASSWORD:-olel_dev_redis}
       JWT_SECRET:           ${JWT_SECRET}
       JWT_REFRESH_SECRET:   ${JWT_REFRESH_SECRET}
       TOTP_ENCRYPTION_KEY:  ${TOTP_ENCRYPTION_KEY}
@@ -65,30 +83,38 @@ services:
       IVR_CALLER_ID:        ${IVR_CALLER_ID:-}
       WS_PUBLIC_ORIGIN:     ${WS_PUBLIC_ORIGIN:-ws://localhost:4000}
       BOT_API_KEY:          ${BOT_API_KEY}
-      # Base d'URL publique pour servir les médias uploadés (photos/vocaux).
-      # DOIT être joignable depuis le navigateur des opérateurs (IP ou domaine).
+      # Base des URL signées des médias (joignable par les navigateurs des opérateurs)
       PUBLIC_API_URL:       ${NEXT_PUBLIC_API_URL:-http://localhost:4000/api/v1}
+      UPLOAD_DIR:           /app/uploads
+      MEDIA_URL_SECRET:     ${MEDIA_URL_SECRET:-}
+      # Secret des rappels Africa's Talking (?key=) — obligatoire en production
+      AT_CALLBACK_SECRET:   ${AT_CALLBACK_SECRET:-}
+      METRICS_TOKEN:        ${METRICS_TOKEN:-}
+      # Un seul saut de proxy (Nginx) : adresse client fiable pour la limitation de débit
+      TRUST_PROXY_HOPS:     1
       ALLOWED_ORIGINS:      ${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:3001}
       NODE_ENV:               ${NODE_ENV:-production}
       RETURN_OTP_DEV_CODE:    ${RETURN_OTP_DEV_CODE:-false}
       PORT:                   4000
       SENTRY_DSN:             ${SENTRY_DSN:-}
+    logging: *logging
+    volumes:
+      # Médias persistants (photos, vocaux) : survivent au remplacement du conteneur (F30)
+      - backend_uploads:/app/uploads
     ports:
-      - "4000:4000"
+      - "127.0.0.1:4000:4000"
     healthcheck:
-      test: ["CMD-SHELL", "curl -fs http://127.0.0.1:4000/api/v1/health/live || exit 1"]
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:4000/api/v1/health/live',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 60s
-    command: >
-      sh -c "npx prisma migrate deploy && node dist/main.js"
 
   # ── Dashboard Next.js ───────────────────────────────────────────────────────
   dashboard:
     build:
-      context:    ./apps/dashboard
-      dockerfile: Dockerfile
+      context:    .
+      dockerfile: apps/dashboard/Dockerfile
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000/api/v1}
         NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-ws://localhost:4000}
@@ -103,28 +129,32 @@ services:
       NEXT_PUBLIC_MAPBOX_TOKEN:  ${MAPBOX_TOKEN:-}
       NEXT_PUBLIC_SENTRY_DSN:    ${NEXT_PUBLIC_SENTRY_DSN:-}
       NODE_ENV:                  ${NODE_ENV:-production}
+    logging: *logging
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
 
   # ── Landing publique (Next.js institutionnel) ───────────────────────────────
   landing:
     build:
-      context:    ./apps/landing
-      dockerfile: Dockerfile
+      context:    .
+      dockerfile: apps/landing/Dockerfile
     container_name: olel-landing
     restart: unless-stopped
     environment:
       NODE_ENV: ${NODE_ENV:-production}
+    logging: *logging
     ports:
-      - "3004:3004"
+      - "127.0.0.1:3004:3004"
 
   # ── App Mobile (Next.js PWA) ────────────────────────────────────────────────
   mobile:
     build:
-      context:    ./apps/mobile
-      dockerfile: Dockerfile
+      context:    .
+      dockerfile: apps/mobile/Dockerfile
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000/api/v1}
+        # Numéros d'urgence confirmés officiellement (JSON) — sinon 18 et 17 seulement
+        NEXT_PUBLIC_EMERGENCY_NUMBERS: ${EMERGENCY_NUMBERS:-}
     container_name: olel-mobile
     restart: unless-stopped
     depends_on:
@@ -136,14 +166,15 @@ services:
       NEXT_PUBLIC_DEFAULT_ZONE_ID: ${DEFAULT_ZONE_ID:-}
       NEXT_PUBLIC_SENTRY_DSN:     ${NEXT_PUBLIC_SENTRY_DSN:-}
       NODE_ENV:                   ${NODE_ENV:-production}
+    logging: *logging
     ports:
-      - "3001:3001"
+      - "127.0.0.1:3001:3001"
 
   # ── Bot WhatsApp ────────────────────────────────────────────────────────────
   bot:
     build:
-      context:    ./apps/bot
-      dockerfile: Dockerfile
+      context:    .
+      dockerfile: apps/bot/Dockerfile
     container_name: olel-bot
     restart: unless-stopped
     depends_on:
@@ -152,14 +183,16 @@ services:
     environment:
       WHATSAPP_TOKEN:           ${WHATSAPP_TOKEN:-}
       WHATSAPP_PHONE_ID:        ${WHATSAPP_PHONE_ID:-}
-      WHATSAPP_VERIFY_TOKEN:    ${WHATSAPP_VERIFY_TOKEN:-olel_webhook_secret}
+      # Obligatoire : plus de valeur par défaut connue (sinon vérification refusée)
+      WHATSAPP_VERIFY_TOKEN:    ${WHATSAPP_VERIFY_TOKEN:-}
       WHATSAPP_APP_SECRET:      ${WHATSAPP_APP_SECRET:-}
       BACKEND_URL:              http://backend:4000
       BOT_API_KEY:              ${BOT_API_KEY}
       BOT_PORT:                 3002
       NODE_ENV:                 ${NODE_ENV:-production}
+    logging: *logging
     ports:
-      - "3002:3002"
+      - "127.0.0.1:3002:3002"
 
   # ── Adminer (UI DB dev) ─────────────────────────────────────────────────────
   adminer:
@@ -169,10 +202,11 @@ services:
     depends_on:
       - postgres
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     profiles:
       - dev
 
 volumes:
   postgres_data:
   redis_data:
+  backend_uploads:

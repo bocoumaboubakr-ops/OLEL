@@ -25,10 +25,8 @@ async function bootstrap() {
           ),
         ),
       }),
-      ...(process.env.NODE_ENV === 'production'
-        ? [new winston.transports.File({ filename: 'logs/error.log', level: 'error' }),
-           new winston.transports.File({ filename: 'logs/combined.log' })]
-        : []),
+      // Journaux sur la sortie standard uniquement : rotation et conservation
+      // assurées par Docker (logging json-file, max-size/max-file) — audit F30.
     ],
   });
 

@@ -25,7 +25,10 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro      # certificats Let's Encrypt
       - certbot_www:/var/www/certbot              # challenge ACME (renouvellement)
+      - certbot_signal:/var/run/certbot-signal    # signal de rechargement après renouvellement
       - nginx_logs:/var/log/nginx
+    # Recharge Nginx (sans coupure) quand Certbot a renouvelé un certificat (audit F32)
+    command: ["/bin/sh", "-c", "while :; do sleep 300; if [ -f /var/run/certbot-signal/reload ]; then rm -f /var/run/certbot-signal/reload; nginx -t && nginx -s reload && echo 'nginx rechargé (certificat renouvelé)'; fi; done & exec nginx -g 'daemon off;'"]
     healthcheck:
       test: ["CMD", "nginx", "-t"]
       interval: 30s
@@ -40,10 +43,12 @@ services:
     volumes:
       - /etc/letsencrypt:/etc/letsencrypt
       - certbot_www:/var/www/certbot
+      - certbot_signal:/var/run/certbot-signal
+    # Le hook de déploiement signale le renouvellement : Nginx recharge les certificats
     entrypoint: >
       sh -c "trap exit TERM;
              while :; do
-               certbot renew --quiet --webroot --webroot-path=/var/www/certbot --deploy-hook 'echo renewed';
+               certbot renew --quiet --webroot --webroot-path=/var/www/certbot --deploy-hook 'touch /var/run/certbot-signal/reload';
                sleep 12h & wait $${!};
              done"
 
@@ -61,9 +66,11 @@ services:
     volumes:
       - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      # Jeton de collecte des métriques du backend (= METRICS_TOKEN), fichier non versionné
+      - ./monitoring/prometheus/metrics.token:/etc/prometheus/metrics.token:ro
       - prometheus_data:/prometheus
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
     profiles:
       - monitoring
 
@@ -75,7 +82,8 @@ services:
     depends_on:
       - prometheus
     environment:
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-OlelGrafana2024!}
+      # Aucun mot de passe par défaut (audit F32)
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:?GRAFANA_PASSWORD requis pour le profil monitoring}
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_SERVER_ROOT_URL: "%(protocol)s://%(domain)s/grafana/"
       GF_INSTALL_PLUGINS: "grafana-clock-panel"
@@ -83,7 +91,7 @@ services:
       - grafana_data:/var/lib/grafana
       - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
     ports:
-      - "3003:3000"
+      - "127.0.0.1:3003:3000"
     profiles:
       - monitoring
 
@@ -108,36 +116,18 @@ services:
       - redis
     environment:
       REDIS_ADDR: redis://redis:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
     profiles:
       - monitoring
 
-  # ── Backup automatique ─────────────────────────────────────────────────────
-  backup:
-    image: alpine:3.19
-    container_name: olel-backup
-    restart: unless-stopped
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      BACKUP_DIR: /backups
-      RETENTION_DAYS: "7"
-    volumes:
-      - ./scripts/backup-db.sh:/backup-db.sh:ro
-      - backup_data:/backups
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    command: >
-      sh -c "apk add --no-cache docker-cli bash &&
-             echo '0 2 * * * /bin/bash /backup-db.sh >> /var/log/olel-backup.log 2>&1' > /etc/crontabs/root &&
-             /bin/bash /backup-db.sh &&
-             crond -f -l 8"
-    profiles:
-      - backup
+  # ── Sauvegardes ─────────────────────────────────────────────────────────────
+  # Plus de conteneur de sauvegarde monté sur le socket Docker (audit F31) :
+  # scripts/backup.sh est lancé par la crontab de l'HÔTE (scripts/setup-backup.sh),
+  # chiffré, avec copie hors serveur (RCLONE_REMOTE) et alerte en cas d'échec.
 
 volumes:
   nginx_logs:
   certbot_www:
+  certbot_signal:
   prometheus_data:
   grafana_data:
-  backup_data:

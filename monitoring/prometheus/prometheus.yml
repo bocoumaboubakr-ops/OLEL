@@ -19,6 +19,10 @@ scrape_configs:
       - targets: ['backend:4000']
     metrics_path: '/api/v1/metrics'
     scrape_interval: 30s
+    # Métriques protégées par METRICS_TOKEN (audit F33)
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/metrics.token
 
   - job_name: 'postgres'
     static_configs:

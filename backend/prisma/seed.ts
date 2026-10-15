@@ -172,7 +172,8 @@ async function main() {
     create: {
       phone: botPhone,
       name: 'BOT OLEL',
-      role: Role.ADMIN,
+      // Compte technique d'attribution des signalements anonymes : rôle minimal
+      role: Role.CITOYEN,
       isActive: true,
       zoneId: matam.id,
     },

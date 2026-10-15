@@ -182,7 +182,11 @@ describe('F11 — sessions, OTP et second facteur', () => {
   });
 
   it('RETURN_OTP_DEV_CODE est refusé en production', () => {
-    expect(() => validateEnv({ ...TEST_ENV, NODE_ENV: 'production', RETURN_OTP_DEV_CODE: 'true' })).toThrow(/interdit en production/);
+    expect(() => validateEnv({ ...TEST_ENV, NODE_ENV: 'production', REDIS_PASSWORD: 'x', RETURN_OTP_DEV_CODE: 'true' })).toThrow(/interdit en production/);
+  });
+
+  it('Redis sans mot de passe est refusé en production (F32)', () => {
+    expect(() => validateEnv({ ...TEST_ENV, NODE_ENV: 'production' })).toThrow(/REDIS_PASSWORD est obligatoire/);
   });
 
   it('changer de facteur TOTP exige le code actuel et ne désactive jamais le facteur entre-temps', async () => {
