@@ -128,7 +128,12 @@ export interface FrozenPayloadInput {
   description: string;
   zoneNames: string[];
   type?: string;
+  /** Mode pilote : la diffusion est un exercice, annoncé en tête et en fin de message. */
+  exercise?: boolean;
 }
+
+/** Mention d'exercice (mode pilote). ⚠️ ff / wo / snk : à traduire et faire relire (D5). */
+const EXERCISE_TAG: Record<Lang, string> = { fr: 'EXERCICE', ff: 'EXERCICE', wo: 'EXERCICE', snk: 'EXERCICE' };
 
 /** Calcule le texte exact par langue, à figer dans Broadcast.payload. */
 export function buildFrozenPayload(i: FrozenPayloadInput): Record<Lang, string> {
@@ -140,11 +145,12 @@ export function buildFrozenPayload(i: FrozenPayloadInput): Record<Lang, string> 
     }
     const tag = CERTAINTY_TAG[i.certainty][lang];
     // Un retrait n'affiche pas le niveau de danger : seule l'annulation compte
+    const ex = i.exercise ? `${EXERCISE_TAG[lang]} — ` : '';
     const header = i.certainty === 'RETRACTION'
-      ? `[OLEL] ${tag}`
-      : `[OLEL] ${levelPrefix(i.level, lang)}${tag ? ` — ${tag}` : ''}`;
+      ? `[OLEL] ${ex}${tag}`
+      : `[OLEL] ${ex}${levelPrefix(i.level, lang)}${tag ? ` — ${tag}` : ''}`;
     const body = i.approvedText?.trim() || `${i.title}\n${i.description}`;
-    out[lang] = `${header}\n${body}\n${ZONE_WORD[lang]} : ${i.zoneNames.join(', ')}\n${FOLLOW_INSTRUCTIONS[lang]}`;
+    out[lang] = `${header}\n${body}\n${ZONE_WORD[lang]} : ${i.zoneNames.join(', ')}\n${FOLLOW_INSTRUCTIONS[lang]}${i.exercise ? `\n${EXERCISE_TAG[lang]}` : ''}`;
   }
   return out;
 }
@@ -169,7 +175,8 @@ export function buildTemplateCalls(i: FrozenPayloadInput): Record<Lang, Template
   const out = {} as Record<Lang, TemplateCall>;
   for (const lang of SUPPORTED_LANGS) {
     const tag = CERTAINTY_TAG[i.certainty][lang];
-    const title = templateParam(tag ? `${tag} — ${i.title}` : i.title);
+    const marked = [i.exercise ? EXERCISE_TAG[lang] : '', tag].filter(Boolean).join(' — ');
+    const title = templateParam(marked ? `${marked} — ${i.title}` : i.title);
     const zones = templateParam(i.zoneNames.join(', '));
     out[lang] = severe
       ? { name: `alert_level_3_${lang}`, language: 'fr', params: [title, zones, templateParam(i.approvedText?.trim() || i.description)] }
@@ -177,3 +184,6 @@ export function buildTemplateCalls(i: FrozenPayloadInput): Record<Lang, Template
   }
   return out;
 }
+
+/** Textes de base, exposés pour la feuille de relecture des traductions (D5). */
+export const I18N_REVIEW = { LEVEL_PREFIX, FOLLOW_INSTRUCTIONS, ZONE_WORD, CERTAINTY_TAG, EXERCISE_TAG };

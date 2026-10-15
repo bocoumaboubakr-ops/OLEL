@@ -53,6 +53,10 @@ describe('Mode pilote — verrou serveur', () => {
     const r = await api(ctx, 'POST', `/alerts/${a.id}/broadcast`, { token: accessToken, body: { message: 'Exercice pilote', channels: ['whatsapp', 'sms'] } });
     const b = await waitFinal(ctx, r.body.broadcast.id);
     expect(wa.mock.calls.map((c) => c[0])).toEqual([equipe.phone]);
+    // Toute diffusion du pilote est annoncée comme exercice, en tête et en fin
+    expect(wa.mock.calls[0][1]).toMatch(/^\[OLEL\] EXERCICE — /);
+    expect(wa.mock.calls[0][1]).toMatch(/\nEXERCICE$/);
+    expect(b.message).toMatch(/^\[OLEL\] EXERCICE — /);
     const skipped = await ctx.prisma.broadcastDelivery.findMany({ where: { broadcastId: b.id, recipient: habitant.phone } });
     expect(skipped.length).toBe(2);
     expect(skipped.every((d) => d.status === 'SKIPPED' && /Mode pilote/.test(d.error!))).toBe(true);
@@ -64,6 +68,7 @@ describe('Mode pilote — verrou serveur', () => {
   it('sans liste, fonctionnement normal', async () => {
     const { citizens } = await diffused();
     expect(wa.mock.calls.map((c) => c[0]).sort()).toEqual(citizens.map((c) => c.phone).sort());
+    expect(wa.mock.calls.every((c) => !/EXERCICE/.test(c[1] as string))).toBe(true);
   });
 });
 

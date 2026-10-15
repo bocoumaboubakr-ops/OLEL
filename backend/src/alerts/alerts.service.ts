@@ -25,7 +25,7 @@ import { FlagsService } from '../flags/flags.service';
 import { buildFrozenPayload, buildTemplateCalls, Certainty } from '../common/i18n/alert-messages';
 import { TERRITORY_EXEMPT } from '../users/user-policy';
 import { randomUUID } from 'crypto';
-import { pilotAudienceAllowed } from '../common/pilot/pilot-mode';
+import { pilotAudienceAllowed, pilotModeInfo } from '../common/pilot/pilot-mode';
 
 /** Canaux acceptés pour une diffusion : ceux réellement mis en œuvre (audit F26). */
 export const AVAILABLE_CHANNELS = ['app', 'whatsapp', 'sms'];
@@ -133,6 +133,8 @@ export class AlertsService {
     const input = {
       level, certainty: p.certainty as Certainty, approvedText: p.approvedText,
       title: p.alert.title, description: p.alert.description, zoneNames: zones.map((z) => z.name), type: p.alert.type,
+      // Mode pilote : toute diffusion est un exercice, et le texte figé le dit
+      exercise: pilotModeInfo().pilotMode,
     };
     const templates = buildTemplateCalls(input);
     // Texte libre par langue + appels de modèles figés : ce qui part est ce qui a été approuvé
