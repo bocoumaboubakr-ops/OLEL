@@ -58,7 +58,8 @@ export class WhatsappService {
     const text = raw.toLowerCase();
     const session: Session = (await this.load(from)) || { step: 'choose_lang', data: {} };
 
-    this.logger.log(`Message de ${from}: "${raw}" (step: ${session.step}, lang: ${session.lang || '-'})`);
+    // Journaux minimaux : ni numéro complet, ni contenu du message (données personnelles)
+    this.logger.log(`Message ${msg.type ?? 'text'} de …${String(from).slice(-4)} (${raw.length} car., étape ${session.step}, langue ${session.lang || '-'})`);
 
     // ── Désabonnement / réabonnement : prioritaires, dans toutes les étapes (F24) ──
     if (STOP_WORDS.includes(text)) {
@@ -286,7 +287,7 @@ export class WhatsappService {
       await this.sendText(from, tr.reportSaved(label, tr.sevLabels[sev - 1], String(created.id).slice(0, 8).toUpperCase()));
     } catch (e: any) {
       this.logger.error(
-        `createSignalement échoué pour ${from} : HTTP ${e?.response?.status} — ` +
+        `createSignalement échoué pour …${String(from).slice(-4)} : HTTP ${e?.response?.status} — ` +
         `${JSON.stringify(e?.response?.data || e?.message)} | payload type=${option.type} sev=${sev} lang=${lang}`,
       );
       await this.sendText(from, tr.reportError);
@@ -414,7 +415,7 @@ export class WhatsappService {
       // Simulation tracée hors production uniquement ; en production, la
       // réponse non envoyée fait échouer le traitement (visible, repris).
       if (this.cfg.get('NODE_ENV') === 'production') throw new Error('WHATSAPP_TOKEN absent : réponse non envoyée');
-      this.logger.log(`[SIMUL → ${to}] ${text.replace(/\n/g, ' | ').substring(0, 120)}`);
+      this.logger.log(`[SIMUL → …${String(to).slice(-4)}] ${text.length} car.`);
       return;
     }
     try {
@@ -426,7 +427,7 @@ export class WhatsappService {
     } catch (err: any) {
       const meta = err?.response?.data?.error;
       this.logger.error(
-        `Envoi WhatsApp → ${to} échoué (HTTP ${err?.response?.status ?? '?'}) : ` +
+        `Envoi WhatsApp → …${String(to).slice(-4)} échoué (HTTP ${err?.response?.status ?? '?'}) : ` +
         (meta ? `[${meta.code}] ${meta.message}` : err?.message ?? 'erreur inconnue'),
       );
     }
