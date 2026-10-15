@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException, ForbiddenException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, ForbiddenException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { AccountStatus, Prisma, Role } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
@@ -35,7 +35,7 @@ export class UsersService {
   }
 
   async findOne(id: string) {
-    const user = await this.prisma.user.findUnique({ where: { id }, select: PUBLIC_SELECT });
+    const user = await this.prisma.user.findUnique({ where: { id }, select: { ...PUBLIC_SELECT, zone: { select: { name: true } } } });
     if (!user) throw new NotFoundException('Utilisateur introuvable');
     return user;
   }
@@ -58,8 +58,22 @@ export class UsersService {
     return { success: true, language };
   }
 
-  async updateMe(id: string, dto: { name?: string; email?: string }) {
-    return this.prisma.user.update({ where: { id }, data: { name: dto.name, email: dto.email }, select: PUBLIC_SELECT });
+  /**
+   * Profil personnel. La zone n'est modifiable que par un CITOYEN (zone où il
+   * reçoit les alertes) : pour un opérateur, la zone est son territoire
+   * d'autorité et ne change que par un responsable habilité (audit F01/F09).
+   */
+  async updateMe(caller: Caller, dto: { name?: string; email?: string; zoneId?: string; language?: string }) {
+    if (dto.zoneId !== undefined) {
+      if (caller.role !== Role.CITOYEN) throw new ForbiddenException('Votre zone est votre territoire d\'autorité : modification par un responsable uniquement');
+      const zone = await this.prisma.zone.findUnique({ where: { id: dto.zoneId }, select: { isActive: true } });
+      if (!zone?.isActive) throw new BadRequestException('Zone inconnue');
+    }
+    return this.prisma.user.update({
+      where: { id: caller.id },
+      data: { name: dto.name, email: dto.email, zoneId: dto.zoneId, language: dto.language },
+      select: { ...PUBLIC_SELECT, zone: { select: { name: true } } },
+    });
   }
 
   async create(

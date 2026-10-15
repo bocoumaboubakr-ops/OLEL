@@ -44,8 +44,8 @@ export class UsersController {
   @Patch('me')
   @AllowInTraining()
   @ApiOperation({ summary: 'Modifier mon nom / e-mail (jamais rôle, statut ni zone)' })
-  updateMe(@CurrentUser() user: { id: string }, @Body() dto: UpdateMeDto) {
-    return this.users.updateMe(user.id, dto);
+  updateMe(@CurrentUser() user: Caller, @Body() dto: UpdateMeDto) {
+    return this.users.updateMe(user, dto);
   }
 
   @Patch('me/language')

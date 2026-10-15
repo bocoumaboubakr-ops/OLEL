@@ -1,14 +1,4 @@
-import {
-  IsString,
-  IsEnum,
-  IsOptional,
-  IsEmail,
-  MinLength,
-  MaxLength,
-  IsUUID,
-  Matches,
-  IsBoolean,
-} from 'class-validator';
+import { IsString, IsEnum, IsOptional, IsEmail, MinLength, MaxLength, IsUUID, Matches, IsBoolean } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { AccountStatus, Role } from '@prisma/client';
 
@@ -105,6 +95,16 @@ export class UpdateMeDto {
   @IsOptional()
   @IsEmail()
   email?: string;
+
+  @ApiPropertyOptional({ description: 'Citoyen uniquement : commune/zone où recevoir les alertes (audit F09)' })
+  @IsOptional()
+  @IsUUID()
+  zoneId?: string;
+
+  @ApiPropertyOptional({ description: 'Langue des messages : fr | ff | wo | snk' })
+  @IsOptional()
+  @Matches(/^(fr|ff|wo|snk)$/)
+  language?: string;
 }
 
 export class ChangePasswordDto {

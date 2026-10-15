@@ -104,6 +104,27 @@ describe('F09 — signalements : territoire récursif, jamais les zones sœurs',
   });
 });
 
+describe('F09 — zone d\'abonnement du citoyen', () => {
+  it('le citoyen choisit sa commune et reçoit alors les alertes de celle-ci ; un opérateur ne peut pas changer son territoire', async () => {
+    const auteur = await createUser(ctx, Role.SENTINELLE, ctx.zones.communeA);
+    const citoyen = await createUser(ctx, Role.CITOYEN, ctx.zones.matam);
+    const coord = await createUser(ctx, Role.COORDINATEUR, ctx.zones.communeA);
+    const pubA = await diffused(ctx.zones.communeA, auteur.id, 'Crue A');
+    const tC = await login(ctx, citoyen);
+    // Rattaché à la région seulement : l'alerte communale n'est pas une alerte régionale pour lui… mais elle concerne sa région (zone descendante)
+    const r = await api(ctx, 'PATCH', '/users/me', { token: tC.accessToken, body: { zoneId: ctx.zones.communeB } });
+    expect(r.status).toBe(200);
+    expect(r.body.zone.name).toBe('Commune B');
+    const ids = (await api(ctx, 'GET', '/alerts', { token: tC.accessToken })).body.alerts.map((x: any) => x.id);
+    expect(ids).not.toContain(pubA.id);
+    await api(ctx, 'PATCH', '/users/me', { token: tC.accessToken, body: { zoneId: ctx.zones.communeA } });
+    expect((await api(ctx, 'GET', '/alerts', { token: tC.accessToken })).body.alerts.map((x: any) => x.id)).toContain(pubA.id);
+    const tO = await login(ctx, coord);
+    expect((await api(ctx, 'PATCH', '/users/me', { token: tO.accessToken, body: { zoneId: ctx.zones.matam } })).status).toBe(403);
+    expect((await ctx.prisma.user.findUnique({ where: { id: coord.id } }))!.zoneId).toBe(ctx.zones.communeA);
+  });
+});
+
 describe('F14 — les actions annoncées sont exactement celles que l\'API accepte', () => {
   const cases: Array<{ name: string; role: Role; zone: 'communeA' | 'kanel' | 'communeB'; step: AlertStep; level: 'ORANGE' | 'ROUGE' }> = [
     { name: 'MAIRIE, ORANGE vérifiée', role: Role.MAIRIE, zone: 'communeA', step: AlertStep.MAIRIE, level: 'ORANGE' },

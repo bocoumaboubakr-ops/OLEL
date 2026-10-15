@@ -859,7 +859,7 @@ function publicView(a: any, user: ReaderCtx) {
   const own = a.createdById === user.id;
   return {
     id: a.id, title: a.title, description: a.description, type: a.type,
-    alertLevel: a.alertLevel, status: a.status, currentStep: a.currentStep,
+    alertLevel: a.alertLevel, severity: a.severity, status: a.status, currentStep: a.currentStep,
     zoneId: a.zoneId, zone: a.zone ? { name: a.zone.name } : null,
     broadcastAt: a.broadcastAt, closedAt: a.closedAt, createdAt: a.createdAt, updatedAt: a.updatedAt,
     ...(own ? { mediaUrls: a.mediaUrls, latitude: a.latitude, longitude: a.longitude, mine: true } : {}),
