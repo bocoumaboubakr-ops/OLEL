@@ -1,33 +1,40 @@
 'use client';
 import { useState, useEffect } from 'react';
 import axios from 'axios';
+import { installAuthRefresh, logoutSession, onSessionLost, storeSession } from '@/lib/session';
+import { listQueued, purgeQueued } from '@/hooks/useOfflineQueue';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
 
 // Timeout pour les zones à faible débit (Matam, réseau mobile instable)
 const axiosWithTimeout = axios.create({ timeout: 15000 });
 
-// Intercepteur 401 : redirige vers la page de connexion si le token expire
-axiosWithTimeout.interceptors.response.use(
-  (r) => r,
-  (error) => {
-    if (error?.response?.status === 401 && typeof window !== 'undefined') {
-      const isAuthEndpoint = error?.config?.url?.includes('/auth/');
-      if (!isAuthEndpoint) {
-        localStorage.removeItem('olel_token');
-        localStorage.removeItem('olel_refresh');
-        localStorage.removeItem('olel_user');
-        window.location.href = '/';
-      }
+// Renouvellement automatique du jeton d'accès (15 min) — audit F13
+installAuthRefresh(axios);
+installAuthRefresh(axiosWithTimeout);
+
+/** Purge des données mises en cache par le navigateur pour ce compte (téléphone partagé). */
+async function purgeBrowserCaches() {
+  try {
+    if (typeof caches !== 'undefined') {
+      for (const k of await caches.keys()) if (k.includes('-api')) await caches.delete(k);
     }
-    return Promise.reject(error);
-  },
-);
+  } catch { /* Cache API indisponible */ }
+}
 
 export type AuthMode = 'password' | 'otp_request' | 'otp_verify';
 
+export interface MobileUser {
+  id: string; name: string; phone: string; role: string;
+  /** IN_TRAINING | ACTIVE | SUSPENDED (audit F19) */
+  status?: string;
+  zoneId?: string | null;
+  zone?: { name: string } | null;
+  language?: string;
+}
+
 export function useMobileAuth() {
-  const [user, setUser] = useState<{ id: string; name: string; phone: string; role: string } | null>(null);
+  const [user, setUser] = useState<MobileUser | null>(null);
   const [initialized, setInitialized] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -38,12 +45,12 @@ export function useMobileAuth() {
       try { setUser(JSON.parse(stored)); } catch { /* ignore */ }
     }
     setInitialized(true);
+    // Session révoquée, suspendue ou expirée côté serveur : retour à l'écran de connexion
+    return onSessionLost(() => { setUser(null); purgeBrowserCaches(); });
   }, []);
 
   const _store = (data: { accessToken: string; refreshToken: string; user: any }) => {
-    localStorage.setItem('olel_token', data.accessToken);
-    localStorage.setItem('olel_refresh', data.refreshToken);
-    localStorage.setItem('olel_user', JSON.stringify(data.user));
+    storeSession(data);
     setUser(data.user);
   };
 
@@ -115,12 +122,25 @@ export function useMobileAuth() {
     } finally { setLoading(false); }
   };
 
-  const logout = () => {
-    localStorage.removeItem('olel_token');
-    localStorage.removeItem('olel_refresh');
-    localStorage.removeItem('olel_user');
+  /**
+   * Déconnexion (audit F13) : révocation de la session côté serveur, purge
+   * des caches du navigateur et, sur confirmation, des signalements en
+   * attente de ce compte — rien ne reste réutilisable par le compte suivant.
+   */
+  const logout = async () => {
+    const id = user?.id;
+    if (id) {
+      const pending = await listQueued(id).catch(() => []);
+      if (pending.length && !window.confirm(
+        `${pending.length} signalement(s) n'ont pas encore été envoyés.\n`
+        + 'Se déconnecter les SUPPRIME de ce téléphone. Continuer ?',
+      )) return;
+      await purgeQueued(id).catch(() => undefined);
+    }
+    await logoutSession();
+    await purgeBrowserCaches();
     setUser(null);
   };
 
-  return { user, initialized, loading, error, login, requestOtp, verifyOtp, logout, refreshProfile };
+  return { user, initialized, loading, error, login, requestOtp, verifyOtp, logout, refreshProfile, setUser };
 }

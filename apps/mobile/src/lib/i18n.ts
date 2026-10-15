@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
+import axios from 'axios';
 
 /**
  * i18n léger pour l'app mobile citoyen.
@@ -170,11 +171,8 @@ export function useI18n() {
     const token = localStorage.getItem('olel_token');
     if (token) {
       const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
-      fetch(`${API}/users/me/language`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ language: l }),
-      }).catch(() => {});
+      // axios : bénéficie du renouvellement automatique de session
+      axios.patch(`${API}/users/me/language`, { language: l }, { headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
     }
   }, []);
 

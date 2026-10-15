@@ -1,7 +1,8 @@
-const CACHE_VERSION = 'olel-v5-plex-pulaar';
+// v6 : plus aucune réponse d'API mise en cache (audit F13) — l'activation
+// supprime aussi l'ancien cache d'API partagé entre comptes.
+const CACHE_VERSION = 'olel-v6-no-api-cache';
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const MAP_CACHE = `${CACHE_VERSION}-tiles`;
-const API_CACHE = `${CACHE_VERSION}-api`;
 
 const SHELL_ASSETS = ['/', '/manifest.json', '/icon-192.png', '/icon-512.png'];
 
@@ -42,9 +43,14 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
-  // Appels API — Network-First avec fallback cache (60s)
+  // Appels API : réseau uniquement. Les réponses dépendent du compte connecté
+  // et ne doivent jamais être servies à un autre compte (téléphone partagé).
+  // Hors ligne, l'application affiche « consultation indisponible ».
   if (url.includes('/api/')) {
-    e.respondWith(networkFirstWithCache(e.request, API_CACHE, 60));
+    e.respondWith(fetch(e.request).catch(() => new Response(
+      JSON.stringify({ offline: true, error: 'Hors ligne — consultation indisponible' }),
+      { status: 503, headers: { 'Content-Type': 'application/json' } },
+    )));
     return;
   }
 
@@ -59,32 +65,6 @@ self.addEventListener('fetch', (e) => {
     }))
   );
 });
-
-async function networkFirstWithCache(req, cacheName, maxAgeSeconds) {
-  try {
-    const res = await fetch(req);
-    if (res.ok) {
-      const cache = await caches.open(cacheName);
-      const clone = res.clone();
-      // Ajoute un header d'expiration
-      const headers = new Headers(clone.headers);
-      headers.set('sw-cached-at', Date.now().toString());
-      const body = await clone.arrayBuffer();
-      cache.put(req, new Response(body, { status: clone.status, headers }));
-    }
-    return res;
-  } catch {
-    const cached = await caches.match(req);
-    if (cached) {
-      const cachedAt = parseInt(cached.headers.get('sw-cached-at') || '0', 10);
-      if (Date.now() - cachedAt < maxAgeSeconds * 1000) return cached;
-    }
-    return new Response(JSON.stringify({ offline: true, error: 'Hors ligne — données non disponibles' }), {
-      status: 503,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-}
 
 async function staleWhileRevalidate(req, cacheName, maxAgeSeconds) {
   const cache = await caches.open(cacheName);

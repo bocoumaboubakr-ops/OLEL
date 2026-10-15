@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
-import { useMobileAuth } from '@/hooks/useMobileAuth';
-import { useOfflineQueue, queueSignalement } from '@/hooks/useOfflineQueue';
+import { useMobileAuth, type MobileUser } from '@/hooks/useMobileAuth';
+import { useOfflineQueue, queueSignalement, newClientRequestId, type QueuedReport } from '@/hooks/useOfflineQueue';
 import { useI18n, LANGS } from '@/lib/i18n';
 import { MediaCapture, type CapturedMedia } from '@/lib/MediaCapture';
 import { THEMES, type Theme, type RiskOption, type AlertTypeValue } from '@/lib/themes';
@@ -61,6 +61,14 @@ const STATUS_LABEL: Record<string, string> = {
   CLOSED: 'Clôturé', RESOLVED: 'Résolu', REJECTED: 'Rejeté',
 };
 const TERMINAL = ['CLOSED', 'RESOLVED', 'REJECTED', 'CANCELLED'];
+/** Alerte publique encore applicable : même définition que l'API, le bot et l'USSD (audit F16). */
+const PUBLIC_STATUSES = ['BROADCAST', 'BROADCASTING', 'ACTIVE'];
+/** Statut d'un signalement du citoyen, tel qu'il est réellement (audit F06). */
+const MY_REPORT_STATUS: Record<string, string> = {
+  PENDING: 'Reçu — en attente d\'examen', UNDER_REVIEW: 'En cours de vérification', VALIDATED: 'Vérifié par un opérateur',
+  BROADCAST: 'Alerte diffusée', BROADCASTING: 'Diffusion en cours', ACTIVE: 'Alerte diffusée',
+  REJECTED: 'Non retenu après examen', CLOSED: 'Clôturé', RESOLVED: 'Clôturé', CANCELLED: 'Annulé',
+};
 
 // Niveaux d'alerte officiels (miroir backend alert-workflow.ts)
 type AlertLevel = 'BLEU' | 'JAUNE' | 'ORANGE' | 'ROUGE' | 'ROUGE_FONCE';
@@ -81,7 +89,7 @@ function LevelBadge({ level }: { level?: string }) {
   );
 }
 
-interface MobileAlert { id: string; title: string; description: string; type: string; severity: number; alertLevel?: string; status: string; zone?: { name: string }; createdAt: string; }
+interface MobileAlert { id: string; title: string; description: string; type: string; severity: number; alertLevel?: string; status: string; zone?: { name: string }; createdAt: string; mine?: boolean; }
 
 interface MobileSignalement {
   id: string; type: string; text: string; severity?: number | null;
@@ -98,17 +106,23 @@ function isAudioUrl(url: string): boolean {
 
 // ── App root ──────────────────────────────────────────────────────────────────
 export default function MobilePage() {
-  const { user, initialized, login, logout, requestOtp, verifyOtp, loading: authLoading, error: authError } = useMobileAuth();
+  const { user, initialized, login, logout, requestOtp, verifyOtp, setUser, refreshProfile, loading: authLoading, error: authError } = useMobileAuth();
+  // Profil relu au démarrage : statut (habilitation, suspension) et zone à jour (audit F19)
+  const userId = user?.id;
+  useEffect(() => { if (userId) refreshProfile(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [userId]);
   const [tab, setTab] = useState<Tab>('home');
   const [alerts, setAlerts] = useState<MobileAlert[]>([]);
   const [alertsLoading, setAlertsLoading] = useState(true);
+  // « Consultation indisponible » distinct de « aucune alerte » (audit F16)
+  const [alertsError, setAlertsError] = useState(false);
   const [sosOpen, setSosOpen] = useState(false);
   const [reportTheme, setReportTheme] = useState<Theme | null>(null);
   const [reportOption, setReportOption] = useState<RiskOption | null>(null);
   const [reportStep, setReportStep] = useState<'theme' | 'option' | 'confirm' | 'done'>('theme');
   const [reportOutcome, setReportOutcome] = useState<SendOutcome | null>(null);
   const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
-  useOfflineQueue();
+  // File hors connexion du compte connecté uniquement (audit F13/F15)
+  const queue = useOfflineQueue(user?.id);
 
   useEffect(() => {
     const on = () => setIsOnline(true);
@@ -125,7 +139,8 @@ export default function MobilePage() {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       setAlerts(data.alerts || []);
-    } catch { /* offline */ } finally { setAlertsLoading(false); }
+      setAlertsError(false);
+    } catch { setAlertsError(true); } finally { setAlertsLoading(false); }
   }, []);
 
   const [signalements, setSignalements] = useState<MobileSignalement[]>([]);
@@ -157,10 +172,16 @@ export default function MobilePage() {
     />
   );
 
-  const active = alerts.filter((a) => !TERMINAL.includes(a.status));
-  const maxSev = active.reduce((m, a) => Math.max(m, a.severity), 0);
+  // Compte en formation : formation uniquement, aucun droit opérationnel (audit F19)
+  const inTraining = user.status === 'IN_TRAINING';
+  const isSentinel = !inTraining && SENTINEL_ROLES.includes(user.role);
+  // Citoyen : alertes publiques diffusées ; ses propres signalements sont listés à part
+  const myReports = alerts.filter((a) => a.mine);
+  const active = isSentinel
+    ? alerts.filter((a) => !TERMINAL.includes(a.status))
+    : alerts.filter((a) => !a.mine && PUBLIC_STATUSES.includes(a.status));
+  const maxSev = active.reduce((m, a) => Math.max(m, a.severity ?? 0), 0);
   const zoneStatus = SEV_ZONE[Math.min(maxSev, 3)] ?? SEV_ZONE[0];
-  const isSentinel = user && SENTINEL_ROLES.includes(user.role);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', background: '#f8f9fa' }}>
@@ -200,8 +221,14 @@ export default function MobilePage() {
 
       {/* ── Contenu scrollable ───────────────────────────────────────────── */}
       <div style={{ flex: 1, overflowY: 'auto' }}>
-        {tab === 'home' && <HomeScreen zoneStatus={zoneStatus} activeCount={active.length} onReport={() => setTab('report')} onAlerts={() => setTab('alerts')} onMap={() => setTab('map')} isSentinel={isSentinel} />}
-        {tab === 'alerts' && <AlertsScreen alerts={active} loading={alertsLoading} onRefresh={fetchAlerts} />}
+        {tab === 'home' && (
+          <>
+            {inTraining && <TrainingBanner onOpen={() => setTab('formations')} />}
+            <PendingReports items={queue.items} onRetry={queue.flush} onRemove={queue.remove} />
+            <HomeScreen zoneStatus={zoneStatus} activeCount={active.length} unavailable={alertsError} zoneName={user.zone?.name} onReport={() => setTab('report')} onAlerts={() => setTab('alerts')} onMap={() => setTab('map')} isSentinel={isSentinel} canReport={!inTraining} />
+          </>
+        )}
+        {tab === 'alerts' && <AlertsScreen alerts={active} myReports={myReports} loading={alertsLoading} unavailable={alertsError} onRefresh={fetchAlerts} />}
         {tab === 'report' && (
           <ReportScreen
             step={reportStep}
@@ -220,7 +247,7 @@ export default function MobilePage() {
         {tab === 'formations' && <FormationsScreen />}
         {tab === 'missions' && <MissionsScreen />}
         {tab === 'validate' && <SentinelValidationScreen alerts={alerts.filter((a) => a.status === 'PENDING' || a.status === 'UNDER_REVIEW')} signalements={signalements} onDone={() => { fetchAlerts(); fetchSignalements(); }} />}
-        {tab === 'profile' && <ProfileScreen user={user} onLogout={logout} />}
+        {tab === 'profile' && <ProfileScreen user={user} onLogout={logout} onUpdated={(u) => { setUser(u); localStorage.setItem('olel_user', JSON.stringify(u)); fetchAlerts(); }} />}
       </div>
 
       {/* ── Bottom Nav ───────────────────────────────────────────────────── */}
@@ -228,8 +255,10 @@ export default function MobilePage() {
         {([
           { key: 'home',       icon: '◉', label: 'Accueil' },
           { key: 'alerts',     icon: '●', label: 'Alertes', badge: active.length > 0 ? active.length : undefined },
-          { key: 'report',     icon: '＋', label: 'Signaler' },
-          ...(isSentinel ? [
+          ...(inTraining ? [] : [{ key: 'report', icon: '＋', label: 'Signaler' }]),
+          ...(inTraining ? [
+            { key: 'formations', icon: '⚐',  label: 'Formation' },
+          ] : isSentinel ? [
             { key: 'validate',   icon: '✓',  label: 'Valider' },
             { key: 'missions',   icon: '☰',  label: 'Missions' },
             { key: 'formations', icon: '⚐',  label: 'Formation' },
@@ -410,21 +439,28 @@ function MobileLoginScreen({
 }
 
 // ── HomeScreen ────────────────────────────────────────────────────────────────
-function HomeScreen({ zoneStatus, activeCount, onReport, onAlerts, onMap, isSentinel }: {
-  zoneStatus: typeof SEV_ZONE[0]; activeCount: number;
-  onReport: () => void; onAlerts: () => void; onMap: () => void; isSentinel: boolean;
+function HomeScreen({ zoneStatus, activeCount, unavailable, zoneName, onReport, onAlerts, onMap, isSentinel, canReport }: {
+  zoneStatus: typeof SEV_ZONE[0]; activeCount: number; unavailable: boolean; zoneName?: string;
+  onReport: () => void; onAlerts: () => void; onMap: () => void; isSentinel: boolean; canReport: boolean;
 }) {
+  if (unavailable) {
+    zoneStatus = { label: 'Consultation indisponible', color: '#92400E', bg: '#FFFBEB' } as typeof SEV_ZONE[0];
+  }
   return (
     <div style={{ display: 'flex', flexDirection: 'column', padding: '0 0 24px' }}>
       {/* Bandeau statut zone : sobre, sans bordure agressive */}
       <div style={{ background: zoneStatus.bg, padding: '20px 24px' }}>
         <div style={{ fontSize: '0.7rem', fontWeight: 600, color: zoneStatus.color, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>
-          Région de Matam
+          {zoneName || 'Région de Matam'}
         </div>
         <div style={{ fontSize: '1.05rem', fontWeight: 600, color: zoneStatus.color, letterSpacing: '-0.01em' }}>
           {zoneStatus.label}
         </div>
-        {activeCount > 0 && (
+        {unavailable ? (
+          <div style={{ fontSize: '0.78rem', color: zoneStatus.color, marginTop: 4 }}>
+            Impossible de vérifier les alertes en ce moment. Cela ne veut pas dire qu&apos;il n&apos;y en a pas.
+          </div>
+        ) : activeCount > 0 && (
           <div style={{ fontSize: '0.78rem', color: zoneStatus.color, opacity: 0.75, marginTop: 4 }}>
             {activeCount} alerte{activeCount > 1 ? 's' : ''} en cours
           </div>
@@ -432,7 +468,7 @@ function HomeScreen({ zoneStatus, activeCount, onReport, onAlerts, onMap, isSent
       </div>
 
       {/* CTA principal : sobre, sans gradient ni ombre flashy */}
-      <div style={{ padding: '24px 20px 12px' }}>
+      {canReport && <div style={{ padding: '24px 20px 12px' }}>
         <button onClick={onReport}
           style={{
             width: '100%', background: '#DC2626', color: 'white', border: 'none',
@@ -446,11 +482,11 @@ function HomeScreen({ zoneStatus, activeCount, onReport, onAlerts, onMap, isSent
           </div>
           <span style={{ fontSize: '1.3rem', fontWeight: 300 }}>›</span>
         </button>
-      </div>
+      </div>}
 
       {/* Cartes secondaires : flat, sobre */}
       <div style={{ padding: '8px 20px 0', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-        <InfoCard label="Alertes actives" value={String(activeCount)} sub="en cours" onClick={onAlerts} />
+        <InfoCard label="Alertes actives" value={unavailable ? '?' : String(activeCount)} sub={unavailable ? 'indisponible' : 'en cours'} onClick={onAlerts} />
         {!isSentinel && <InfoCard label="Carte" value={'📍'} sub="Région Matam" onClick={onMap} />}
       </div>
     </div>
@@ -566,7 +602,13 @@ function ReportOptionSelect({ theme, onSelect, onBack }: { theme: Theme; onSelec
   );
 }
 
-type GpsState = { state: 'idle' | 'acquiring' | 'ok' | 'denied' | 'timeout' | 'unavailable' | 'manual'; lat?: number; lng?: number };
+/** Position + provenance (audit F18) : une saisie manuelle n'est jamais présentée comme un relevé GPS. */
+type GpsState = {
+  state: 'idle' | 'acquiring' | 'ok' | 'denied' | 'timeout' | 'unavailable' | 'manual';
+  lat?: number; lng?: number;
+  source?: 'DEVICE_GPS' | 'MANUAL';
+  accuracy?: number;
+};
 
 function useGeolocation(opts?: { auto?: boolean }): GpsState & {
   retry: () => void;
@@ -584,7 +626,7 @@ function useGeolocation(opts?: { auto?: boolean }): GpsState & {
     }
     setState({ state: 'acquiring' });
     navigator.geolocation.getCurrentPosition(
-      (pos) => setState({ state: 'ok', lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      (pos) => setState({ state: 'ok', lat: pos.coords.latitude, lng: pos.coords.longitude, source: 'DEVICE_GPS', accuracy: Math.round(pos.coords.accuracy) }),
       (err) => {
         if (err.code === err.PERMISSION_DENIED) setState({ state: 'denied' });
         else if (err.code === err.TIMEOUT) setState({ state: 'timeout' });
@@ -599,7 +641,7 @@ function useGeolocation(opts?: { auto?: boolean }): GpsState & {
   return {
     ...state,
     retry: acquire,
-    setManual: (lat, lng) => setState({ state: 'ok', lat, lng }),
+    setManual: (lat, lng) => setState({ state: 'ok', lat, lng, source: 'MANUAL' }),
   };
 }
 
@@ -607,7 +649,7 @@ function GpsStatus({ gps, onRetry, onManual }: { gps: GpsState; onRetry: () => v
   if (gps.state === 'ok' && gps.lat !== undefined && gps.lng !== undefined) {
     return (
       <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', color: '#15803D', padding: '10px 12px', borderRadius: 10, fontSize: '0.82rem' }}>
-        📍 Position acquise : {gps.lat.toFixed(5)}, {gps.lng.toFixed(5)}
+        📍 {gps.source === 'MANUAL' ? 'Position saisie à la main' : 'Position GPS'} : {gps.lat.toFixed(5)}, {gps.lng.toFixed(5)}{gps.accuracy ? ` (± ${gps.accuracy} m)` : ''}
       </div>
     );
   }
@@ -661,6 +703,8 @@ function ReportConfirm({ theme, option, onSent, onBack }: { theme: Theme; option
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const [showManualGps, setShowManualGps] = useState(false);
+  // Gravité déclarée (1-3) : le niveau officiel en découle côté serveur (audit F21)
+  const [severity, setSeverity] = useState<1 | 2 | 3>(2);
   const gps = useGeolocation({ auto: true });
 
   const handleSend = async () => {
@@ -672,15 +716,18 @@ function ReportConfirm({ theme, option, onSent, onBack }: { theme: Theme; option
       const zoneId = process.env.NEXT_PUBLIC_DEFAULT_ZONE_ID || undefined;
       const mediaUrls = captured.map((m) => m.url);
       const description = (option.descPrefix || '') + (note.trim() || `Signalement de type ${option.label} depuis l'application mobile.`);
+      // Contrat API uniquement ; clientRequestId stable pour un rejeu sans doublon (audit F15)
       const payload = {
         title: `Signalement : ${option.label}`,
         description,
         type: option.type as AlertTypeValue,
-        severity: 2,
+        subtype: option.id,
+        severity,
         channel: 'app',
+        clientRequestId: newClientRequestId(),
         ...(zoneId ? { zoneId } : {}),
         ...(mediaUrls.length ? { mediaUrls } : {}),
-        latitude: gps.lat, longitude: gps.lng,
+        ...(gps.lat != null && gps.lng != null ? { latitude: gps.lat, longitude: gps.lng, locationSource: gps.source ?? 'DEVICE_GPS' } : {}),
       };
 
       if (!navigator.onLine) {
@@ -689,11 +736,21 @@ function ReportConfirm({ theme, option, onSent, onBack }: { theme: Theme; option
         return;
       }
 
-      const { data } = await axios.post(`${API}/alerts`, payload, { headers: { Authorization: `Bearer ${token}` } });
-      onSent({ kind: 'received', ref: String(data?.id ?? '').slice(0, 8).toUpperCase() });
+      try {
+        const { data } = await axios.post(`${API}/alerts`, payload, { headers: { Authorization: `Bearer ${token}` }, timeout: 20000 });
+        onSent({ kind: 'received', ref: String(data?.id ?? '').slice(0, 8).toUpperCase() });
+      } catch (e: any) {
+        // Réseau coupé pendant l'envoi : enregistré localement (même clientRequestId → pas de doublon)
+        if (!e?.response || e.response.status >= 500) {
+          await queueSignalement(payload);
+          onSent({ kind: 'queued' });
+          return;
+        }
+        throw e;
+      }
     } catch (e: any) {
       const msg = e.response?.data?.message;
-      setError(Array.isArray(msg) ? msg.join(', ') : (msg || 'Erreur lors de l\'envoi'));
+      setError(Array.isArray(msg) ? msg.join(', ') : (msg || e.message || 'Erreur lors de l\'envoi'));
     } finally { setSending(false); }
   };
 
@@ -720,8 +777,19 @@ function ReportConfirm({ theme, option, onSent, onBack }: { theme: Theme; option
         placeholder="Décrivez ce que vous observez : lieu, ampleur, personnes touchées…" rows={3}
         style={{ width: '100%', padding: '10px 12px', border: '1px solid #E5E7EB', borderRadius: 10, fontSize: '0.92rem', resize: 'none', boxSizing: 'border-box', fontFamily: 'inherit', marginBottom: 16, outline: 'none' }} />
 
+      <label style={{ display: 'block', marginBottom: 6, fontWeight: 600, fontSize: '0.85rem', color: '#0F172A' }}>Gravité selon vous</label>
+      <div role="radiogroup" style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
+        {([[1, 'Vigilance', '#16A34A'], [2, 'Alerte', '#ea580c'], [3, 'Urgence', '#DC2626']] as const).map(([v, label, color]) => (
+          <button key={v} type="button" role="radio" aria-checked={severity === v} onClick={() => setSeverity(v)}
+            style={{ flex: 1, padding: '10px 6px', borderRadius: 10, cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600,
+              border: `1px solid ${severity === v ? color : '#E5E7EB'}`, background: severity === v ? color + '14' : 'white', color: severity === v ? color : '#475569' }}>
+            {label}
+          </button>
+        ))}
+      </div>
+
       <label style={{ display: 'block', marginBottom: 6, fontWeight: 600, fontSize: '0.85rem', color: '#0F172A' }}>
-        Photo / vocal <span style={{ fontWeight: 400, color: '#94A3B8' }}>(recommandé)</span>
+        Photo / vocal <span style={{ fontWeight: 400, color: '#94A3B8' }}>(recommandé ; nécessite le réseau)</span>
       </label>
       <div style={{ marginBottom: 16 }}><MediaCapture onChange={setCaptured} /></div>
 
@@ -781,8 +849,19 @@ function ReportSuccess({ outcome, onDone }: { outcome: SendOutcome | null; onDon
 }
 
 // ── AlertsScreen ──────────────────────────────────────────────────────────────
-function AlertsScreen({ alerts, loading, onRefresh }: { alerts: MobileAlert[]; loading: boolean; onRefresh: () => void }) {
+function AlertsScreen({ alerts, myReports, loading, unavailable, onRefresh }: { alerts: MobileAlert[]; myReports: MobileAlert[]; loading: boolean; unavailable: boolean; onRefresh: () => void }) {
   if (loading) return <div style={{ textAlign: 'center', padding: 56, color: '#94A3B8', fontSize: '0.9rem' }}>Chargement…</div>;
+  if (unavailable) {
+    return (
+      <div style={{ padding: '20px 16px' }}>
+        <div role="alert" style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 12, padding: 16, color: '#92400E' }}>
+          <div style={{ fontWeight: 600, marginBottom: 4 }}>Consultation indisponible</div>
+          <div style={{ fontSize: '0.84rem' }}>Les alertes n&apos;ont pas pu être chargées (réseau ou serveur). Cela ne veut pas dire qu&apos;il n&apos;y a pas d&apos;alerte : écoutez la radio et les autorités locales.</div>
+          <button onClick={onRefresh} style={{ marginTop: 10, background: 'white', border: '1px solid #FDE68A', borderRadius: 8, padding: '6px 12px', color: '#92400E', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}>Réessayer</button>
+        </div>
+      </div>
+    );
+  }
   return (
     <div style={{ padding: '20px 16px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 16 }}>
@@ -792,6 +871,17 @@ function AlertsScreen({ alerts, loading, onRefresh }: { alerts: MobileAlert[]; l
         </div>
         <button onClick={onRefresh} style={{ background: 'white', border: '1px solid #E5E7EB', borderRadius: 8, padding: '6px 12px', color: '#64748B', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 500 }}>Actualiser</button>
       </div>
+      {myReports.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: '0.72rem', color: '#94A3B8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Mes signalements</div>
+          {myReports.map((r) => (
+            <div key={r.id} style={{ background: 'white', borderRadius: 10, padding: '10px 12px', marginBottom: 6, border: '1px solid #F1F5F9', display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+              <span style={{ fontSize: '0.84rem', color: '#0F172A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.title}</span>
+              <span style={{ fontSize: '0.72rem', color: '#64748B', flexShrink: 0 }}>{MY_REPORT_STATUS[r.status] || r.status}</span>
+            </div>
+          ))}
+        </div>
+      )}
       {!alerts.length ? (
         <div style={{ textAlign: 'center', padding: '64px 20px', color: '#64748B' }}>
           <p style={{ margin: 0, fontSize: '0.92rem' }}>Aucune alerte active dans votre zone.</p>
@@ -912,7 +1002,83 @@ const ROLE_LABEL: Record<string, { label: string; color: string }> = {
   SUPER_ADMIN:      { label: 'Super Admin',       color: '#0F172A' },
 };
 
-function ProfileScreen({ user, onLogout }: { user: { id: string; name: string; phone: string; role: string }; onLogout: () => void }) {
+/** Compte sentinelle en formation : aucun droit opérationnel avant habilitation (audit F19). */
+function TrainingBanner({ onOpen }: { onOpen: () => void }) {
+  return (
+    <div style={{ margin: '12px 16px 0', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 12, padding: 14, color: '#92400E' }}>
+      <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>Compte en formation</div>
+      <div style={{ fontSize: '0.8rem', marginTop: 4 }}>
+        Suivez vos modules. Un responsable vous habilitera ensuite ; d&apos;ici là, la validation et les missions ne sont pas disponibles.
+      </div>
+      <button onClick={onOpen} style={{ marginTop: 10, background: '#92400E', color: 'white', border: 'none', borderRadius: 8, padding: '7px 12px', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer' }}>Ouvrir la formation</button>
+    </div>
+  );
+}
+
+/** Signalements enregistrés sur ce téléphone et pas encore reçus par OLEL (audit F15). */
+function PendingReports({ items, onRetry, onRemove }: { items: QueuedReport[]; onRetry: () => void; onRemove: (key: string) => void }) {
+  if (!items.length) return null;
+  const pending = items.filter((i) => i.state === 'pending');
+  const rejected = items.filter((i) => i.state === 'rejected');
+  return (
+    <div style={{ margin: '12px 16px 0', background: 'white', border: '1px solid #FDE68A', borderRadius: 12, padding: 14 }}>
+      {pending.length > 0 && (
+        <>
+          <div style={{ fontWeight: 600, fontSize: '0.88rem', color: '#92400E' }}>
+            {pending.length} signalement{pending.length > 1 ? 's' : ''} enregistré{pending.length > 1 ? 's' : ''} sur ce téléphone, pas encore reçu{pending.length > 1 ? 's' : ''} par OLEL
+          </div>
+          {pending[0].lastError && <div style={{ fontSize: '0.76rem', color: '#A16207', marginTop: 4 }}>Dernière tentative : {pending[0].lastError}</div>}
+          <button onClick={onRetry} style={{ marginTop: 8, background: '#0F172A', color: 'white', border: 'none', borderRadius: 8, padding: '7px 12px', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer' }}>Réessayer maintenant</button>
+        </>
+      )}
+      {rejected.map((r) => (
+        <div key={r.key} style={{ marginTop: 10, paddingTop: 10, borderTop: pending.length ? '1px solid #F1F5F9' : 'none', fontSize: '0.8rem', color: '#991B1B' }}>
+          Signalement refusé par le serveur : {r.lastError}
+          <button onClick={() => onRemove(r.key)} style={{ marginLeft: 8, background: 'none', border: 'none', color: '#991B1B', textDecoration: 'underline', cursor: 'pointer', fontSize: '0.78rem' }}>Supprimer</button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+const ACCOUNT_STATUS_LABEL: Record<string, string> = { IN_TRAINING: 'En formation', ACTIVE: 'Habilité', SUSPENDED: 'Suspendu' };
+
+/**
+ * Zone d'abonnement du citoyen (audit F09) : il reçoit les alertes diffusées
+ * sur sa commune (et les alertes régionales). Sans commune choisie, seules
+ * les alertes régionales lui parviennent.
+ */
+function ZonePicker({ user, onUpdated }: { user: MobileUser; onUpdated: (u: MobileUser) => void }) {
+  const [zones, setZones] = useState<{ id: string; name: string; parentId: string | null }[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState('');
+  useEffect(() => {
+    axios.get(`${API}/zones`, { headers: { Authorization: `Bearer ${localStorage.getItem('olel_token')}` } })
+      .then(({ data }) => setZones((Array.isArray(data) ? data : data.zones || []).filter((z: any) => z.isActive !== false)))
+      .catch(() => setMsg('Liste des communes indisponible'));
+  }, []);
+  const save = async (zoneId: string) => {
+    setSaving(true); setMsg('');
+    try {
+      const { data } = await axios.patch(`${API}/users/me`, { zoneId }, { headers: { Authorization: `Bearer ${localStorage.getItem('olel_token')}` } });
+      onUpdated({ ...user, ...data });
+      setMsg('Zone enregistrée');
+    } catch (e: any) { setMsg(e.response?.data?.message || 'Enregistrement impossible'); }
+    finally { setSaving(false); }
+  };
+  return (
+    <div>
+      <select disabled={saving || !zones.length} value={user.zoneId || ''} onChange={(e) => e.target.value && save(e.target.value)}
+        style={{ width: '100%', padding: '10px 12px', border: '1px solid #E5E7EB', borderRadius: 10, fontSize: '0.88rem', background: 'white' }}>
+        <option value="">— Choisir ma commune —</option>
+        {zones.map((z) => <option key={z.id} value={z.id}>{z.name}</option>)}
+      </select>
+      {msg && <div style={{ fontSize: '0.74rem', color: '#64748B', marginTop: 6 }}>{msg}</div>}
+    </div>
+  );
+}
+
+function ProfileScreen({ user, onLogout, onUpdated }: { user: MobileUser; onLogout: () => void; onUpdated: (u: MobileUser) => void }) {
   const roleInfo = ROLE_LABEL[user.role] || { label: user.role, color: '#64748B' };
   return (
     <div style={{ padding: '20px 16px 32px' }}>
@@ -938,7 +1104,18 @@ function ProfileScreen({ user, onLogout }: { user: { id: string; name: string; p
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.78rem', fontWeight: 600, color: roleInfo.color, background: roleInfo.color + '0D', padding: '4px 10px', borderRadius: 6 }}>
           <div style={{ width: 6, height: 6, borderRadius: '50%', background: roleInfo.color }} />
           {roleInfo.label}
+          {user.status && user.role !== 'CITOYEN' && <span style={{ color: '#64748B', fontWeight: 500 }}>· {ACCOUNT_STATUS_LABEL[user.status] || user.status}</span>}
         </div>
+      </div>
+
+      {/* Zone : choix pour le citoyen ; territoire attribué pour un opérateur */}
+      <div style={{ background: 'white', borderRadius: 12, padding: '16px', marginBottom: 12, border: '1px solid #F1F5F9' }}>
+        <div style={{ fontSize: '0.7rem', color: '#94A3B8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
+          {user.role === 'CITOYEN' ? 'Ma commune (alertes reçues)' : 'Territoire'}
+        </div>
+        {user.role === 'CITOYEN'
+          ? <ZonePicker user={user} onUpdated={onUpdated} />
+          : <div style={{ fontSize: '0.88rem', color: '#0F172A' }}>{user.zone?.name || '—'} <span style={{ color: '#94A3B8', fontSize: '0.76rem' }}>(attribué par votre responsable)</span></div>}
       </div>
 
       {/* Langue */}
@@ -952,9 +1129,8 @@ function ProfileScreen({ user, onLogout }: { user: { id: string; name: string; p
       <div style={{ background: 'white', borderRadius: 12, padding: '16px', marginBottom: 20, border: '1px solid #F1F5F9' }}>
         <div style={{ fontSize: '0.7rem', color: '#94A3B8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>Plateforme</div>
         {[
-          { label: 'Zone',    value: 'Région de Matam' },
+          { label: 'Région',  value: 'Matam' },
           { label: 'Version', value: 'OLEL v1.0' },
-          { label: 'Session', value: 'Sécurisée' },
         ].map(({ label, value }, i, arr) => (
           <div key={label} style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 10, marginBottom: 10, borderBottom: i === arr.length - 1 ? 'none' : '1px solid #F1F5F9' }}>
             <span style={{ fontSize: '0.85rem', color: '#64748B' }}>{label}</span>
@@ -1348,7 +1524,7 @@ function SentinelValidationForm({ alert, onBack, onDone }: { alert: MobileAlert;
   const [alertLevel, setAlertLevel] = useState<AlertLevel>((alert.alertLevel as AlertLevel) || 'BLEU');
   const [comment, setComment] = useState('');
   const [photoUrl, setPhotoUrl] = useState('');
-  const [gps, setGps] = useState<{ lat: number; lng: number } | null>(null);
+  const [gps, setGps] = useState<{ lat: number; lng: number; accuracy?: number } | null>(null);
   const [gpsError, setGpsError] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
@@ -1356,7 +1532,7 @@ function SentinelValidationForm({ alert, onBack, onDone }: { alert: MobileAlert;
   useEffect(() => {
     if (navigator.geolocation && typeof window !== 'undefined' && window.isSecureContext) {
       navigator.geolocation.getCurrentPosition(
-        (pos) => setGps({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        (pos) => setGps({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: Math.round(pos.coords.accuracy) }),
         (err) => setGpsError(
           err.code === err.PERMISSION_DENIED
             ? 'GPS refusé par le navigateur — autorisez la localisation'
@@ -1387,6 +1563,8 @@ function SentinelValidationForm({ alert, onBack, onDone }: { alert: MobileAlert;
         photoUrl: action === 'REJECTED' ? undefined : photoUrl.trim(),
         latitude: gps?.lat,
         longitude: gps?.lng,
+        // Preuve terrain : position relevée par l'appareil, avec sa précision (audit F18)
+        ...(gps ? { locationSource: 'DEVICE_GPS', locationAccuracyM: gps.accuracy } : {}),
       }, { headers: { Authorization: `Bearer ${token}` } });
       onDone();
     } catch (e: any) {
@@ -1524,7 +1702,7 @@ function SentinelValidationForm({ alert, onBack, onDone }: { alert: MobileAlert;
 // se rend sur place, relève la position (GPS, ou saisie manuelle quand le
 // navigateur bloque la géolocalisation en HTTP) et ajoute ses observations.
 function SignalementFieldVerifyForm({ signalement, onBack, onDone }: { signalement: MobileSignalement; onBack: () => void; onDone: () => void }) {
-  const [gps, setGps] = useState<{ lat: number; lng: number } | null>(null);
+  const [gps, setGps] = useState<{ lat: number; lng: number; accuracy?: number } | null>(null);
   const [gpsStatus, setGpsStatus] = useState<'pending' | 'ok' | 'manual'>('pending');
   const [manualLat, setManualLat] = useState('');
   const [manualLng, setManualLng] = useState('');
@@ -1536,7 +1714,7 @@ function SignalementFieldVerifyForm({ signalement, onBack, onDone }: { signaleme
   useEffect(() => {
     if (navigator.geolocation && window.isSecureContext) {
       navigator.geolocation.getCurrentPosition(
-        (pos) => { setGps({ lat: pos.coords.latitude, lng: pos.coords.longitude }); setGpsStatus('ok'); },
+        (pos) => { setGps({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: Math.round(pos.coords.accuracy) }); setGpsStatus('ok'); },
         () => setGpsStatus('manual'),
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 },
       );
@@ -1560,6 +1738,9 @@ function SignalementFieldVerifyForm({ signalement, onBack, onDone }: { signaleme
       await axios.patch(`${API}/signalements/${signalement.id}/field-verify`,
         {
           latitude: lat, longitude: lng,
+          // Provenance enregistrée : GPS de l'appareil ou saisie manuelle (audit F18)
+          locationSource: gps ? 'DEVICE_GPS' : 'MANUAL',
+          ...(gps?.accuracy ? { locationAccuracyM: gps.accuracy } : {}),
           notes: notes.trim() || undefined,
           ...(mediaUrls.length ? { mediaUrls } : {}),
         },
