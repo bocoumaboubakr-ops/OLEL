@@ -58,3 +58,6 @@ dump.rdb
 
 # Jeton de collecte Prometheus (copie de METRICS_TOKEN)
 monitoring/prometheus/metrics.token
+
+# Rapports de répétition du déploiement (scripts/rehearse-deploy.sh)
+rehearsal-*.txt
