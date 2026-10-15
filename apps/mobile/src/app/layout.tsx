@@ -21,8 +21,9 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
+  // Zoom autorisé (accessibilité, audit F27) : ne jamais bloquer l'agrandissement
+  maximumScale: 5,
+  userScalable: true,
   themeColor: '#0F172A',
 };
 

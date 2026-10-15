@@ -106,6 +106,8 @@ function isAudioUrl(url: string): boolean {
 
 // ── App root ──────────────────────────────────────────────────────────────────
 export default function MobilePage() {
+  // Applique la langue choisie au document dès l'ouverture (lecteurs d'écran, F27)
+  useI18n();
   const { user, initialized, login, logout, requestOtp, verifyOtp, setUser, refreshProfile, loading: authLoading, error: authError } = useMobileAuth();
   // Profil relu au démarrage : statut (habilitation, suspension) et zone à jour (audit F19)
   const userId = user?.id;

@@ -162,11 +162,14 @@ export function useI18n() {
   useEffect(() => {
     const stored = (localStorage.getItem('olel_lang') as Lang) || 'fr';
     setLangState(stored);
+    document.documentElement.lang = stored;
   }, []);
 
   const setLang = useCallback((l: Lang) => {
     localStorage.setItem('olel_lang', l);
     setLangState(l);
+    // Langue du document pour les lecteurs d'écran (audit F27)
+    document.documentElement.lang = l;
     // Best-effort : propager au backend si connecté
     const token = localStorage.getItem('olel_token');
     if (token) {

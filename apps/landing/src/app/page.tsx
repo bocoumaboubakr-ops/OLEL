@@ -25,7 +25,6 @@ export default function LandingPage() {
       <HowItWorks />
       <Showcase />
       <Channels />
-      <Testimonial />
       <Partners />
       <FinalCTA />
       <Footer />
@@ -39,7 +38,7 @@ function Nav() {
     { href: '#vision', label: 'Vision' },
     { href: '#how', label: 'Fonctionnement' },
     { href: '#channels', label: 'Canaux' },
-    { href: '#partners', label: 'Partenaires' },
+    { href: '#partners', label: 'Collaborations' },
   ];
   return (
     <nav style={{
@@ -92,9 +91,11 @@ function Hero() {
           fontSize: 'clamp(1rem, 2vw, 1.15rem)', lineHeight: 1.7, color: MUTED,
           maxWidth: 640, margin: '0 auto 44px',
         }}>
-          OLEL est la plateforme communautaire d&apos;alerte multi-risques pour la
-          région de Matam. Quatre langues — français, pulaar, wolof, soninké — et
-          cinq canaux complémentaires, du smartphone à l&apos;USSD.
+          OLEL est une plateforme communautaire d&apos;alerte multi-risques conçue pour
+          la région de Matam : signalement par WhatsApp, application web ou USSD,
+          vérification humaine, diffusion d&apos;alertes officielles. Quatre langues
+          visées — français, pulaar, wolof, soninké — dont les traductions sont en
+          cours de validation par des locuteurs.
         </p>
         <div className="olel-cta-row" style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
           <a href="#how" style={btn('primary')}>Découvrir le fonctionnement</a>
@@ -107,12 +108,13 @@ function Hero() {
 
 // ── Stats ───────────────────────────────────────────────────────────────────
 function Stats() {
+  // Uniquement des éléments vérifiables dans le produit (audit F35) : aucun
+  // chiffre de couverture tant qu'il n'est ni mesuré ni sourcé.
   const stats = [
-    { value: '562 000', label: 'Habitants couverts' },
-    { value: '6',       label: 'Familles de risques' },
-    { value: '4',       label: 'Langues supportées' },
-    { value: '5',       label: 'Canaux de diffusion' },
-    { value: '12 mois', label: 'Phase pilote' },
+    { value: '6',       label: 'Familles de risques prises en charge' },
+    { value: '4',       label: 'Langues visées (traductions à valider)' },
+    { value: '3',       label: 'Canaux de signalement développés' },
+    { value: 'Pilote',  label: 'Phase pilote supervisée envisagée' },
   ];
   return (
     <section style={{ background: BG, borderBottom: `1px solid ${LINE_2}` }}>
@@ -142,11 +144,11 @@ function Vision() {
     },
     {
       title: 'La voix d\'abord',
-      body: 'L\'accessibilité est vitale sur une plateforme d\'alerte. Le signalement vocal est traité comme un canal premier, en français, pulaar, wolof et soninké, pour atteindre toutes les populations — y compris peu alphabétisées.',
+      body: 'L\'accessibilité est vitale sur une plateforme d\'alerte. Les messages vocaux sont acceptés (WhatsApp, application) et écoutés par un opérateur, pour inclure les personnes peu alphabétisées. Aucune transcription ni traduction automatique n\'est réalisée.',
     },
     {
       title: 'Une chaîne humaine traçable',
-      body: 'Pas d\'alerte sans validation humaine. Les sentinelles formées vérifient sur le terrain, la mairie valide, le préfet escalade, le gouverneur diffuse. Chaque action est horodatée, attribuée et auditée.',
+      body: 'Pas d\'alerte sans validation humaine. Les sentinelles habilitées vérifient sur le terrain, la mairie valide ; une alerte grave est confirmée par la préfecture, par une autre personne que son auteur, avant diffusion. Chaque décision est horodatée, attribuée et auditée.',
     },
   ];
   return (
@@ -179,18 +181,18 @@ function HowItWorks() {
   const steps = [
     {
       role: 'Citoyen',
-      desc: 'Signale un risque dans sa langue, par WhatsApp, application mobile, SMS ou USSD. Le signalement vocal est privilégié pour les populations peu alphabétisées.',
-      actions: ['Signaler un incident', 'Consulter les alertes de sa zone', 'Recevoir les bulletins hebdomadaires'],
+      desc: 'Signale un risque par WhatsApp, application web ou USSD, y compris par message vocal. Il reçoit une référence et peut suivre l\'état réel de son signalement.',
+      actions: ['Signaler un incident', 'Consulter les alertes de sa zone', 'Recevoir les alertes officielles (avec son accord)'],
     },
     {
       role: 'Sentinelle',
-      desc: 'Volontaire formé qui vérifie sur le terrain (photo, GPS, gravité) et fait remonter à la mairie en moins de trente minutes.',
+      desc: 'Volontaire formé puis habilité par un responsable, qui vérifie sur le terrain (photo, position GPS, gravité) et fait remonter à la mairie.',
       actions: ['Vérifier rapidement sur place', 'Compléter le signalement', 'Coordonner l\'équipe locale'],
     },
     {
       role: 'Administration',
-      desc: 'La mairie valide localement, le préfet escalade si besoin, le gouverneur décide de la diffusion à l\'échelle régionale.',
-      actions: ['Tableau de bord temps réel', 'Validation multi-niveaux', 'Diffusion multi-canal'],
+      desc: 'La mairie valide localement ; la préfecture confirme les alertes graves. La diffusion part avec le texte approuvé, sur les zones et les canaux choisis, et chaque remise est suivie.',
+      actions: ['Tableau de bord temps réel', 'Validation selon la gravité', 'Diffusion suivie par destinataire'],
     },
   ];
   return (
@@ -285,20 +287,22 @@ function Showcase() {
 
 // ── Channels ────────────────────────────────────────────────────────────────
 function Channels() {
+  // État réel de chaque canal (audit F26/F35) : aucun numéro ni délai annoncé
+  // tant qu'il n'a pas été attribué et éprouvé sur des numéros de test.
   const items = [
-    { code: 'SMS',       num: '21303',         desc: 'Signalement par mot-clé depuis n\'importe quel téléphone, y compris feature phone.' },
-    { code: 'USSD',      num: '*123*1#',       desc: 'Menu interactif gratuit en 4 langues, sans connexion internet.' },
-    { code: 'IVR',       num: '800 OLEL',      desc: 'Vocal libre, navigation par touches, enregistrement jusqu\'à soixante secondes.' },
-    { code: 'WhatsApp',  num: '+221 33 OLEL',  desc: 'Bot multilingue, signalement vocal et texte, traduction IA vers le français.' },
-    { code: 'Voice',     num: 'Broadcast',     desc: 'Diffusion automatique d\'appels vocaux à toute une zone en moins de trente minutes.' },
+    { code: 'WhatsApp',     status: 'Développé — en essai', desc: 'Bot multilingue : signalement texte, photo, vocal et position ; consultation des alertes ; accord explicite et désabonnement (STOP). Numéro communiqué au lancement. Modèles d\'alerte en attente d\'approbation par Meta.' },
+    { code: 'Application',  status: 'Développée — en essai', desc: 'Application web mobile pour citoyens et sentinelles : signalement avec photo, vocal et position, fonctionnement hors connexion, vérification terrain.' },
+    { code: 'USSD',         status: 'Développé (français)', desc: 'Menu sans internet pour signaler et consulter les alertes de sa zone. Code court à obtenir auprès des opérateurs.' },
+    { code: 'SMS',          status: 'Diffusion développée', desc: 'Diffusion des alertes officielles par SMS en complément de WhatsApp ; compte fournisseur à finaliser. Signalement par SMS envisagé.' },
+    { code: 'Appel vocal',  status: 'Envisagé', desc: 'Serveur vocal pour signaler par touches ; diffusion d\'alertes par appel non opérationnelle à ce jour.' },
   ];
   return (
     <section id="channels" className="olel-section" style={{ padding: '120px 0', background: BG, borderBottom: `1px solid ${LINE_2}` }}>
       <div className="olel-container" style={container()}>
         <SectionHeader
           eyebrow="Canaux"
-          title="Cinq canaux, aucun citoyen oublié."
-          lede="Du smartphone Android au feature phone Nokia, OLEL atteint toutes les couches de la population par les canaux qu'elles utilisent déjà."
+          title="Des canaux complémentaires, déployés progressivement."
+          lede="État au moment de la publication : un canal n'est annoncé comme opérationnel qu'après un essai complet sur des numéros de test."
         />
         <div style={{ marginTop: 64 }}>
           {items.map((it, i) => (
@@ -311,8 +315,8 @@ function Channels() {
               <div style={{ fontSize: '0.94rem', fontWeight: 600, color: INK, letterSpacing: '-0.005em' }}>
                 {it.code}
               </div>
-              <div style={{ fontFamily: 'ui-monospace, "SF Mono", Menlo, monospace', fontSize: '0.86rem', color: MUTED_2 }}>
-                {it.num}
+              <div style={{ fontSize: '0.84rem', color: MUTED_2 }}>
+                {it.status}
               </div>
               <p style={{ margin: 0, fontSize: '0.92rem', color: MUTED, lineHeight: 1.6 }}>{it.desc}</p>
             </div>
@@ -323,36 +327,19 @@ function Channels() {
   );
 }
 
-// ── Testimonial ─────────────────────────────────────────────────────────────
-function Testimonial() {
-  return (
-    <section className="olel-section" style={{ padding: '120px 0', background: BG, borderBottom: `1px solid ${LINE_2}` }}>
-      <div className="olel-container" style={container({ maxWidth: 800 })}>
-        <div style={eyebrow({ marginBottom: 32 })}>Voix du terrain</div>
-        <blockquote style={{
-          ...SERIF, fontSize: 'clamp(1.5rem, 2.6vw, 2.1rem)',
-          fontWeight: 400, lineHeight: 1.4, color: INK, margin: '0 0 32px',
-          letterSpacing: '-0.015em', fontStyle: 'normal',
-        }}>
-          « Quand l&apos;eau monte, on prévient en priorité les voisins âgés et les
-          familles avec enfants. OLEL nous donne enfin l&apos;outil pour le faire vite,
-          dans notre langue, et que la mairie nous croie. »
-        </blockquote>
-        <div style={{ fontSize: '0.88rem', color: MUTED }}>
-          <span style={{ color: INK, fontWeight: 600 }}>Aïssatou Diallo</span> · Sentinelle, Thilogne
-        </div>
-      </div>
-    </section>
-  );
-}
-
 // ── Partners ────────────────────────────────────────────────────────────────
 function Partners() {
+  // Acteurs pressentis : aucun partenariat n'est présenté comme acquis tant
+  // qu'il n'est pas formalisé et autorisé par l'organisation concernée (F35).
   const partners = ['ANACIM', 'OMVS', 'OIM', 'DPC', 'Orange', 'Free', 'Expresso', 'Radio Matam FM'];
   return (
     <section id="partners" className="olel-section" style={{ padding: '120px 0', background: BG, borderBottom: `1px solid ${LINE_2}` }}>
       <div className="olel-container" style={container()}>
-        <SectionHeader eyebrow="Partenaires et soutiens" title="Un écosystème en mouvement." />
+        <SectionHeader
+          eyebrow="Collaborations envisagées"
+          title="Des acteurs avec lesquels travailler."
+          lede="Organisations avec lesquelles une collaboration est envisagée ou en discussion. Aucune n'est, à ce stade, présentée comme partenaire formel d'OLEL."
+        />
         <div className="olel-partners-grid" style={{
           marginTop: 56,
           display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)',

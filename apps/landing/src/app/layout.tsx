@@ -20,7 +20,7 @@ const serif = Source_Serif_4({
 
 export const metadata: Metadata = {
   title: 'OLEL — Alerte précoce multi-risques · Matam',
-  description: 'Plateforme communautaire d\'alerte précoce pour la région de Matam (Sénégal). Système multilingue par WhatsApp, SMS, application mobile et radio.',
+  description: 'Plateforme communautaire d\'alerte précoce multi-risques conçue pour la région de Matam (Sénégal) : signalement par WhatsApp, application web et USSD, vérification humaine, diffusion d\'alertes officielles.',
   icons: {
     icon: '/logo.png',
     apple: '/logo.png',
