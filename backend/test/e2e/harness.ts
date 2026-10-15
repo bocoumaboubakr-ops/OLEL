@@ -53,7 +53,17 @@ export async function bootApp(): Promise<Ctx> {
 export async function resetDb(prisma: PrismaClient) {
   const tables = await prisma.$queryRaw<{ tablename: string }[]>`
     SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename <> '_prisma_migrations'`;
-  await prisma.$executeRawUnsafe(`TRUNCATE ${tables.map((t) => `"${t.tablename}"`).join(', ')} RESTART IDENTITY CASCADE`);
+  // Un worker peut encore terminer une diffusion du test précédent : en cas
+  // d'interblocage avec le TRUNCATE, on réessaie (jamais de test sur base sale).
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await prisma.$executeRawUnsafe(`TRUNCATE ${tables.map((t) => `"${t.tablename}"`).join(', ')} RESTART IDENTITY CASCADE`);
+      return;
+    } catch (e: any) {
+      if (attempt >= 5 || !String(e?.message).includes('deadlock')) throw e;
+      await new Promise((r) => setTimeout(r, 200 * attempt));
+    }
+  }
 }
 
 /**

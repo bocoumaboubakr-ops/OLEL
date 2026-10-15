@@ -79,7 +79,9 @@ export type TemplateKey =
   | 'feedback_security'
   | 'sentinelle_assigned';
 
-const PROTECTION_CIVILE = '+221 33 869 19 20';
+// Aucun numéro de service n'est inscrit dans les modèles tant qu'il n'est pas
+// confirmé officiellement (audit F35) : un modèle approuvé par Meta ne peut
+// pas être corrigé sans nouvelle soumission.
 
 /* ─────────────────────────────────────────────────────────────────────────────
  * 1. welcome_multi — Premier contact citoyen
@@ -165,7 +167,7 @@ const alert_level_3: Record<Lang, MetaTemplate> = {
     variables: ['titre', 'zone', 'consignes'],
     components: {
       header: { type: 'TEXT', text: '🚨 URGENCE OLEL' },
-      body: { text: '*{{1}}* dans votre zone : *{{2}}*.\n\n{{3}}\n\nProtection civile : ' + PROTECTION_CIVILE },
+      body: { text: '*{{1}}* dans votre zone : *{{2}}*.\n\n{{3}}' },
       footer: { text: 'OLEL · Alerte précoce' },
       buttons: [
         { type: 'QUICK_REPLY', text: 'J\'ai besoin d\'aide' },
@@ -179,7 +181,7 @@ const alert_level_3: Record<Lang, MetaTemplate> = {
     variables: ['titre', 'nokku', 'jamirooje'],
     components: {
       header: { type: 'TEXT', text: '🚨 HEÑORDE OLEL' },
-      body: { text: '*{{1}}* e nokku maa : *{{2}}*.\n\n{{3}}\n\nKisal yimɓe : ' + PROTECTION_CIVILE },
+      body: { text: '*{{1}}* e nokku maa : *{{2}}*.\n\n{{3}}' },
       footer: { text: 'OLEL · Reentaare' },
       buttons: [
         { type: 'QUICK_REPLY', text: 'Mi heɓii balla' },
@@ -193,7 +195,7 @@ const alert_level_3: Record<Lang, MetaTemplate> = {
     variables: ['titer', 'gox', 'naal'],
     components: {
       header: { type: 'TEXT', text: '🚨 MUSIBA OLEL' },
-      body: { text: '*{{1}}* ci sa gox : *{{2}}*.\n\n{{3}}\n\nKaaraange askan : ' + PROTECTION_CIVILE },
+      body: { text: '*{{1}}* ci sa gox : *{{2}}*.\n\n{{3}}' },
       footer: { text: 'OLEL · Artu' },
       buttons: [
         { type: 'QUICK_REPLY', text: 'Soxla naa ndimbal' },
@@ -207,7 +209,7 @@ const alert_level_3: Record<Lang, MetaTemplate> = {
     variables: ['titre', 'jamaane', 'jamirooje'],
     components: {
       header: { type: 'TEXT', text: '🚨 TANPINTE OLEL' },
-      body: { text: '*{{1}}* na *{{2}}* di.\n\n{{3}}\n\nSere kisi : ' + PROTECTION_CIVILE },
+      body: { text: '*{{1}}* na *{{2}}* di.\n\n{{3}}' },
       footer: { text: 'OLEL · Xibaare' },
       buttons: [
         { type: 'QUICK_REPLY', text: 'N labenoxo balla' },

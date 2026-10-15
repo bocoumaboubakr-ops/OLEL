@@ -9,7 +9,7 @@ import {
 } from '@prisma/client';
 import { AlertsGateway } from './alerts.gateway';
 import {
-  LEVEL_CONFIG, CRITICAL_LEVELS, criticalCategory, canClose,
+  LEVEL_CONFIG, CRITICAL_LEVELS, canClose,
   protectionCivileEntryStep, normalizePhase, nextStepFor, PHASE,
   AUTO_ESCALATION_MINUTES, hasLevel, levelFromDeclaredSeverity,
 } from './alert-workflow';
@@ -22,7 +22,7 @@ import { AuditService } from '../audit/audit.service';
 import { TerritoryService } from '../common/territory/territory.service';
 import { BroadcastDispatcher } from '../notifications/broadcast-dispatcher.service';
 import { FlagsService } from '../flags/flags.service';
-import { buildFrozenPayload, Certainty } from '../common/i18n/alert-messages';
+import { buildFrozenPayload, buildTemplateCalls, Certainty } from '../common/i18n/alert-messages';
 import { TERRITORY_EXEMPT } from '../users/user-policy';
 import { randomUUID } from 'crypto';
 
@@ -128,15 +128,18 @@ export class AlertsService {
     const zones = await tx.zone.findMany({ where: { id: { in: targets } }, select: { id: true, name: true } });
     if (zones.length !== targets.length) throw new BadRequestException('Zone cible inconnue');
     const level = p.level ?? p.alert.alertLevel;
-    const payload = buildFrozenPayload({
+    const input = {
       level, certainty: p.certainty as Certainty, approvedText: p.approvedText,
       title: p.alert.title, description: p.alert.description, zoneNames: zones.map((z) => z.name), type: p.alert.type,
-    });
+    };
+    const templates = buildTemplateCalls(input);
+    // Texte libre par langue + appels de modèles figés : ce qui part est ce qui a été approuvé
+    const payload = { ...buildFrozenPayload(input), ...(templates ? { templates } : {}) };
     try {
       return await tx.broadcast.create({
         data: {
           alertId: p.alert.id, authorId: p.authorId, kind: p.kind, certainty: p.certainty, alertLevel: level,
-          message: payload.fr, payload, targetZoneIds: targets, channels: p.channels,
+          message: payload.fr, payload: payload as unknown as Prisma.InputJsonObject, targetZoneIds: targets, channels: p.channels,
           idempotencyKey: p.idempotencyKey || randomUUID(),
         },
       });

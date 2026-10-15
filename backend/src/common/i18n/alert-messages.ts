@@ -132,3 +132,31 @@ export function buildFrozenPayload(i: FrozenPayloadInput): Record<Lang, string> 
   }
   return out;
 }
+
+/** Paramètres d'un modèle WhatsApp approuvé (hors fenêtre de 24 h). */
+export interface TemplateCall { name: string; language: string; params: string[] }
+
+/** Meta : pas de saut de ligne ni de longues suites d'espaces dans un paramètre, 1024 caractères au plus. */
+const templateParam = (s: string) => s.replace(/\s*\n+\s*/g, ' — ').replace(/\s{4,}/g, '   ').slice(0, 1000);
+
+/**
+ * Appel de modèle figé avec le texte approuvé (audit F24) : catalogue
+ * apps/bot/src/whatsapp/templates.ts. ROUGE+ : alert_level_3 (titre, zone,
+ * consigne) ; autres niveaux : alert_level_2 (titre, zone). La mention de
+ * certitude est portée dans le titre. Les modèles doivent être APPROUVÉS par
+ * Meta avant activation de l'indicateur « whatsapp_templates ».
+ */
+export function buildTemplateCalls(i: FrozenPayloadInput): Record<Lang, TemplateCall> | null {
+  if (i.certainty === 'INTERNAL') return null;
+  const severe = i.level === 'ROUGE' || i.level === 'ROUGE_FONCE';
+  const out = {} as Record<Lang, TemplateCall>;
+  for (const lang of SUPPORTED_LANGS) {
+    const tag = CERTAINTY_TAG[i.certainty][lang];
+    const title = templateParam(tag ? `${tag} — ${i.title}` : i.title);
+    const zones = templateParam(i.zoneNames.join(', '));
+    out[lang] = severe
+      ? { name: `alert_level_3_${lang}`, language: 'fr', params: [title, zones, templateParam(i.approvedText?.trim() || i.description)] }
+      : { name: `alert_level_2_${lang}`, language: 'fr', params: [title, zones] };
+  }
+  return out;
+}

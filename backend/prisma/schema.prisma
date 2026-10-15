@@ -135,6 +135,8 @@ model User {
   name          String
   role          Role     @default(CITOYEN)
   language      String   @default("fr") // fr | ff (Pulaar) | wo (Wolof) | snk (Soninké)
+  /// Dernier message reçu de ce numéro sur WhatsApp (fenêtre de 24 h de Meta)
+  lastWhatsappInboundAt DateTime?
   passwordHash  String?
   otpSecret     String?
   totpSecret    String?
@@ -372,7 +374,13 @@ model AuditLog {
 }
 
 model Consent {
+  /// Désabonnement de toutes les alertes (STOP) — audit F24
   optedOut Boolean @default(false)
+  optedOutAt   DateTime?
+  optOutSource String?
+  /// Consentement explicite à recevoir des messages WhatsApp (politique Meta)
+  whatsappOptInAt     DateTime?
+  whatsappOptInSource String?
   id              String   @id @default(uuid())
   userId          String
   user            User     @relation(fields: [userId], references: [id])
@@ -686,4 +694,40 @@ model BroadcastDelivery {
   @@unique([broadcastId, recipient, channel])
   @@index([providerMessageId])
   @@map("broadcast_deliveries")
+}
+
+/// Message entrant d'un canal fournisseur, enregistré AVANT l'accusé de
+/// réception technique (audit F25) ; l'identifiant fournisseur dédoublonne.
+model InboundMessage {
+  id          String        @id // identifiant fournisseur (ex. wamid Meta)
+  channel     String        @default("whatsapp")
+  from        String
+  type        String
+  payload     Json
+  status      InboundStatus @default(RECEIVED)
+  attempts    Int           @default(0)
+  error       String?
+  receivedAt  DateTime      @default(now())
+  processedAt DateTime?
+
+  @@index([status, receivedAt])
+  @@map("inbound_messages")
+}
+
+enum InboundStatus {
+  RECEIVED
+  PROCESSED
+  FAILED
+  IGNORED
+}
+
+/// Conversation du bot, persistée avec expiration (audit F25)
+model BotSession {
+  phone     String   @id
+  state     Json
+  expiresAt DateTime
+  updatedAt DateTime @updatedAt
+
+  @@index([expiresAt])
+  @@map("bot_sessions")
 }

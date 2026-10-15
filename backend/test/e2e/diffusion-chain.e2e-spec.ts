@@ -294,7 +294,7 @@ describe('F22 — échecs fournisseur visibles, reprises sans doublon, simulatio
   });
 
   it('une reprise ne recontacte jamais un destinataire déjà atteint', async () => {
-    const auteur = await createUser(ctx, Role.SENTINELLE, ctx.zones.communeA);
+    const auteur = await createUser(ctx, Role.SENTINELLE, ctx.zones.kanel);
     const c1 = await citizenIn(ctx, ctx.zones.communeA);
     const c2 = await citizenIn(ctx, ctx.zones.communeA);
     const a = await makeAlert(ctx, { zoneId: ctx.zones.communeA, createdById: auteur.id, status: AlertStatus.BROADCAST, step: AlertStep.BROADCAST });

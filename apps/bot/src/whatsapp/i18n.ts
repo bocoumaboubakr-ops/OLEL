@@ -37,7 +37,8 @@ type Dict = {
   photoPrompt: string;              // « Envoyez une photo, ou tapez passer »
   photoSkipped: string;             // « OK, sans photo. »
   severityPrompt: string;
-  reportSaved: (label: string, sev: string) => string;
+  /** Confirmation factuelle : reçu par OLEL, sans promesse d'intervention (audit F06) */
+  reportSaved: (label: string, sev: string, ref: string) => string;
   reportError: string;
   alertsNone: string;
   alertsHeader: (n: number) => string;
@@ -48,6 +49,24 @@ type Dict = {
   sevLabels: [string, string, string]; // vigilance / alerte / urgence
   audioPrompt: string;
   audioReceived: string;
+  // ── Consentement et désabonnement (audit F24) ──
+  consentPrompt: string;
+  consentSaved: string;
+  consentDeclined: string;
+  optedOut: string;
+  optedIn: string;
+  /** Consultation impossible : ne jamais laisser croire qu'il n'y a pas d'alerte (F16) */
+  alertsUnavailable: string;
+};
+
+/** Messages de consentement/désabonnement (français ; traductions à faire valider — D5). */
+const CONSENT_FR = {
+  consentPrompt: '📩 *Recevoir les alertes OLEL sur WhatsApp ?*\nOLEL vous écrira seulement pour des alertes officielles de votre zone et le suivi de vos signalements.\n\n1️⃣ Oui\n2️⃣ Non\n\nVous pourrez arrêter à tout moment en écrivant *STOP*.',
+  consentSaved: '✅ C\'est noté : vous recevrez les alertes OLEL sur WhatsApp. Écrivez *STOP* pour arrêter.',
+  consentDeclined: '👍 C\'est noté : pas d\'alertes OLEL sur WhatsApp. Vous pouvez toujours signaler et consulter. Écrivez *ALERTES* pour changer d\'avis.',
+  optedOut: '🔕 Vous êtes désabonné : OLEL ne vous enverra plus d\'alertes. Écrivez *ALERTES* pour vous réabonner.',
+  optedIn: '🔔 Vous êtes de nouveau abonné aux alertes OLEL. Écrivez *STOP* pour arrêter.',
+  alertsUnavailable: '⚠️ Consultation des alertes indisponible pour le moment. Cela ne veut PAS dire qu\'il n\'y a pas d\'alerte : écoutez la radio et les autorités locales. Réessayez plus tard.',
 };
 
 const fr: Dict = {
@@ -59,7 +78,7 @@ const fr: Dict = {
   photoPrompt: '📷 Si vous pouvez, *envoyez une photo* du lieu (facultatif).\n\nSinon tapez *passer* pour continuer.',
   photoSkipped: '👍 OK, on continue sans photo.',
   severityPrompt: 'Gravité :\n1. 🟢 Vigilance\n2. 🟡 Alerte\n3. 🔴 Urgence (danger immédiat)\n\nRépondez 1, 2 ou 3.',
-  reportSaved: (l, s) => `✅ *Signalement enregistré !*\nType : ${l}\nGravité : ${s}\n\nLes autorités ont été notifiées. Merci pour votre vigilance.\n\nTapez *menu* pour recommencer.`,
+  reportSaved: (l, s, ref) => `✅ *Signalement reçu par OLEL*\nType : ${l}\nGravité : ${s}\nRéf : ${ref}\n\nUn opérateur va l'examiner. OLEL ne remplace pas les secours : en cas de danger immédiat, contactez-les directement.\n\nTapez *menu* pour recommencer.`,
   reportError: '❌ Erreur lors de l\'enregistrement. Réessayez.\nTapez *menu*.',
   alertsNone: '✅ Aucune alerte active dans votre zone.\n\nTapez *menu* pour revenir.',
   alertsHeader: (n) => `🚨 *Alertes actives (${n}) :*`,
@@ -70,6 +89,7 @@ const fr: Dict = {
   sevLabels: ['🟢 Vigilance', '🟡 Alerte', '🔴 Urgence'],
   audioPrompt: '🎙️ Message vocal reçu. Décrivez aussi brièvement par écrit si possible, ou tapez *ok* pour valider.',
   audioReceived: '🎙️ Votre message vocal a bien été reçu et sera écouté par un agent.',
+  ...CONSENT_FR,
 };
 
 // ⚠️ Traductions à relire par des natifs
@@ -82,7 +102,7 @@ const ff: Dict = {
   photoPrompt: '📷 So aɗa waawi, *nelu nataal* nokku (jiidi).\n\nWalla winndu *passer* ngam jokkude.',
   photoSkipped: '👍 Eyyo, en jokkii ko aldaa e nataal.',
   severityPrompt: 'Mawnde bone:\n1. 🟢 Reentaare\n2. 🟡 Tonngol\n3. 🔴 Heñorde (bone jooni)\n\nJaabo 1, 2 walla 3.',
-  reportSaved: (l, s) => `✅ *Bone on winndaama!*\nSifaa : ${l}\nMawnde : ${s}\n\nLaamu humpitaama. A jaaraama.\n\nWinndu *menu* ngam fuɗɗaade.`,
+  reportSaved: (l, s, ref) => `✅ *Bone on winndaama!*\nSifaa : ${l}\nMawnde : ${s}\nRéf : ${ref}\n\nA jaaraama.\n\nWinndu *menu* ngam fuɗɗaade.`,
   reportError: '❌ Juumre waɗii. Eto goɗngol.\nWinndu *menu*.',
   alertsNone: '✅ Alaa reentaare e nokku maa.\n\nWinndu *menu*.',
   alertsHeader: (n) => `🚨 *Reentaareeji (${n}) :*`,
@@ -93,6 +113,8 @@ const ff: Dict = {
   sevLabels: ['🟢 Reentaare', '🟡 Tonngol', '🔴 Heñorde'],
   audioPrompt: '🎙️ Konngol sawtuyaŋkol heɓaama. Winndu seeɗa kadi so aɗa waawi, walla winndu *ok*.',
   audioReceived: '🎙️ Konngol maa sawtuyaŋkol heɓaama, gardiiɗo maa heɗoo ngol.',
+  // À TRADUIRE par des locuteurs natifs (décision D5) : repli en français
+  ...CONSENT_FR,
 };
 
 // ⚠️ Traductions à relire par des natifs
@@ -105,7 +127,7 @@ const wo: Dict = {
   photoPrompt: '📷 Su manee, *yónnee ab nataal* bu bérab bi (du jëfandiku ci bépp wàll).\n\nWalla bind *passer* ngir jokk.',
   photoSkipped: '👍 Baaxna, nu jokk te du am nataal.',
   severityPrompt: 'Tolluwaayu musiba:\n1. 🟢 Moytabal\n2. 🟡 Artu\n3. 🔴 Jamono bu tàng (musiba léegi)\n\nTontu 1, 2 walla 3.',
-  reportSaved: (l, s) => `✅ *Yégle bi nataal na!*\nXeet : ${l}\nTolluwaay : ${s}\n\nAutorités yi xamees nañu. Jërëjëf.\n\nBind *menu* ngir tàmbali.`,
+  reportSaved: (l, s, ref) => `✅ *Yégle bi nataal na!*\nXeet : ${l}\nTolluwaay : ${s}\nRéf : ${ref}\n\nJërëjëf.\n\nBind *menu* ngir tàmbali.`,
   reportError: '❌ Njuumte am na. Jéemaat.\nBind *menu*.',
   alertsNone: '✅ Amul artu ci sa gox.\n\nBind *menu*.',
   alertsHeader: (n) => `🚨 *Artu yi (${n}) :*`,
@@ -116,6 +138,8 @@ const wo: Dict = {
   sevLabels: ['🟢 Moytabal', '🟡 Artu', '🔴 Jamono bu tàng'],
   audioPrompt: '🎙️ Bataaxalu baat bi jot na. Bindal tuuti itam su manee, walla bind *ok*.',
   audioReceived: '🎙️ Sa bataaxalu baat jot na, ab agent dina ko déglu.',
+  // À TRADUIRE par des locuteurs natifs (décision D5) : repli en français
+  ...CONSENT_FR,
 };
 
 // ⚠️ Traductions à relire par des natifs
@@ -128,7 +152,7 @@ const snk: Dict = {
   photoPrompt: '📷 An ŋa wuto, *nelli nataal* jamaane ŋa (na dëne).\n\nWalla safa *passer* a tuga.',
   photoSkipped: '👍 Tuga, n bani nataal a yibo.',
   severityPrompt: 'Tana gabe:\n1. 🟢 Korinte\n2. 🟡 Xibaare\n3. 🔴 Tanpinte (tana yiga)\n\nJaabi 1, 2 walla 3.',
-  reportSaved: (l, s) => `✅ *Xibaare safani!*\nSifa : ${l}\nGabe : ${s}\n\nSaxuruyen xa toxo. I ni jaara.\n\nSafa *menu* a tuga.`,
+  reportSaved: (l, s, ref) => `✅ *Xibaare safani!*\nSifa : ${l}\nGabe : ${s}\nRéf : ${ref}\n\nI ni jaara.\n\nSafa *menu* a tuga.`,
   reportError: '❌ Filli wuto. Tagara koota.\nSafa *menu*.',
   alertsNone: '✅ Xibaare nta n jamaane di.\n\nSafa *menu*.',
   alertsHeader: (n) => `🚨 *Xibaarini (${n}) :*`,
@@ -139,6 +163,8 @@ const snk: Dict = {
   sevLabels: ['🟢 Korinte', '🟡 Xibaare', '🔴 Tanpinte'],
   audioPrompt: '🎙️ Audio safani. Safa doroni an ŋa wuto, walla safa *ok*.',
   audioReceived: '🎙️ I audio safani, agent ke a yittan.',
+  // À TRADUIRE par des locuteurs natifs (décision D5) : repli en français
+  ...CONSENT_FR,
 };
 
 export const DICT: Record<Lang, Dict> = { fr, ff, wo, snk };

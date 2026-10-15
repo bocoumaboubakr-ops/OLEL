@@ -48,11 +48,17 @@ export async function waitFinal(ctx: Ctx, broadcastId: string, timeoutMs = 20000
   }
 }
 
-export const citizenIn = (ctx: Ctx, zoneId: string, language = 'fr') =>
+/**
+ * Citoyen fictif. Par défaut : consentement WhatsApp enregistré et fenêtre de
+ * 24 h ouverte (il vient d'écrire au bot) ; options pour tester les règles Meta.
+ */
+export const citizenIn = (ctx: Ctx, zoneId: string, language = 'fr', o: { waOptIn?: boolean; windowOpen?: boolean; optedOut?: boolean } = {}) =>
   ctx.prisma.user.create({
     data: {
       phone: `+22176${String(Math.floor(Math.random() * 1e7)).padStart(7, '0')}`,
       name: 'Citoyen fictif', role: Role.CITOYEN, zoneId, language,
+      lastWhatsappInboundAt: (o.windowOpen ?? true) ? new Date() : new Date(Date.now() - 3 * 86400_000),
+      consents: { create: { whatsappOptInAt: (o.waOptIn ?? true) ? new Date() : null, optedOut: o.optedOut ?? false } },
     },
   });
 

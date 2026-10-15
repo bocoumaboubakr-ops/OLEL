@@ -12,11 +12,14 @@ export class LoggingInterceptor implements NestInterceptor {
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
     const req = context.switchToHttp().getRequest();
-    const { method, url, ip } = req;
+    const { method, url } = req;
     const start = Date.now();
 
     // Masquer les données sensibles dans les logs
-    const safeUrl = url.replace(/\/auth\/.*/, '/auth/***');
+    const safeUrl = url
+      .replace(/\/auth\/.*/, '/auth/***')
+      // Secrets portés par l'URL : rappel fournisseur (?key=), médias signés (?sig=)
+      .replace(/([?&](?:key|sig|token)=)[^&]*/gi, '$1***');
 
     return next.handle().pipe(
       tap(() => {

@@ -1,10 +1,9 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { SkipThrottle } from '@nestjs/throttler';
 import { ApiTags, ApiHeader, ApiOperation } from '@nestjs/swagger';
 import { BotApiKeyGuard } from '../common/guards/bot-api-key.guard';
 import { AlertsService } from './alerts.service';
 import { PrismaService } from '../common/prisma/prisma.service';
-import { PUBLIC_ACTIVE_STATUSES } from './alert-policy';
 
 /**
  * Accès bot (clé API interne) aux alertes actives — utilisé par le menu
@@ -20,25 +19,12 @@ export class AlertsBotController {
   constructor(private alerts: AlertsService, private prisma: PrismaService) {}
 
   @Get('active')
-  @ApiOperation({ summary: 'Alertes actives (résumé) pour diffusion bot' })
-  async getActive() {
-    // Même définition que le dashboard et les statistiques : alerte DIFFUSÉE non clôturée (audit F16).
-    // Seules des informations publiques sont exposées au canal bot.
-    const alerts = await this.prisma.alert.findMany({
-      where: { status: { in: PUBLIC_ACTIVE_STATUSES } },
-      orderBy: [{ alertLevel: 'desc' }, { broadcastAt: 'desc' }],
-      take: 5,
-      include: { zone: { select: { name: true } } },
-    });
-    // Résumé minimal : ne pas exposer les détails internes au canal bot
-    return alerts.map((a: any) => ({
-      id: a.id,
-      title: a.title,
-      alertLevel: a.alertLevel,
-      status: a.status,
-      type: a.type,
-      zone: a.zone ? { name: a.zone.name } : null,
-      createdAt: a.createdAt,
-    }));
+  @ApiOperation({ summary: 'Alertes publiques en vigueur (résumé) — ?phone= pour la zone du citoyen' })
+  async getActive(@Query('phone') phone?: string) {
+    // Même définition que le mobile, l'USSD et les statistiques (audit F16) ;
+    // cloisonnée par la zone du citoyen quand il est connu.
+    const normalized = phone ? (phone.startsWith('+') ? phone : `+${phone.trim()}`) : undefined;
+    const user = normalized ? await this.prisma.user.findUnique({ where: { phone: normalized }, select: { zoneId: true } }) : null;
+    return this.alerts.publicActiveFor(user?.zoneId ?? null, 5);
   }
 }

@@ -25,10 +25,27 @@ type MessagingChannel = (typeof MESSAGING_CHANNELS)[number];
 /** Estimation indicative (non contractuelle) du coût par message réellement accepté. */
 const CHANNEL_COST_XOF_ESTIMATE: Record<MessagingChannel, number> = { whatsapp: 5, sms: 25 };
 
+const RECIPIENT_SELECT = {
+  id: true, phone: true, language: true, lastWhatsappInboundAt: true,
+  consents: { select: { whatsappOptInAt: true, optedOut: true } },
+} satisfies Prisma.UserSelect;
+
 const REACHED: DeliveryStatus[] = [DeliveryStatus.SENT, DeliveryStatus.DELIVERED, DeliveryStatus.READ, DeliveryStatus.SIMULATED];
 const FINAL: BroadcastStatus[] = [BroadcastStatus.DONE, BroadcastStatus.PARTIAL, BroadcastStatus.FAILED, BroadcastStatus.CANCELLED];
 
-interface Recipient { id: string; phone: string; language: string | null }
+interface Recipient {
+  id: string; phone: string; language: string | null;
+  /** Consentement WhatsApp explicite enregistré (et non désabonné) — audit F24 */
+  waOptIn: boolean;
+  /** Fenêtre de 24 h ouverte par un message du citoyen : texte libre autorisé */
+  waWindowOpen: boolean;
+}
+
+/** Fenêtre de service client WhatsApp (politique Meta). */
+const WHATSAPP_WINDOW_MS = 24 * 3600 * 1000;
+export const FLAG_WHATSAPP_TEMPLATES = 'whatsapp_templates';
+type Outcome = 'reached' | 'unreached' | 'ineligible';
+type TemplateCall = { name: string; language: string; params: string[] };
 
 /**
  * Exécute une intention de diffusion EXACTEMENT telle qu'approuvée (audit F04,
@@ -75,27 +92,36 @@ export class NotificationsProcessor {
     }
 
     await this.prisma.broadcast.update({ where: { id: b.id }, data: { attempts: { increment: 1 } } });
-    const payload = b.payload as Record<string, string>;
+    const payload = b.payload as Record<string, unknown>;
+    const templatesOn = await this.flags.isEnabled(FLAG_WHATSAPP_TEMPLATES);
     const channels = b.channels.filter((c): c is MessagingChannel => (MESSAGING_CHANNELS as readonly string[]).includes(c));
     const enabled: Record<string, boolean> = {};
     for (const c of channels) enabled[c] = await this.flags.isEnabled(c);
 
     const recipients = await this.resolveRecipients(b.kind, b.alert.zoneId, b.targetZoneIds);
     let unreached = 0;
+    let ineligible = 0;
     for (const r of recipients) {
-      if (!(await this.deliverTo(b.id, r, channels, enabled, payload))) unreached++;
+      const outcome = await this.deliverTo(b.id, r, channels, enabled, payload, templatesOn);
+      if (outcome === 'unreached') unreached++;
+      if (outcome === 'ineligible') ineligible++; // aucun canal autorisé : pas de reprise inutile
     }
 
-    const reachedCount = recipients.length - unreached;
+    const reachedCount = recipients.length - unreached - ineligible;
     const lastAttempt = job.attemptsMade + 1 >= (job.opts.attempts ?? DISPATCH_ATTEMPTS);
     await this.recount(b.id, recipients.length);
     if (unreached > 0 && !lastAttempt) {
       await this.prisma.broadcast.update({ where: { id: b.id }, data: { lastError: `${unreached} destinataire(s) en échec — nouvelle tentative` } });
       throw new Error(`${unreached} destinataire(s) non atteint(s), reprise programmée`);
     }
-    const status = unreached === 0 ? BroadcastStatus.DONE
+    const missed = unreached + ineligible;
+    const status = missed === 0 ? BroadcastStatus.DONE
       : reachedCount === 0 ? BroadcastStatus.FAILED : BroadcastStatus.PARTIAL;
-    await this.finalize(b.id, status, unreached ? `${unreached} destinataire(s) non atteint(s) après ${DISPATCH_ATTEMPTS} tentatives` : null);
+    const reasons = [
+      unreached ? `${unreached} destinataire(s) non atteint(s) après ${DISPATCH_ATTEMPTS} tentatives` : '',
+      ineligible ? `${ineligible} destinataire(s) sans canal autorisé (consentement WhatsApp absent ou hors fenêtre 24 h sans modèle, pas de SMS)` : '',
+    ].filter(Boolean).join(' ; ');
+    await this.finalize(b.id, status, reasons || null);
     this.logger.log(`Diffusion ${b.id} [${b.kind}] : ${recipients.length} destinataires, ${unreached} non atteints → ${status}`);
   }
 
@@ -135,42 +161,80 @@ export class NotificationsProcessor {
     const base: Prisma.UserWhereInput = { status: AccountStatus.ACTIVE, deletedAt: null };
     if (kind === BroadcastKind.INTERNAL) {
       const zones = new Set([...(await this.territory.subtree(alertZoneId)), ...(await this.territory.ancestorsInclusive(alertZoneId))]);
-      return this.prisma.user.findMany({
+      return this.toRecipients(await this.prisma.user.findMany({
         where: { ...base, role: { in: OPERATOR_ROLES }, zoneId: { in: Array.from(zones) } },
-        select: { id: true, phone: true, language: true },
-      });
+        select: RECIPIENT_SELECT,
+      }));
     }
     const zones = await this.territory.subtreeOfMany(targetZoneIds.length ? targetZoneIds : [alertZoneId]);
-    return this.prisma.user.findMany({
+    return this.toRecipients(await this.prisma.user.findMany({
       where: { ...base, zoneId: { in: zones }, NOT: { consents: { some: { optedOut: true } } } },
-      select: { id: true, phone: true, language: true },
+      select: RECIPIENT_SELECT,
+    }));
+  }
+
+  private toRecipients(rows: Prisma.UserGetPayload<{ select: typeof RECIPIENT_SELECT }>[]): Recipient[] {
+    const now = Date.now();
+    return rows.map((u) => {
+      const c = u.consents[0];
+      return {
+        id: u.id, phone: u.phone, language: u.language,
+        waOptIn: !!c?.whatsappOptInAt && !c?.optedOut,
+        waWindowOpen: !!u.lastWhatsappInboundAt && now - u.lastWhatsappInboundAt.getTime() < WHATSAPP_WINDOW_MS,
+      };
     });
   }
 
-  /** Tente les canaux dans l'ordre choisi ; s'arrête au premier qui atteint le destinataire. */
-  private async deliverTo(broadcastId: string, r: Recipient, channels: MessagingChannel[], enabled: Record<string, boolean>, payload: Record<string, string>): Promise<boolean> {
+  /**
+   * Tente les canaux dans l'ordre choisi ; s'arrête au premier qui atteint le
+   * destinataire. WhatsApp exige un consentement explicite ; hors fenêtre de
+   * 24 h, seul un modèle approuvé peut être envoyé (politique Meta, audit F24).
+   */
+  private async deliverTo(
+    broadcastId: string, r: Recipient, channels: MessagingChannel[], enabled: Record<string, boolean>,
+    payload: Record<string, unknown>, templatesOn: boolean,
+  ): Promise<Outcome> {
     const already = await this.prisma.broadcastDelivery.findFirst({
       where: { broadcastId, recipient: r.phone, status: { in: REACHED } }, select: { id: true },
     });
-    if (already) return true;
+    if (already) return 'reached';
 
     const lang = normalizeLang(r.language);
-    const text = payload[lang] ?? payload.fr;
+    const text = (payload[lang] ?? payload.fr) as string;
+    const template = (payload.templates as Record<string, TemplateCall> | undefined)?.[lang];
+    let attempted = false;
     for (const channel of channels) {
       if (!enabled[channel]) {
         await this.upsertDelivery(broadcastId, r, channel, lang, { status: DeliveryStatus.SKIPPED, error: 'Canal désactivé (feature flag)' });
         continue;
       }
+      let useTemplate = false;
+      if (channel === 'whatsapp') {
+        if (!r.waOptIn) {
+          await this.upsertDelivery(broadcastId, r, channel, lang, { status: DeliveryStatus.SKIPPED, error: 'Pas de consentement WhatsApp enregistré' });
+          continue;
+        }
+        if (!r.waWindowOpen) {
+          if (!templatesOn || !template) {
+            await this.upsertDelivery(broadcastId, r, channel, lang, { status: DeliveryStatus.SKIPPED, error: 'Hors fenêtre de 24 h : modèle Meta non activé' });
+            continue;
+          }
+          useTemplate = true;
+        }
+      }
       if (!(await this.claim(broadcastId, r, channel, lang))) continue; // pris par une autre exécution
+      attempted = true;
       try {
         const res: SendResult = channel === 'whatsapp'
-          ? await this.whatsapp.sendMessage(r.phone, text)
+          ? (useTemplate
+            ? await this.whatsapp.sendTemplate(r.phone, template!.name, template!.language, template!.params)
+            : await this.whatsapp.sendMessage(r.phone, text))
           : await this.sms.sendSms(r.phone, text);
         await this.prisma.broadcastDelivery.update({
           where: { broadcastId_recipient_channel: { broadcastId, recipient: r.phone, channel } },
           data: { status: res.simulated ? DeliveryStatus.SIMULATED : DeliveryStatus.SENT, providerMessageId: res.providerMessageId, error: null },
         });
-        return true;
+        return 'reached';
       } catch (e) {
         await this.prisma.broadcastDelivery.update({
           where: { broadcastId_recipient_channel: { broadcastId, recipient: r.phone, channel } },
@@ -178,7 +242,7 @@ export class NotificationsProcessor {
         });
       }
     }
-    return false;
+    return attempted ? 'unreached' : 'ineligible';
   }
 
   /** Réservation atomique (destinataire, canal) : une seule exécution envoie. */

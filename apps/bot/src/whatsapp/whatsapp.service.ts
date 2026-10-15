@@ -19,6 +19,10 @@ interface ReportData {
   option?: RiskOption;
   description?: string;
   mediaUrls?: string[];
+  latitude?: number;
+  longitude?: number;
+  /** Média reçu avant le choix de la langue : conservé (audit F25) */
+  pendingMediaMsgId?: string;
 }
 
 interface Session {
@@ -27,35 +31,68 @@ interface Session {
   data: ReportData;
 }
 
+const STOP_WORDS = ['stop', 'arret', 'arrêt', 'desabonner', 'désabonner', 'unsubscribe'];
+const RESUBSCRIBE_WORDS = ['alertes', 'start', 'abonner', "m'abonner"];
+/** Délais maximaux des appels Meta (audit F26). */
+const GRAPH_TIMEOUT_MS = 15_000;
+
 const SKIP_WORDS = ['passer', 'skip', 'non', 'no', 'pas', 'sauter', '0'];
 
 @Injectable()
 export class WhatsappService {
   private readonly logger = new Logger(WhatsappService.name);
-  private conversations = new Map<string, Session>();
-
   constructor(private cfg: ConfigService, private backend: BackendService) {}
 
-  async handleIncoming(msg: any, _metadata: any) {
+  /** Conversations persistées côté backend avec expiration (survivent à un redémarrage). */
+  private async load(from: string): Promise<Session | null> {
+    return this.backend.getSession<Session>(from);
+  }
+
+  private async save(from: string, s: Session) {
+    await this.backend.saveSession(from, s);
+  }
+
+  async handleIncoming(msg: any) {
     const from = msg.from;
-    const raw = msg.text?.body?.trim() || '';
+    const raw = msg.text?.body?.trim() || msg.interactive?.button_reply?.title || '';
     const text = raw.toLowerCase();
-    const session = this.conversations.get(from) || { step: 'choose_lang', data: {} };
+    const session: Session = (await this.load(from)) || { step: 'choose_lang', data: {} };
 
     this.logger.log(`Message de ${from}: "${raw}" (step: ${session.step}, lang: ${session.lang || '-'})`);
+
+    // ── Désabonnement / réabonnement : prioritaires, dans toutes les étapes (F24) ──
+    if (STOP_WORDS.includes(text)) {
+      await this.backend.setConsent(from, 'OPT_OUT', session.lang);
+      await this.sendText(from, t(session.lang ?? 'fr').optedOut);
+      return;
+    }
+    if (RESUBSCRIBE_WORDS.includes(text)) {
+      await this.backend.setConsent(from, 'OPT_IN_AGAIN', session.lang);
+      await this.sendText(from, t(session.lang ?? 'fr').optedIn);
+      return;
+    }
 
     // ── Commandes globales (avant tout traitement) ─────────────────────────
     if (text === 'langue' || text === 'lang' || text === 'ɗemngal' || text === 'làkk') {
       await this.sendText(from, DICT.fr.chooseLang);
-      this.conversations.set(from, { step: 'awaiting_lang', data: {} });
+      await this.save(from, { step: 'awaiting_lang', data: session.data });
       return;
     }
 
     // ── Choix de langue (1er contact OU avant qu'une langue ne soit fixée) ──
     if (!session.lang) {
-      if (session.step !== 'awaiting_lang') {
+      // Un premier média (photo/vocal) envoyé avant la langue est conservé (F25)
+      if (msg.type === 'image' || msg.type === 'audio') {
+        const kind = msg.type === 'image' ? 'image' : 'audio';
+        const media = await this.downloadWhatsappMedia(msg[kind]?.id, kind);
+        if (media) {
+          session.data.mediaUrls = [...(session.data.mediaUrls || []), media.url];
+          session.data.pendingMediaMsgId = session.data.pendingMediaMsgId ?? String(msg.id);
+        }
+      }
+      if (session.step !== 'awaiting_lang' || msg.type === 'image' || msg.type === 'audio') {
         await this.sendText(from, DICT.fr.chooseLang);
-        this.conversations.set(from, { step: 'awaiting_lang', data: {} });
+        await this.save(from, { step: 'awaiting_lang', data: session.data });
         return;
       }
       const map: Record<string, Lang> = { '1': 'fr', '2': 'ff', '3': 'wo', '4': 'snk' };
@@ -64,7 +101,22 @@ export class WhatsappService {
         await this.sendText(from, DICT.fr.chooseLang);
         return;
       }
-      this.conversations.set(from, { step: 'awaiting_choice', lang: chosen, data: {} });
+      if (session.data.pendingMediaMsgId && session.data.mediaUrls?.length) {
+        await this.backend.createSignalement({
+          phone: from, type: 'AUTRE', severity: 2, language: chosen, mediaUrls: session.data.mediaUrls,
+          description: '📎 Média envoyé avant le choix de la langue — à qualifier par un agent',
+          messageId: session.data.pendingMediaMsgId,
+        });
+        await this.sendText(from, t(chosen).audioReceived);
+      }
+      // Consentement explicite aux alertes WhatsApp, demandé une fois (politique Meta, F24)
+      const consent = await this.backend.getConsent(from);
+      if (!consent.whatsappOptIn && !consent.optedOut) {
+        await this.save(from, { step: 'awaiting_consent', lang: chosen, data: {} });
+        await this.sendText(from, t(chosen).consentPrompt);
+        return;
+      }
+      await this.save(from, { step: 'awaiting_choice', lang: chosen, data: {} });
       await this.sendText(from, t(chosen).menu);
       return;
     }
@@ -72,19 +124,43 @@ export class WhatsappService {
     const lang: Lang = session.lang;
     const tr = t(lang);
 
+    if (session.step === 'awaiting_consent') {
+      if (raw.trim() === '1') {
+        await this.backend.setConsent(from, 'WHATSAPP_OPT_IN', lang);
+        await this.sendText(from, tr.consentSaved);
+      } else if (raw.trim() === '2') {
+        await this.sendText(from, tr.consentDeclined);
+      } else {
+        await this.sendText(from, tr.consentPrompt);
+        return;
+      }
+      await this.save(from, { step: 'awaiting_choice', lang, data: {} });
+      await this.sendText(from, tr.menu);
+      return;
+    }
+
+    // ── Position partagée : rattachée au signalement en cours ─────────────
+    if (msg.type === 'location' && msg.location) {
+      session.data.latitude = Number(msg.location.latitude);
+      session.data.longitude = Number(msg.location.longitude);
+      await this.save(from, session);
+      await this.sendText(from, '📍 ✓');
+      return;
+    }
+
     // ── Image reçue (photo de signalement) ────────────────────────────────
     if (msg.type === 'image' || msg.image) {
-      await this.handleImage(from, msg.image?.id, lang, session);
+      await this.handleImage(from, msg.image?.id, lang, session, String(msg.id));
       return;
     }
 
     // ── Message vocal reçu ────────────────────────────────────────────────
     if (msg.type === 'audio' || msg.audio) {
-      await this.handleAudio(from, msg.audio?.id, lang, session);
+      await this.handleAudio(from, msg.audio?.id, lang, session, String(msg.id));
       return;
     }
 
-    if (text === 'menu' || text === '0' || text === 'stop' || text === 'aide') {
+    if (text === 'menu' || text === '0' || text === 'aide') {
       await this.showMainMenu(from, lang);
       return;
     }
@@ -92,20 +168,22 @@ export class WhatsappService {
     if (session.step === 'awaiting_choice') {
       if (text === '1') {
         await this.sendText(from, `${tr.reportThemePrompt}\n\n${themeMenu(lang)}`);
-        this.conversations.set(from, { step: 'report_theme', lang, data: {} });
+        await this.save(from, { step: 'report_theme', lang, data: {} });
       } else if (text === '2') {
-        const alerts = await this.backend.getActiveAlerts();
-        if (!alerts.length) {
+        const alerts = await this.backend.getActiveAlerts(from);
+        if (alerts === null) {
+          await this.sendText(from, tr.alertsUnavailable);
+        } else if (!alerts.length) {
           await this.sendText(from, tr.alertsNone);
         } else {
           const list = alerts.slice(0, 5).map((a: any) =>
             `• ${levelPrefix(a.alertLevel)}\n  *${a.title}*\n  📍 ${a.zone?.name || 'Matam'} — ${a.status}`).join('\n\n');
           await this.sendText(from, `${tr.alertsHeader(alerts.length)}\n\n${list}`);
         }
-        this.conversations.set(from, { step: 'awaiting_choice', lang, data: {} });
+        await this.save(from, { step: 'awaiting_choice', lang, data: {} });
       } else if (text === '3') {
         await this.sendText(from, tr.profile(from));
-        this.conversations.set(from, { step: 'awaiting_choice', lang, data: {} });
+        await this.save(from, { step: 'awaiting_choice', lang, data: {} });
       } else {
         await this.sendText(from, tr.invalidOption);
       }
@@ -123,7 +201,7 @@ export class WhatsappService {
       session.data.theme = theme;
       const themeLabel = theme.labels[lang];
       await this.sendText(from, `${tr.reportOptionPrompt(themeLabel)}\n\n${optionsMenu(theme, lang)}`);
-      this.conversations.set(from, { step: 'report_option', lang, data: session.data });
+      await this.save(from, { step: 'report_option', lang, data: session.data });
       return;
     }
 
@@ -143,7 +221,7 @@ export class WhatsappService {
       session.data.option = option;
       const label = `${option.icon} ${option.labels[lang]}`;
       await this.sendText(from, tr.describePrompt(label));
-      this.conversations.set(from, { step: 'report_desc', lang, data: session.data });
+      await this.save(from, { step: 'report_desc', lang, data: session.data });
       return;
     }
 
@@ -151,7 +229,7 @@ export class WhatsappService {
     if (session.step === 'report_desc') {
       session.data.description = raw;
       await this.sendText(from, tr.photoPrompt);
-      this.conversations.set(from, { step: 'report_photo', lang, data: session.data });
+      await this.save(from, { step: 'report_photo', lang, data: session.data });
       return;
     }
 
@@ -161,7 +239,7 @@ export class WhatsappService {
       if (SKIP_WORDS.includes(text)) {
         await this.sendText(from, tr.photoSkipped);
         await this.sendText(from, tr.severityPrompt);
-        this.conversations.set(from, { step: 'report_severity', lang, data: session.data });
+        await this.save(from, { step: 'report_severity', lang, data: session.data });
         return;
       }
       // Tout autre texte : on rappelle l'option (envoyer photo, ou *passer*)
@@ -176,31 +254,36 @@ export class WhatsappService {
         await this.sendText(from, tr.invalidSeverity);
         return;
       }
-      await this.finalizeReport(from, lang, session.data, sev);
+      await this.finalizeReport(from, lang, session.data, sev, String(msg.id));
     }
   }
 
   /** Crée le signalement avec la description préfixée selon l'option choisie. */
-  private async finalizeReport(from: string, lang: Lang, data: ReportData, sev: number) {
+  private async finalizeReport(from: string, lang: Lang, data: ReportData, sev: number, messageId: string) {
     const tr = t(lang);
     const option = data.option;
     if (!option) {
       await this.sendText(from, tr.reportError);
-      this.conversations.set(from, { step: 'awaiting_choice', lang, data: {} });
+      await this.save(from, { step: 'awaiting_choice', lang, data: {} });
       return;
     }
     const description = (option.descPrefix || '') + (data.description || '');
     const label = `${option.icon} ${option.labels[lang]}`;
     try {
-      await this.backend.createSignalement({
+      // messageId : une re-livraison du même message ne crée pas de doublon (F25)
+      const created = await this.backend.createSignalement({
         phone: from,
         type: option.type,
+        subtype: option.id,
         description,
         severity: sev,
         language: lang,
         mediaUrls: data.mediaUrls,
+        latitude: data.latitude,
+        longitude: data.longitude,
+        messageId,
       });
-      await this.sendText(from, tr.reportSaved(label, tr.sevLabels[sev - 1]));
+      await this.sendText(from, tr.reportSaved(label, tr.sevLabels[sev - 1], String(created.id).slice(0, 8).toUpperCase()));
     } catch (e: any) {
       this.logger.error(
         `createSignalement échoué pour ${from} : HTTP ${e?.response?.status} — ` +
@@ -208,7 +291,7 @@ export class WhatsappService {
       );
       await this.sendText(from, tr.reportError);
     }
-    this.conversations.set(from, { step: 'awaiting_choice', lang, data: {} });
+    await this.save(from, { step: 'awaiting_choice', lang, data: {} });
   }
 
   /** Télécharge un média WhatsApp (audio/image) et le réuploade vers le backend. */
@@ -217,12 +300,12 @@ export class WhatsappService {
     if (!token || !mediaId) return null;
     try {
       const meta = await axios.get(`https://graph.facebook.com/v19.0/${mediaId}`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${token}` }, timeout: GRAPH_TIMEOUT_MS,
       });
       const mimetype = String(meta.data?.mime_type || (expectedKind === 'audio' ? 'audio/ogg' : 'image/jpeg')).split(';')[0].trim();
       const bin = await axios.get(meta.data.url, {
         headers: { Authorization: `Bearer ${token}` },
-        responseType: 'arraybuffer',
+        responseType: 'arraybuffer', timeout: 30_000, maxContentLength: 16 * 1024 * 1024,
       });
       const buffer = Buffer.from(bin.data);
       let ext = '';
@@ -240,7 +323,7 @@ export class WhatsappService {
     }
   }
 
-  private async handleImage(from: string, mediaId: string | undefined, lang: Lang, session: Session) {
+  private async handleImage(from: string, mediaId: string | undefined, lang: Lang, session: Session, messageId: string) {
     const tr = t(lang);
     if (!mediaId) { await this.sendText(from, tr.reportError); return; }
 
@@ -250,16 +333,16 @@ export class WhatsappService {
     // Si on est à l'étape photo : on attache et on passe à la gravité
     if (session.step === 'report_photo') {
       session.data.mediaUrls = [...(session.data.mediaUrls || []), media.url];
-      this.conversations.set(from, { ...session, lang });
+      await this.save(from, { ...session, lang });
       await this.sendText(from, tr.severityPrompt);
-      this.conversations.set(from, { step: 'report_severity', lang, data: session.data });
+      await this.save(from, { step: 'report_severity', lang, data: session.data });
       return;
     }
 
     // Si on est dans le flow (description en cours) : on attache silencieusement
     if (['report_theme', 'report_option', 'report_desc'].includes(session.step)) {
       session.data.mediaUrls = [...(session.data.mediaUrls || []), media.url];
-      this.conversations.set(from, { ...session, lang });
+      await this.save(from, { ...session, lang });
       return;
     }
 
@@ -272,15 +355,16 @@ export class WhatsappService {
         severity: 2,
         language: lang,
         mediaUrls: [media.url],
+        messageId,
       });
       await this.sendText(from, tr.audioReceived);
     } catch {
       await this.sendText(from, tr.reportError);
     }
-    this.conversations.set(from, { step: 'awaiting_choice', lang, data: {} });
+    await this.save(from, { step: 'awaiting_choice', lang, data: {} });
   }
 
-  private async handleAudio(from: string, mediaId: string | undefined, lang: Lang, session: Session) {
+  private async handleAudio(from: string, mediaId: string | undefined, lang: Lang, session: Session, messageId: string) {
     const tr = t(lang);
     if (!mediaId) { await this.sendText(from, tr.reportError); return; }
 
@@ -291,7 +375,7 @@ export class WhatsappService {
 
     if (inReportFlow) {
       session.data.mediaUrls = [...(session.data.mediaUrls || []), media.url];
-      this.conversations.set(from, { ...session, lang });
+      await this.save(from, { ...session, lang });
       await this.sendText(from, tr.audioPrompt);
       return;
     }
@@ -305,17 +389,18 @@ export class WhatsappService {
         severity: 2,
         language: lang,
         mediaUrls: [media.url],
+        messageId,
       });
       await this.sendText(from, tr.audioReceived);
     } catch {
       await this.sendText(from, tr.reportError);
     }
-    this.conversations.set(from, { step: 'awaiting_choice', lang, data: {} });
+    await this.save(from, { step: 'awaiting_choice', lang, data: {} });
   }
 
   private async showMainMenu(from: string, lang: Lang) {
     await this.sendText(from, t(lang).menu);
-    this.conversations.set(from, { step: 'awaiting_choice', lang, data: {} });
+    await this.save(from, { step: 'awaiting_choice', lang, data: {} });
   }
 
   async sendMessage(to: string, text: string): Promise<void> {
@@ -326,6 +411,9 @@ export class WhatsappService {
     const token = this.cfg.get('WHATSAPP_TOKEN', '');
     const phoneId = this.cfg.get('WHATSAPP_PHONE_ID', '');
     if (!token || token.startsWith('EAAx')) {
+      // Simulation tracée hors production uniquement ; en production, la
+      // réponse non envoyée fait échouer le traitement (visible, repris).
+      if (this.cfg.get('NODE_ENV') === 'production') throw new Error('WHATSAPP_TOKEN absent : réponse non envoyée');
       this.logger.log(`[SIMUL → ${to}] ${text.replace(/\n/g, ' | ').substring(0, 120)}`);
       return;
     }
@@ -333,7 +421,7 @@ export class WhatsappService {
       await axios.post(
         `https://graph.facebook.com/v19.0/${phoneId}/messages`,
         { messaging_product: 'whatsapp', to, type: 'text', text: { body: text, preview_url: false } },
-        { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } },
+        { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, timeout: GRAPH_TIMEOUT_MS },
       );
     } catch (err: any) {
       const meta = err?.response?.data?.error;

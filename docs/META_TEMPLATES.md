@@ -77,7 +77,7 @@ Les **sample values** sont obligatoires sinon Meta refuse — ce sont les valeur
 | **Category** | `UTILITY` |
 | **Name** | `alert_level_3_fr` |
 | **Header** | `Text` → `🚨 URGENCE OLEL` |
-| **Body** | `*{{1}}* dans votre zone : *{{2}}*.\n\n{{3}}\n\nProtection civile : +221 33 869 19 20` |
+| **Body** | `*{{1}}* dans votre zone : *{{2}}*.\n\n{{3}}` |
 | **Sample values** | `{{1}}` = `Crue brutale`, `{{2}}` = `Kanel`, `{{3}}` = `Évacuez vers le point haut le plus proche. Restez avec votre famille.` |
 | **Footer** | `OLEL · Alerte précoce` |
 | **Buttons** | 3 × `Quick Reply` : `J'ai besoin d'aide`, `Je suis en sécurité`, `Voir détails` |

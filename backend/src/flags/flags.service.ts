@@ -10,6 +10,9 @@ const DEFAULT_FLAGS = [
   // défaut, activables par un administrateur (décision D3, audit F03/F04).
   { name: 'prealert_red', enabled: false },
   { name: 'auto_escalation_red', enabled: false },
+  // Modèles WhatsApp hors fenêtre de 24 h : à activer seulement après
+  // approbation des modèles par Meta (audit F24).
+  { name: 'whatsapp_templates', enabled: false },
 ];
 
 @Injectable()

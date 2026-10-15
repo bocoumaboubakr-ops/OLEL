@@ -4,6 +4,7 @@ import { BullModule } from '@nestjs/bull';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { TerritoryModule } from './common/territory/territory.service';
+import { BotRelayModule } from './bot-relay/bot-relay.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { AlertsModule } from './alerts/alerts.module';
@@ -52,6 +53,7 @@ import { configuration } from './common/config/configuration';
 
     PrismaModule,
     TerritoryModule,
+    BotRelayModule,
     AuthModule,
     UsersModule,
     AlertsModule,

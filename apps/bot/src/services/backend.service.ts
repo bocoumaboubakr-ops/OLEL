@@ -1,55 +1,93 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import axios from 'axios';
+import axios, { AxiosInstance } from 'axios';
 
+/** Délai maximal d'un appel au backend (audit F26). */
+const BACKEND_TIMEOUT_MS = 10_000;
+
+export interface InboundRecord { id: string; from: string; type: string; payload: Record<string, unknown> }
+
+/**
+ * Client du backend OLEL (clé API du bot). Les erreurs du relais durable
+ * sont PROPAGÉES : le contrôleur répond alors une erreur à Meta, qui
+ * re-livrera le message — rien n'est acquitté sans avoir été enregistré.
+ */
 @Injectable()
 export class BackendService {
   private readonly logger = new Logger(BackendService.name);
-  private readonly backendUrl: string;
-  private readonly apiKey: string;
+  private readonly http: AxiosInstance;
 
-  constructor(private cfg: ConfigService) {
-    this.backendUrl = cfg.get('BACKEND_URL', 'http://localhost:4000');
-    this.apiKey = cfg.get('BOT_API_KEY', '');
+  constructor(cfg: ConfigService) {
+    this.http = axios.create({
+      baseURL: `${cfg.get('BACKEND_URL', 'http://localhost:4000')}/api/v1`,
+      timeout: BACKEND_TIMEOUT_MS,
+      headers: { 'x-bot-api-key': cfg.get('BOT_API_KEY', '') },
+    });
   }
 
-  private get headers() {
-    return { 'x-bot-api-key': this.apiKey };
-  }
-
-  async getActiveAlerts() {
-    try {
-      const { data } = await axios.get(`${this.backendUrl}/api/v1/alerts-bot/active`, { headers: this.headers });
-      return Array.isArray(data) ? data : [];
-    } catch (e) {
-      this.logger.error(`Erreur getActiveAlerts: ${e.message}`);
-      return [];
-    }
-  }
-
-  async createSignalement(payload: { phone: string; type: string; description: string; severity?: number; language?: string; mediaUrls?: string[] }) {
-    const { data } = await axios.post(
-      `${this.backendUrl}/api/v1/signalements/bot`,
-      payload,
-      { headers: this.headers },
-    );
+  // ── Relais durable (audit F25) ───────────────────────────────────────────
+  async recordInbound(m: InboundRecord): Promise<{ duplicate: boolean }> {
+    const { data } = await this.http.post('/bot-relay/inbound', m);
     return data;
   }
 
-  /**
-   * Réuploade vers le backend un média (audio/photo) téléchargé depuis WhatsApp.
-   * Retourne l'URL publique stockée, ou null en cas d'échec.
-   */
+  async markInbound(id: string, status: 'PROCESSED' | 'FAILED' | 'IGNORED', error?: string) {
+    await this.http.patch(`/bot-relay/inbound/${encodeURIComponent(id)}`, { status, error });
+  }
+
+  async pendingInbound(): Promise<(InboundRecord & { payload: any })[]> {
+    const { data } = await this.http.get('/bot-relay/inbound/pending');
+    return Array.isArray(data) ? data : [];
+  }
+
+  async getSession<T>(phone: string): Promise<T | null> {
+    const { data } = await this.http.get(`/bot-relay/sessions/${encodeURIComponent(phone)}`);
+    return (data?.state as T) ?? null;
+  }
+
+  async saveSession(phone: string, state: unknown) {
+    await this.http.put(`/bot-relay/sessions/${encodeURIComponent(phone)}`, { state });
+  }
+
+  async getConsent(phone: string): Promise<{ known: boolean; optedOut: boolean; whatsappOptIn: boolean }> {
+    const { data } = await this.http.get('/bot-relay/consent', { params: { phone } });
+    return data;
+  }
+
+  async setConsent(phone: string, choice: 'WHATSAPP_OPT_IN' | 'OPT_OUT' | 'OPT_IN_AGAIN', language?: string) {
+    await this.http.post('/bot-relay/consent', { phone: phone.startsWith('+') ? phone : `+${phone}`, choice, language });
+  }
+
+  async forwardStatuses(statuses: { providerMessageId: string; status: string; timestamp?: string; error?: string }[]) {
+    if (statuses.length) await this.http.post('/bot-relay/whatsapp-statuses', { statuses });
+  }
+
+  // ── Consultation et signalements ─────────────────────────────────────────
+  /** Alertes en vigueur pour la zone du citoyen ; null = consultation impossible (≠ aucune alerte, F16). */
+  async getActiveAlerts(phone?: string): Promise<any[] | null> {
+    try {
+      const { data } = await this.http.get('/alerts-bot/active', { params: phone ? { phone } : {} });
+      return Array.isArray(data) ? data : null;
+    } catch (e) {
+      this.logger.error(`Consultation des alertes indisponible : ${(e as Error).message}`);
+      return null;
+    }
+  }
+
+  async createSignalement(payload: {
+    phone: string; type: string; description: string; severity?: number; language?: string;
+    mediaUrls?: string[]; subtype?: string; latitude?: number; longitude?: number; messageId?: string;
+  }) {
+    const { data } = await this.http.post('/signalements/bot', payload);
+    return data as { id: string; duplicate?: boolean };
+  }
+
+  /** Réuploade un média WhatsApp ; retourne la référence canonique, ou null en cas d'échec. */
   async uploadMedia(buffer: Buffer, filename: string, mimetype: string): Promise<string | null> {
     try {
       const form = new FormData();
-      // Node 18+ : Blob/FormData globaux, supportés par axios
       form.append('file', new Blob([new Uint8Array(buffer)], { type: mimetype }), filename);
-      const { data } = await axios.post(
-        `${this.backendUrl}/api/v1/upload/bot-media`,
-        form,
-        { headers: this.headers, maxBodyLength: Infinity, maxContentLength: Infinity },
-      );
+      const { data } = await this.http.post('/upload/bot-media', form, { maxBodyLength: 20 * 1024 * 1024, timeout: 30_000 });
       return data?.url || null;
     } catch (e) {
       this.logger.error(`Erreur uploadMedia: ${(e as Error).message}`);
